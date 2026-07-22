@@ -51,7 +51,7 @@ const WatchList = () => {
 
   return (
     <View className="flex-1 bg-black justify-center items-center">
-      <StatusBar translucent backgroundColor="transparent" />
+      <StatusBar />
 
       <View
         className="w-full bg-black"

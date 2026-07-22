@@ -21,6 +21,7 @@ module.exports = () => {
     ...(hasAndroidGoogleServices || hasIosGooglePlist
       ? ['@react-native-firebase/crashlytics']
       : []),
+    ['expo-build-properties', {android: {usePrecompiledHeaders: true}}],
     [
       'react-native-video',
       {
@@ -88,6 +89,8 @@ module.exports = () => {
         launchMode: 'most-recent',
       },
     ],
+    'expo-font',
+    'expo-status-bar',
   ];
   const IS_PLAYSTORE = process.env.APP_VARIANT === 'playstore';
   const PACKAGE_NAME = IS_PLAYSTORE ? 'vega.app' : 'com.vega';
@@ -113,7 +116,6 @@ module.exports = () => {
           ? {googleServicesFile: './google-services.json'}
           : {}),
         minSdkVersion: 28,
-        edgeToEdgeEnabled: true,
         package: PACKAGE_NAME,
         versionCode: 178,
         permissions: [
@@ -141,7 +143,6 @@ module.exports = () => {
           {action: 'VIEW', data: {scheme: 'vlc'}},
         ],
         allowBackup: true,
-        icon: './assets/icon.png',
         adaptiveIcon: {
           foregroundImage: './assets/adaptive_icon.png',
           backgroundColor: '#000000',

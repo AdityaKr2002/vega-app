@@ -33,7 +33,7 @@ const Downloads = () => {
 
   return (
     <View className="flex-1 bg-black">
-      <StatusBar translucent backgroundColor="transparent" />
+      <StatusBar />
       <FlatList
         data={groups}
         key={columns}

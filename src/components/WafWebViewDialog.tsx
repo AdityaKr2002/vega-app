@@ -40,7 +40,8 @@ const WafWebViewDialog = () => {
   const initialCookiesRef = useRef<Record<string, string>>({});
   const webViewReadyRef = useRef(false);
 
-  const userAgent = pickUserAgent(request?.headers) || commonHeaders['User-Agent'];
+  const userAgent =
+    pickUserAgent(request?.headers) || commonHeaders['User-Agent'];
 
   // Reset transient state whenever a new request becomes active.
   useEffect(() => {
@@ -106,7 +107,6 @@ const WafWebViewDialog = () => {
     remove(request.id);
   }, [request, remove]);
 
-
   const resolveWithPage = useCallback(() => {
     if (!request || settledRef.current) {
       return;
@@ -138,7 +138,6 @@ const WafWebViewDialog = () => {
     },
     [request, finalizeResolve],
   );
-
 
   useEffect(() => {
     const cookieName = request?.waitForCookie;
@@ -243,7 +242,7 @@ const WafWebViewDialog = () => {
             />
             {loading && (
               <View
-                style={StyleSheet.absoluteFillObject}
+                style={StyleSheet.absoluteFill}
                 className="items-center justify-center bg-black/30">
                 <ActivityIndicator size="large" color={primary} />
               </View>

@@ -169,12 +169,7 @@ const Home = ({}: Props) => {
                 <ProviderDrawer onClose={() => setIsDrawerOpen(false)} />
               ) : null
             }>
-            <StatusBar
-              style="auto"
-              animated={true}
-              translucent={true}
-              backgroundColor={backgroundColor}
-            />
+            <StatusBar style="auto" animated={true} />
 
             <ScrollView
               onScroll={handleScroll}

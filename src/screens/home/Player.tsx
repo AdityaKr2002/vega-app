@@ -58,9 +58,9 @@ type Props = NativeStackScreenProps<RootStackParamList, 'Player'>;
 
 const goFullScreen = () => {
   if (Platform.OS === 'android') {
+    // Sticky-immersive behavior is handled by the system under edge-to-edge;
+    // setBehaviorAsync was removed in expo-navigation-bar (SDK 57).
     NavigationBar.setVisibilityAsync('hidden');
-    // Make it "sticky immersive" (appears on swipe, then hides again)
-    NavigationBar.setBehaviorAsync('overlay-swipe');
     StatusBar.setHidden(true, 'slide');
   }
   // `expo-status-bar` handles the top bar
@@ -70,8 +70,6 @@ const exitFullScreen = () => {
   if (Platform.OS === 'android') {
     // Show the navigation bar
     NavigationBar.setVisibilityAsync('visible');
-    // Reset behavior
-    NavigationBar.setBehaviorAsync('overlay-swipe');
     StatusBar.setHidden(false, 'slide');
   }
 };
@@ -1251,7 +1249,6 @@ const Player = ({route}: Props): React.JSX.Element => {
             {/* Subtitle Tab */}
             {activeTab === 'subtitle' && (
               <FlashList
-                estimatedItemSize={70}
                 data={textTracks}
                 ListHeaderComponent={
                   <View>

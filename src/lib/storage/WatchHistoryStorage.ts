@@ -14,7 +14,7 @@ export enum WatchHistoryKeys {
 export interface WatchHistoryItem {
   id: string;
   title: string;
-  poster?: string;
+  image?: string;
   provider?: string;
   link: string;
   timestamp?: number;

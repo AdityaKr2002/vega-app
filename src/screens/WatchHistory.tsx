@@ -167,7 +167,6 @@ const WatchHistory = ({navigation}: Props) => {
 
       <FlashList
         data={uniqueHistory}
-        estimatedItemSize={150}
         numColumns={3}
         ListEmptyComponent={() => (
           <View className="flex-1 justify-center items-center mt-10">

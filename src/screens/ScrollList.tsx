@@ -179,7 +179,6 @@ const ScrollList = ({route}: Props): React.ReactElement => {
       </View>
       <View className="flex-1 w-full">
         <FlashList
-          estimatedItemSize={300}
           ListFooterComponent={
             <View className={posts.length > 0 && isLoading ? 'mb-16' : ''}>
               {posts.length > 0 && isLoading ? renderSkeletonItem() : null}

@@ -117,7 +117,6 @@ const Slider = ({
         </View>
       ) : (
         <FlashList
-          estimatedItemSize={100}
           showsHorizontalScrollIndicator={false}
           data={posts}
           extraData={isSelected}
