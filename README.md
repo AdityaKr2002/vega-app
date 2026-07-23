@@ -4,10 +4,11 @@
 Android app for streaming media.
 ### Features
 - Bring your own sources.
-- Steam and Download Ad-Free.
+- Stream and Download Ad-Free.
 - Multi Audio and external Subs support.
 - WatchList.
 - External player and Downloader support.
+- Sync with desktop app
 <br>
 
 [![Discord](https://custom-icon-badges.demolab.com/badge/-Join_Discord-6567a5?style=for-the-badge&logo=discord&logoColor=white)](https://discord.gg/cr42m6maWy)
