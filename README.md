@@ -29,7 +29,7 @@ https://github.com/vega-org/vega-desktop
 
 ## Add or Create Provider source
 > [!TIP]
-> Follow the guide here https://vega.8man.in/guide
+> Follow the guide here https://vega.8man.in/guide/adding-providers
 
 ##
 <!--  ![Screenshots](https://github.com/user-attachments/assets/b86af756-e66e-4ae7-b2af-61b25cfd8d4e) -->
