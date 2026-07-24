@@ -85,10 +85,12 @@ https://reactnative.dev/docs/signed-apk-android
 > Vega App does not host, store, or provide any media content. It is not affiliated with or connected to any external providers or extensions. All content accessed through the app is managed and sourced directly by the user via third-party tools or integrations. Vega App has no control over it.
 
 
-## Stars
+## Leave a star if this it helpful
+<a href="https://www.star-history.com/?repos=vega-org%2Fvega-app&type=date&legend=top-left">
  <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=Zenda-Cross/vega-app&type=Date&theme=dark" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=Zenda-Cross/vega-app&type=Date" />
-   <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=Zenda-Cross/vega-app&type=Date" />
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=vega-org/vega-app&type=date&theme=dark&legend=top-left&sealed_token=-I7j1Po7SdncNAdqtUOsTzYS9tjaBH6Rwsnl-_pPmn5_SaAScEKBXB_7Kwd6hMGQK8_8fYCRJYmoOdoxDvVDtEEv7gf6QASammwDPS04qIt5q8riYCdpk_RKabSl79-zrSUHnqi3iagtPtKn-u3Q9Q4kBICxLDw1atvs1k5gijdYKQij-AFVGv21Eo7R" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=vega-org/vega-app&type=date&legend=top-left&sealed_token=-I7j1Po7SdncNAdqtUOsTzYS9tjaBH6Rwsnl-_pPmn5_SaAScEKBXB_7Kwd6hMGQK8_8fYCRJYmoOdoxDvVDtEEv7gf6QASammwDPS04qIt5q8riYCdpk_RKabSl79-zrSUHnqi3iagtPtKn-u3Q9Q4kBICxLDw1atvs1k5gijdYKQij-AFVGv21Eo7R" />
+   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=vega-org/vega-app&type=date&legend=top-left&sealed_token=-I7j1Po7SdncNAdqtUOsTzYS9tjaBH6Rwsnl-_pPmn5_SaAScEKBXB_7Kwd6hMGQK8_8fYCRJYmoOdoxDvVDtEEv7gf6QASammwDPS04qIt5q8riYCdpk_RKabSl79-zrSUHnqi3iagtPtKn-u3Q9Q4kBICxLDw1atvs1k5gijdYKQij-AFVGv21Eo7R" />
  </picture>
 </a>
+
