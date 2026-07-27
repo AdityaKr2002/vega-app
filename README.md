@@ -4,10 +4,11 @@
 Android app for streaming media.
 ### Features
 - Bring your own sources.
-- Steam and Download Ad-Free.
+- Stream and Download Ad-Free.
 - Multi Audio and external Subs support.
 - WatchList.
 - External player and Downloader support.
+- Sync with desktop app
 <br>
 
 [![Discord](https://custom-icon-badges.demolab.com/badge/-Join_Discord-6567a5?style=for-the-badge&logo=discord&logoColor=white)](https://discord.gg/cr42m6maWy)
@@ -27,9 +28,9 @@ https://github.com/vega-org/vega-desktop
 
 <br>
 
-## Add Provider source
+## Add or Create Provider source
 > [!TIP]
-> Follow the guide here https://vega.8man.in/guide/adding-providers/
+> Follow the guide here https://vega.8man.in/guide/adding-providers
 
 ##
 <!--  ![Screenshots](https://github.com/user-attachments/assets/b86af756-e66e-4ae7-b2af-61b25cfd8d4e) -->
@@ -84,10 +85,12 @@ https://reactnative.dev/docs/signed-apk-android
 > Vega App does not host, store, or provide any media content. It is not affiliated with or connected to any external providers or extensions. All content accessed through the app is managed and sourced directly by the user via third-party tools or integrations. Vega App has no control over it.
 
 
-## Stars
+## Leave a star if this was helpful
+<a href="https://www.star-history.com/?repos=vega-org%2Fvega-app&type=date&legend=top-left">
  <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=Zenda-Cross/vega-app&type=Date&theme=dark" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=Zenda-Cross/vega-app&type=Date" />
-   <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=Zenda-Cross/vega-app&type=Date" />
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=vega-org/vega-app&type=date&theme=dark&legend=top-left&sealed_token=-I7j1Po7SdncNAdqtUOsTzYS9tjaBH6Rwsnl-_pPmn5_SaAScEKBXB_7Kwd6hMGQK8_8fYCRJYmoOdoxDvVDtEEv7gf6QASammwDPS04qIt5q8riYCdpk_RKabSl79-zrSUHnqi3iagtPtKn-u3Q9Q4kBICxLDw1atvs1k5gijdYKQij-AFVGv21Eo7R" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=vega-org/vega-app&type=date&legend=top-left&sealed_token=-I7j1Po7SdncNAdqtUOsTzYS9tjaBH6Rwsnl-_pPmn5_SaAScEKBXB_7Kwd6hMGQK8_8fYCRJYmoOdoxDvVDtEEv7gf6QASammwDPS04qIt5q8riYCdpk_RKabSl79-zrSUHnqi3iagtPtKn-u3Q9Q4kBICxLDw1atvs1k5gijdYKQij-AFVGv21Eo7R" />
+   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=vega-org/vega-app&type=date&legend=top-left&sealed_token=-I7j1Po7SdncNAdqtUOsTzYS9tjaBH6Rwsnl-_pPmn5_SaAScEKBXB_7Kwd6hMGQK8_8fYCRJYmoOdoxDvVDtEEv7gf6QASammwDPS04qIt5q8riYCdpk_RKabSl79-zrSUHnqi3iagtPtKn-u3Q9Q4kBICxLDw1atvs1k5gijdYKQij-AFVGv21Eo7R" />
  </picture>
 </a>
+
