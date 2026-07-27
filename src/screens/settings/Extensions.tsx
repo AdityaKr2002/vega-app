@@ -197,10 +197,6 @@ const Extensions = ({navigation}: Props) => {
       await extensionManager.installProvider(provider);
       loadProviders();
 
-      Alert.alert(
-        'Success',
-        `${provider.display_name} has been installed successfully!`,
-      );
       const refreshedInstalledProviders =
         extensionStorage.getInstalledProviders() || [];
       setInstalledProviders(refreshedInstalledProviders);
