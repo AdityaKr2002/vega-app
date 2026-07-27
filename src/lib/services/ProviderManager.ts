@@ -1,104 +1,137 @@
 import {ToastAndroid} from 'react-native';
-import {providerContext} from '../providers/providerContext';
-import {Catalog, EpisodeLink, Info, Post} from '../providers/types';
+import {headers as commonHeaders} from '../providers/headers';
+import {Catalog, EpisodeLink, Info, Post, Stream} from '../providers/types';
 import {extensionManager} from './ExtensionManager';
+import {MAX_STATE_BYTES} from '../sandbox/protocol';
+import {sandboxBridge, setSandboxStateHandler} from '../sandbox/sandboxBridge';
 
 export class ProviderManager {
-  private createExecutionContext() {
-    return {
-      exports: {},
-      require: () => ({}), // Mock require function
-      module: {exports: {}},
-      console,
-      Promise,
-      __awaiter: (thisArg: any, _arguments: any, P: any, generator: any) => {
-        function adopt(value: any) {
-          return value instanceof P
-            ? value
-            : new P(function (resolve: any) {
-                resolve(value);
-              });
-        }
-        return new (P || (P = Promise))(function (resolve: any, reject: any) {
-          function fulfilled(value: any) {
-            try {
-              step(generator.next(value));
-            } catch (e) {
-              reject(e);
-            }
-          }
-          function rejected(value: any) {
-            try {
-              step(generator.throw(value));
-            } catch (e) {
-              reject(e);
-            }
-          }
-          function step(result: any) {
-            result.done
-              ? resolve(result.value)
-              : adopt(result.value).then(fulfilled, rejected);
-          }
-          step((generator = generator.apply(thisArg, _arguments || [])).next());
-        });
-      },
-      Object,
-    };
+  private readonly providerState = new Map<string, Record<string, unknown>>();
+
+  constructor() {
+    setSandboxStateHandler((providerValue, state) => {
+      try {
+        this.saveProviderState(providerValue, state);
+      } catch (error) {
+        console.warn('Discarding provider state:', error);
+      }
+    });
   }
 
-  private executeModule(moduleCode: string, ...args: any[]): any {
-    const context = this.createExecutionContext();
+  clearProviderState(providerValue: string): void {
+    this.providerState.delete(providerValue);
+  }
 
-    const executeModule = new Function(
-      'context',
-      ...Array.from({length: args.length}, (_, i) => `arg${i}`),
-      `
-      const exports = context.exports;
-      const __awaiter = context.__awaiter;
-      const Object = context.Object;
-      const console = context.console;
-      const Promise = context.Promise;
-      
-      ${moduleCode}
-      
-      return exports;
-      `,
+  private getProviderState(providerValue: string): Record<string, unknown> {
+    const current = this.providerState.get(providerValue);
+    if (!current) {
+      return {};
+    }
+    try {
+      return JSON.parse(JSON.stringify(current));
+    } catch {
+      return {};
+    }
+  }
+
+  private saveProviderState(providerValue: string, value: unknown): void {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+      throw new Error('Provider state must be an object');
+    }
+    const serialized = JSON.stringify(value);
+    if (serialized === undefined || serialized.length > MAX_STATE_BYTES) {
+      throw new Error('Provider state exceeds the 256 KB limit');
+    }
+    this.providerState.set(
+      providerValue,
+      JSON.parse(serialized) as Record<string, unknown>,
     );
-    return executeModule(context, ...args);
   }
-  getCatalog = ({providerValue}: {providerValue: string}): Catalog[] => {
-    // Use extensionManager which now handles test mode automatically
-    const catalogModule =
-      extensionManager.getProviderModules(providerValue)?.modules.catalog;
+
+  private getModule(
+    providerValue: string,
+    key: 'catalog' | 'posts' | 'meta' | 'stream' | 'episodes',
+  ): string | undefined {
+    return extensionManager.getProviderModules(providerValue)?.modules[key];
+  }
+
+  private executeModule<T>(
+    moduleCode: string,
+    providerValue: string,
+    exportName?: string,
+    args: Record<string, unknown> = {},
+    signal?: AbortSignal,
+  ): Promise<T> {
+    return sandboxBridge.invoke<T>({
+      moduleCode,
+      providerValue,
+      exportName,
+      // commonHeaders is passed per invoke because it is platform dependent and
+      // the sandbox realm cannot read Platform itself.
+      args: {...args, commonHeaders},
+      state: this.getProviderState(providerValue),
+      signal,
+    });
+  }
+
+  private requireArray<T>(
+    value: unknown,
+    providerValue: string,
+    operation: string,
+  ): T[] {
+    if (!Array.isArray(value)) {
+      const actualType = value === null ? 'null' : typeof value;
+      throw new Error(
+        `Provider ${providerValue} ${operation} returned ${actualType}, expected an array`,
+      );
+    }
+    return value as T[];
+  }
+  getCatalog = async ({
+    providerValue,
+  }: {
+    providerValue: string;
+  }): Promise<Catalog[]> => {
+    const catalogModule = this.getModule(providerValue, 'catalog');
     if (!catalogModule) {
       return [];
     }
     try {
-      const moduleExports = this.executeModule(catalogModule);
-
-      // Return the catalog array directly from exports
-      return moduleExports.catalog || [];
+      const moduleExports = await this.executeModule<{catalog?: Catalog[]}>(
+        catalogModule,
+        providerValue,
+      );
+      return this.requireArray<Catalog>(
+        moduleExports?.catalog ?? [],
+        providerValue,
+        'catalog',
+      );
     } catch (error) {
       console.error('Error loading catalog:', error);
-      console.error('Module content:', catalogModule);
       throw new Error(`Invalid catalog module for provider: ${providerValue}`);
     }
   };
-  getGenres = ({providerValue}: {providerValue: string}): Catalog[] => {
-    // Use extensionManager which now handles test mode automatically
-    const catalogModule =
-      extensionManager.getProviderModules(providerValue)?.modules.catalog;
+  getGenres = async ({
+    providerValue,
+  }: {
+    providerValue: string;
+  }): Promise<Catalog[]> => {
+    const catalogModule = this.getModule(providerValue, 'catalog');
     if (!catalogModule) {
       return [];
     }
     try {
-      const moduleExports = this.executeModule(catalogModule);
-
-      // Return the genres array directly from exports
-      return moduleExports.genres || [];
+      const moduleExports = await this.executeModule<{genres?: Catalog[]}>(
+        catalogModule,
+        providerValue,
+      );
+      return this.requireArray<Catalog>(
+        moduleExports?.genres ?? [],
+        providerValue,
+        'genres',
+      );
     } catch (error) {
       console.error('Error loading genres:', error);
-      console.error('Module content:', catalogModule);
       throw new Error(`Invalid catalog module for provider: ${providerValue}`);
     }
   };
@@ -113,30 +146,19 @@ export class ProviderManager {
     providerValue: string;
     signal: AbortSignal;
   }): Promise<Post[]> => {
-    // Use extensionManager which now handles test mode automatically
-    const getPostsModule =
-      extensionManager.getProviderModules(providerValue)?.modules.posts;
+    const getPostsModule = this.getModule(providerValue, 'posts');
     if (!getPostsModule) {
       throw new Error(`No posts module found for provider: ${providerValue}`);
     }
     try {
-      const moduleExports = this.executeModule(
+      const posts = await this.executeModule<Post[]>(
         getPostsModule,
-        filter,
-        page,
         providerValue,
+        'getPosts',
+        {filter, page, providerValue},
         signal,
-        providerContext,
       );
-
-      // Call the getPosts function
-      return await moduleExports.getPosts({
-        filter,
-        page,
-        providerValue,
-        signal,
-        providerContext,
-      });
+      return this.requireArray<Post>(posts, providerValue, 'getPosts');
     } catch (error: any) {
       console.error('Error in posts function:', error);
       // Re-throw the original error message if it exists, otherwise use generic message
@@ -156,30 +178,19 @@ export class ProviderManager {
     providerValue: string;
     signal: AbortSignal;
   }): Promise<Post[]> => {
-    // Use extensionManager which now handles test mode automatically
-    const getPostsModule =
-      extensionManager.getProviderModules(providerValue)?.modules.posts;
+    const getPostsModule = this.getModule(providerValue, 'posts');
     if (!getPostsModule) {
       throw new Error(`No posts module found for provider: ${providerValue}`);
     }
     try {
-      const moduleExports = this.executeModule(
+      const posts = await this.executeModule<Post[]>(
         getPostsModule,
-        searchQuery,
-        page,
         providerValue,
+        'getSearchPosts',
+        {searchQuery, page, providerValue},
         signal,
-        providerContext,
       );
-
-      // Call the getSearchPosts function
-      return await moduleExports.getSearchPosts({
-        searchQuery,
-        page,
-        providerValue,
-        signal,
-        providerContext,
-      });
+      return this.requireArray<Post>(posts, providerValue, 'getSearchPosts');
     } catch (error: any) {
       console.error('Error in search posts function:', error);
       // Re-throw the original error message if it exists, otherwise use generic message
@@ -196,26 +207,17 @@ export class ProviderManager {
     link: string;
     provider: string;
   }): Promise<Info> => {
-    // Use extensionManager which now handles test mode automatically
-    const getMetaDataModule =
-      extensionManager.getProviderModules(provider)?.modules.meta;
+    const getMetaDataModule = this.getModule(provider, 'meta');
     if (!getMetaDataModule) {
       throw new Error(`No meta data module found for provider: ${provider}`);
     }
     try {
-      const moduleExports = this.executeModule(
+      return await this.executeModule<Info>(
         getMetaDataModule,
-        link,
         provider,
-        providerContext,
+        'getMeta',
+        {link, provider},
       );
-
-      // Call the getMetaData function
-      return await moduleExports.getMeta({
-        link,
-        provider,
-        providerContext,
-      });
     } catch (error: any) {
       console.error('Error in meta data function:', error);
       // Re-throw the original error message if it exists, otherwise use generic message
@@ -235,28 +237,19 @@ export class ProviderManager {
     signal: AbortSignal;
     providerValue: string;
   }): Promise<any[]> => {
-    // Use extensionManager which now handles test mode automatically
-    const getStreamModule =
-      extensionManager.getProviderModules(providerValue)?.modules.stream;
+    const getStreamModule = this.getModule(providerValue, 'stream');
     if (!getStreamModule) {
       throw new Error(`No stream module found for provider: ${providerValue}`);
     }
     try {
-      const moduleExports = this.executeModule(
+      const streams = await this.executeModule<Stream[]>(
         getStreamModule,
-        link,
-        type,
+        providerValue,
+        'getStream',
+        {link, type},
         signal,
-        providerContext,
       );
-
-      // Call the getStream function
-      return await moduleExports.getStream({
-        link,
-        type,
-        signal,
-        providerContext,
-      });
+      return this.requireArray<Stream>(streams, providerValue, 'getStream');
     } catch (error: any) {
       console.error('Error in stream function:', error);
       // Re-throw the original error message if it exists, otherwise use generic message
@@ -273,26 +266,24 @@ export class ProviderManager {
     url: string;
     providerValue: string;
   }): Promise<EpisodeLink[]> => {
-    // Use extensionManager which now handles test mode automatically
-    const getEpisodeLinksModule =
-      extensionManager.getProviderModules(providerValue)?.modules.episodes;
+    const getEpisodeLinksModule = this.getModule(providerValue, 'episodes');
     if (!getEpisodeLinksModule) {
       throw new Error(
         `No episode links module found for provider: ${providerValue}`,
       );
     }
     try {
-      const moduleExports = this.executeModule(
+      const episodes = await this.executeModule<EpisodeLink[]>(
         getEpisodeLinksModule,
-        url,
-        providerContext,
+        providerValue,
+        'getEpisodes',
+        {url},
       );
-
-      // Call the getEpisodes function
-      return await moduleExports.getEpisodes({
-        url,
-        providerContext,
-      });
+      return this.requireArray<EpisodeLink>(
+        episodes,
+        providerValue,
+        'getEpisodes',
+      );
     } catch (error: any) {
       console.error('Error in episodes function:', error);
       // Re-throw the original error message if it exists, otherwise use generic message

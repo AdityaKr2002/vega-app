@@ -25,8 +25,8 @@ interface SearchPageData {
 }
 
 const SearchResults = ({route}: Props): React.ReactElement => {
-  const {primary} = useThemeStore(state => state);
-  const {installedProviders} = useContentStore(state => state);
+  const primary = useThemeStore(state => state.primary);
+  const installedProviders = useContentStore(state => state.installedProviders);
   const [searchData, setSearchData] = useState<SearchPageData[]>([]);
   const [emptyResults, setEmptyResults] = useState<SearchPageData[]>([]);
 

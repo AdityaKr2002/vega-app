@@ -100,10 +100,10 @@ const SeasonList: React.FC<SeasonListProps> = ({
   synopsis,
   refreshVersion,
 }) => {
-  const {primary} = useThemeStore(state => state);
+  const primary = useThemeStore(state => state.primary);
   const navigation =
     useNavigation<NativeStackNavigationProp<RootStackParamList>>();
-  const {addItem} = useWatchHistoryStore(state => state);
+  const addItem = useWatchHistoryStore(state => state.addItem);
   const {fetchStreams} = useStreamData();
 
   // Early return if no LinkList provided

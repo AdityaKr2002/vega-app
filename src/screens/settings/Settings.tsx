@@ -38,17 +38,18 @@ import {
   syncDohSettings,
 } from '../../lib/services/dohService';
 import useNavigationPreferencesStore from '../../lib/zustand/navigationPreferencesStore';
+import GitHubStarButton from './components/GitHubStarButton';
 
 type Props = NativeStackScreenProps<SettingsStackParamList, 'Settings'>;
 
 const Settings = ({navigation}: Props) => {
   const tabNavigation =
     useNavigation<NativeStackNavigationProp<TabStackParamList>>();
-  const {primary} = useThemeStore(state => state);
-  const {provider, setProvider, installedProviders} = useContentStore(
-    state => state,
-  );
-  const {clearHistory} = useWatchHistoryStore(state => state);
+  const primary = useThemeStore(state => state.primary);
+  const provider = useContentStore(state => state.provider);
+  const setProvider = useContentStore(state => state.setProvider);
+  const installedProviders = useContentStore(state => state.installedProviders);
+  const clearHistory = useWatchHistoryStore(state => state.clearHistory);
   const hideDownloadsTab = useNavigationPreferencesStore(
     state => state.hideDownloadsTab,
   );
@@ -457,20 +458,7 @@ const Settings = ({navigation}: Props) => {
                 </View>
               </TouchableNativeFeedback>
 
-              {/* GitHub */}
-              {/* <TouchableNativeFeedback
-                onPress={() => Linking.openURL(socialLinks.github)}
-                background={TouchableNativeFeedback.Ripple('#333333', false)}>
-                <View className="flex-row items-center justify-between p-4 border-b border-[#262626]">
-                  <View className="flex-row items-center">
-                    <AntDesign name="github" size={22} color={primary} />
-                    <Text className="text-white ml-3 text-base">
-                      Give a star ⭐
-                    </Text>
-                  </View>
-                  <Feather name="external-link" size={20} color="gray" />
-                </View>
-              </TouchableNativeFeedback> */}
+              <GitHubStarButton primary={primary} />
             </View>
           </View>
         </AnimatedSection>

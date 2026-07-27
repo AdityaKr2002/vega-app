@@ -13,7 +13,7 @@ import useThemeStore from '../../lib/zustand/themeStore';
 import {SvgUri} from 'react-native-svg';
 
 const DisableProviders = () => {
-  const {primary} = useThemeStore(state => state);
+  const primary = useThemeStore(state => state.primary);
   const [disabledProviders, setDisabledProviders] = useState<string[]>(
     providersStorage.getDisabledProviders(),
   );

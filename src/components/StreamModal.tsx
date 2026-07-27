@@ -20,7 +20,7 @@ const StreamModal = ({
   serverLoading: boolean;
   downloadFile: (link: string) => void;
 }) => {
-  const {primary} = useThemeStore(state => state);
+  const primary = useThemeStore(state => state.primary);
   return (
     <Modal animationType="fade" visible={downloadModal} transparent={true}>
       <View className="flex-1 bg-black/10 justify-center items-center p-4">

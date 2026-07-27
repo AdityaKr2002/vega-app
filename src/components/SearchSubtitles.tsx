@@ -24,7 +24,7 @@ const SearchSubtitles = ({
   setSearchQuery: (text: string) => void;
   setExternalSubs: React.Dispatch<React.SetStateAction<TextTracks>>;
 }) => {
-  const {primary} = useThemeStore(state => state);
+  const primary = useThemeStore(state => state.primary);
   const [searchModalVisible, setSearchModalVisible] = useState(false);
   const [season, setSeason] = useState('');
   const [episode, setEpisode] = useState('');

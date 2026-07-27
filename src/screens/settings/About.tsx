@@ -146,7 +146,7 @@ export const checkForUpdate = async (
 };
 
 const About = () => {
-  const {primary} = useThemeStore(state => state);
+  const primary = useThemeStore(state => state.primary);
   const [updateLoading, setUpdateLoading] = useState(false);
   const [autoDownload, setAutoDownload] = useState(
     settingsStorage.isAutoDownloadEnabled(),

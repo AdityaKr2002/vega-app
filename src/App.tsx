@@ -49,9 +49,13 @@ import GlobalErrorBoundary from './components/GlobalErrorBoundary';
 import notifee from '@notifee/react-native';
 import notificationService from './lib/services/Notification';
 import WafWebViewDialog from './components/WafWebViewDialog';
+import ProviderSandboxHost from './components/ProviderSandboxHost';
 import {syncDohSettings} from './lib/services/dohService';
 import {runWasmProbe} from './lib/services/wasmProbe';
-import {reconcileDownloadState} from './lib/downloadReconciliation';
+import {
+  reconcileCompletedDownloadOutputs,
+  reconcileDownloadState,
+} from './lib/downloadReconciliation';
 import useDownloadsStore from './lib/zustand/downloadsStore';
 import useNavigationPreferencesStore from './lib/zustand/navigationPreferencesStore';
 import {
@@ -188,7 +192,7 @@ const App = () => {
   const SettingsStack = createNativeStackNavigator<SettingsStackParamList>();
   const WatchHistoryStack =
     createNativeStackNavigator<WatchHistoryStackParamList>();
-  const {primary} = useThemeStore(state => state);
+  const primary = useThemeStore(state => state.primary);
   const hasFirebase = Boolean(Constants?.expoConfig?.extra?.hasFirebase);
 
   const showTabBarLables = settingsStorage.showTabBarLabels();
@@ -217,6 +221,9 @@ const App = () => {
   useEffect(() => {
     const subscription = AppState.addEventListener('change', state => {
       if (state === 'active') {
+        reconcileCompletedDownloadOutputs().catch(error =>
+          console.warn('Download foreground reconciliation failed:', error),
+        );
         syncFromSharedFolder().catch(error =>
           console.warn('[VegaSync] Foreground sync failed:', error),
         );
@@ -699,6 +706,10 @@ const App = () => {
             {/* Global WAF / captcha solving dialog, triggered by providers via
                 providerContext.openWebView */}
             <WafWebViewDialog />
+            {/* Isolated realm that runs untrusted provider code. Must stay
+                mounted for the app lifetime: every provider call is dispatched
+                into it. */}
+            <ProviderSandboxHost />
           </SafeAreaView>
         </QueryClientProvider>
       </SafeAreaProvider>

@@ -35,9 +35,10 @@ type Props = NativeStackScreenProps<HomeStackParamList, 'Info'>;
 export default function Info({route, navigation}: Props): React.JSX.Element {
   const searchNavigation =
     useNavigation<NativeStackNavigationProp<TabStackParamList>>();
-  const {primary} = useThemeStore(state => state);
-  const {addItem, removeItem} = useWatchListStore(state => state);
-  const {provider} = useContentStore(state => state);
+  const primary = useThemeStore(state => state.primary);
+  const addItem = useWatchListStore(state => state.addItem);
+  const removeItem = useWatchListStore(state => state.removeItem);
+  const provider = useContentStore(state => state.provider);
 
   // React Query for optimized data fetching
   const {

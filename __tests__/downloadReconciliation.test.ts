@@ -87,7 +87,10 @@ jest.mock('react-native-mmkv-storage', () => ({
   },
 }));
 
-import {reconcileDownloadState} from '../src/lib/downloadReconciliation';
+import {
+  reconcileCompletedDownloadOutputs,
+  reconcileDownloadState,
+} from '../src/lib/downloadReconciliation';
 import {notificationService} from '../src/lib/services/Notification';
 import useDownloadsStore from '../src/lib/zustand/downloadsStore';
 
@@ -145,6 +148,33 @@ describe('download startup reconciliation', () => {
 
     expect(useDownloadsStore.getState().downloads.movie_direct_0.status).toBe(
       'missing',
+    );
+  });
+
+  it('rechecks completed files without interrupting active downloads', async () => {
+    useDownloadsStore.getState().enqueueDownload({
+      id: 'movie_completed_0',
+      title: 'Completed Movie',
+      type: 'movie',
+      url: 'https://example.com/completed.mp4',
+      status: 'completed',
+      filePath: 'content://downloads/completed.mp4',
+    });
+    useDownloadsStore.getState().enqueueDownload({
+      id: 'movie_active_0',
+      title: 'Active Movie',
+      type: 'movie',
+      url: 'https://example.com/active.mp4',
+      status: 'downloading',
+    });
+
+    await reconcileCompletedDownloadOutputs();
+
+    expect(useDownloadsStore.getState().downloads.movie_completed_0.status).toBe(
+      'missing',
+    );
+    expect(useDownloadsStore.getState().downloads.movie_active_0.status).toBe(
+      'downloading',
     );
   });
 

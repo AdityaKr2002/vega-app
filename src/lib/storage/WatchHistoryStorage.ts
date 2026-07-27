@@ -15,6 +15,7 @@ export interface WatchHistoryItem {
   id: string;
   title: string;
   image?: string;
+  poster?: string;
   provider?: string;
   link: string;
   timestamp?: number;

@@ -1,27 +1,24 @@
-import React, {useEffect, useState} from 'react';
-import {
-  View,
-  Text,
-  Image,
-  TouchableOpacity,
-  FlatList,
-  Pressable,
-} from 'react-native';
+import React, {useCallback, useEffect, useState} from 'react';
+import {View, Text, FlatList, Pressable, TouchableOpacity} from 'react-native';
+import type {ListRenderItem} from 'react-native';
 import useWatchHistoryStore from '../lib/zustand/watchHistrory';
 import {mainStorage as MMKV} from '../lib/storage/StorageService';
 import {useNavigation} from '@react-navigation/native';
 import useThemeStore from '../lib/zustand/themeStore';
 import {NativeStackNavigationProp} from '@react-navigation/native-stack';
 import {TabStackParamList} from '../App';
-import AntDesign from '@expo/vector-icons/AntDesign';
 import ReactNativeHapticFeedback from 'react-native-haptic-feedback';
 import {MaterialCommunityIcons} from '@expo/vector-icons';
+import ContinueWatchingCard, {
+  ContinueWatchingItemData,
+} from './ContinueWatchingCard';
 
 const ContinueWatching = () => {
-  const {primary} = useThemeStore(state => state);
+  const primary = useThemeStore(state => state.primary);
   const navigation =
     useNavigation<NativeStackNavigationProp<TabStackParamList>>();
-  const {history, removeItems} = useWatchHistoryStore(state => state);
+  const history = useWatchHistoryStore(state => state.history);
+  const removeItems = useWatchHistoryStore(state => state.removeItems);
   const [progressData, setProgressData] = useState<Record<string, number>>({});
   const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
   const [selectionMode, setSelectionMode] = useState<boolean>(false);
@@ -125,27 +122,33 @@ const ContinueWatching = () => {
     });
   };
 
-  const handleLongPress = (link: string) => {
-    ReactNativeHapticFeedback.trigger('effectClick', {
-      enableVibrateFallback: true,
-      ignoreAndroidSystemSettings: false,
-    });
+  const handleLongPress = useCallback(
+    (link: string) => {
+      ReactNativeHapticFeedback.trigger('effectClick', {
+        enableVibrateFallback: true,
+        ignoreAndroidSystemSettings: false,
+      });
 
-    // Enter selection mode if not already in it
-    if (!selectionMode) {
-      setSelectionMode(true);
-    }
+      // Enter selection mode if not already in it
+      if (!selectionMode) {
+        setSelectionMode(true);
+      }
 
-    toggleItemSelection(link);
-  };
+      toggleItemSelection(link);
+    },
+    [selectionMode],
+  );
 
-  const handlePress = (item: any) => {
-    if (selectionMode) {
-      toggleItemSelection(item.link);
-    } else {
-      handleNavigateToInfo(item);
-    }
-  };
+  const handlePress = useCallback(
+    (item: any) => {
+      if (selectionMode) {
+        toggleItemSelection(item.link);
+      } else {
+        handleNavigateToInfo(item);
+      }
+    },
+    [selectionMode],
+  );
 
   const deleteSelectedItems = () => {
     removeItems([...selectedItems]);
@@ -157,6 +160,33 @@ const ContinueWatching = () => {
     setSelectedItems(new Set());
     setSelectionMode(false);
   };
+
+  const keyExtractor = useCallback(
+    (item: ContinueWatchingItemData) => item.link,
+    [],
+  );
+
+  const renderItem = useCallback<ListRenderItem<ContinueWatchingItemData>>(
+    ({item}) => (
+      <ContinueWatchingCard
+        item={item}
+        progress={progressData[item.link] || 0}
+        isSelected={selectedItems.has(item.link)}
+        selectionMode={selectionMode}
+        primary={primary}
+        onPress={handlePress}
+        onLongPress={handleLongPress}
+      />
+    ),
+    [
+      progressData,
+      selectedItems,
+      selectionMode,
+      primary,
+      handlePress,
+      handleLongPress,
+    ],
+  );
 
   // Only render if we have items (MOVED AFTER ALL HOOKS)
   if (recentItems.length === 0) {
@@ -197,80 +227,13 @@ const ContinueWatching = () => {
         data={recentItems}
         horizontal
         showsHorizontalScrollIndicator={false}
-        keyExtractor={item => item.link}
+        keyExtractor={keyExtractor}
+        removeClippedSubviews
+        initialNumToRender={6}
+        maxToRenderPerBatch={6}
+        windowSize={5}
         contentContainerStyle={{paddingHorizontal: 12}}
-        renderItem={({item}) => {
-          const progress = progressData[item.link] || 0;
-          const isSelected = selectedItems.has(item.link);
-
-          return (
-            <TouchableOpacity
-              activeOpacity={0.8}
-              className="max-w-[100px] mx-2"
-              onLongPress={e => {
-                e.stopPropagation();
-                handleLongPress(item.link);
-              }}
-              onPress={e => {
-                e.stopPropagation();
-                handlePress(item);
-              }}>
-              <View className="relative">
-                {/* Poster Image */}
-                <Image
-                  source={{uri: item?.poster}}
-                  className="rounded-md"
-                  style={{width: 100, height: 150}}
-                />
-
-                {/* Selection Indicator */}
-                {selectionMode && (
-                  <View className="absolute top-2 right-2 z-50">
-                    <View
-                      className={`w-5 h-5 rounded-full flex items-center justify-center ${
-                        isSelected ? '' : 'bg-white/30'
-                      }`}
-                      style={{
-                        borderWidth: 1,
-                        borderColor: 'white',
-                        backgroundColor: isSelected ? primary : undefined,
-                      }}>
-                      {isSelected && (
-                        <AntDesign name="check" size={12} color="white" />
-                      )}
-                    </View>
-                  </View>
-                )}
-
-                {/* Selection Overlay */}
-                {isSelected && (
-                  <View className="absolute top-0 left-0 right-0 bottom-0 bg-black/30 rounded-lg" />
-                )}
-
-                {/* Progress Bar */}
-                <View
-                  className="absolute bottom-0 left-0 right-0 h-1"
-                  style={{backgroundColor: 'rgba(0,0,0,0.5)'}}>
-                  <View
-                    style={{
-                      position: 'absolute',
-                      left: 0,
-                      top: 0,
-                      height: '100%',
-                      width: `${progress}%`,
-                      backgroundColor: primary,
-                    }}
-                  />
-                </View>
-              </View>
-              <Text
-                className="text-white text-center truncate w-24 text-xs"
-                numberOfLines={2}>
-                {item.title}
-              </Text>
-            </TouchableOpacity>
-          );
-        }}
+        renderItem={renderItem}
       />
     </Pressable>
   );

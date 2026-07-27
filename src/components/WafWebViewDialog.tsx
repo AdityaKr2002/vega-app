@@ -26,7 +26,7 @@ const GRAB_HTML_JS =
 const WafWebViewDialog = () => {
   const request = useWafStore(state => state.requests[0]);
   const remove = useWafStore(state => state.remove);
-  const {primary} = useThemeStore(state => state);
+  const primary = useThemeStore(state => state.primary);
 
   const [loading, setLoading] = useState(true);
   const webViewRef = useRef<WebView>(null);

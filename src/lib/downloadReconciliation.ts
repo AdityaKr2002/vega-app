@@ -124,6 +124,20 @@ const reconcileRecord = async (record: DownloadItem): Promise<void> => {
   }
 };
 
+export const reconcileCompletedDownloadOutputs = async (): Promise<void> => {
+  const completedRecords = Object.values(
+    useDownloadsStore.getState().downloads,
+  ).filter(record => record.status === 'completed');
+
+  await Promise.all(
+    completedRecords.map(async record => {
+      if (!(await downloadOutputExists(record.filePath))) {
+        useDownloadsStore.getState().markMissing(record.id);
+      }
+    }),
+  );
+};
+
 const cleanupOrphanStaging = async (records: DownloadItem[]): Promise<void> => {
   const root = `${RNFS.CachesDirectoryPath}/downloads`;
   if (!(await RNFS.exists(root))) {

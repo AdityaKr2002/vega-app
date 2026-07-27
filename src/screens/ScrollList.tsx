@@ -1,4 +1,4 @@
-import {View, Text, TouchableOpacity} from 'react-native';
+import {View, Text, TouchableOpacity, useWindowDimensions} from 'react-native';
 import React, {useEffect, useState, useRef} from 'react';
 import {NativeStackScreenProps} from '@react-navigation/native-stack';
 import {HomeStackParamList, SearchStackParamList} from '../App';
@@ -22,9 +22,14 @@ const GRID_POSTER_WIDTH = 100;
 const GRID_POSTER_HEIGHT = 150;
 const LIST_POSTER_WIDTH = 70;
 const LIST_POSTER_HEIGHT = 100;
+// Screen container uses p-4 and each grid cell uses m-3 on both sides.
+const GRID_SCREEN_PADDING = 16;
+const GRID_ITEM_MARGIN = 12;
+const GRID_POSTER_ASPECT_RATIO = GRID_POSTER_HEIGHT / GRID_POSTER_WIDTH;
 
 const ScrollList = ({route}: Props): React.ReactElement => {
-  const {primary} = useThemeStore(state => state);
+  const primary = useThemeStore(state => state.primary);
+  const {width: windowWidth} = useWindowDimensions();
   const navigation =
     useNavigation<NativeStackNavigationProp<SearchStackParamList>>();
   const [posts, setPosts] = useState<Post[]>([]);
@@ -32,10 +37,26 @@ const ScrollList = ({route}: Props): React.ReactElement => {
   const [page, setPage] = useState<number>(1);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isEnd, setIsEnd] = useState<boolean>(false);
-  const {provider} = useContentStore(state => state);
+  const provider = useContentStore(state => state.provider);
   const [viewType, setViewType] = useState<number>(
     settingsStorage.getListViewType(),
   );
+
+  // Derive the grid from the available width instead of hardcoding 3 columns.
+  // With a fixed column count, wide screens stretch each cell far past the
+  // poster width, which is what produced the large gaps between posters.
+  const gridAvailableWidth = windowWidth - GRID_SCREEN_PADDING * 2;
+  const gridColumns = Math.max(
+    3,
+    Math.floor(
+      gridAvailableWidth / (GRID_POSTER_WIDTH + GRID_ITEM_MARGIN * 2),
+    ),
+  );
+  const gridPosterWidth =
+    gridAvailableWidth / gridColumns - GRID_ITEM_MARGIN * 2;
+  const gridPosterHeight = gridPosterWidth * GRID_POSTER_ASPECT_RATIO;
+  const numColumns = viewType === 1 ? gridColumns : 1;
+
   // Add abort controller to cancel API requests when unmounting
   const abortController = useRef<AbortController | null>(null);
   const isMounted = useRef(true);
@@ -132,7 +153,7 @@ const ScrollList = ({route}: Props): React.ReactElement => {
   };
 
   const skeletons: ListItem[] = Array.from({
-    length: viewType === 1 ? 9 : 6,
+    length: viewType === 1 ? gridColumns * 3 : 6,
   }).map((_, i) => ({id: `skeleton-${i}`, isSkeleton: true}));
   const listData: ListItem[] =
     posts.length === 0 && isLoading ? skeletons : posts;
@@ -145,16 +166,26 @@ const ScrollList = ({route}: Props): React.ReactElement => {
           : 'flex-row m-3 items-center'
       }>
       <SkeletonLoader
-        height={viewType === 1 ? GRID_POSTER_HEIGHT : LIST_POSTER_HEIGHT}
-        width={viewType === 1 ? GRID_POSTER_WIDTH : LIST_POSTER_WIDTH}
+        height={viewType === 1 ? gridPosterHeight : LIST_POSTER_HEIGHT}
+        width={viewType === 1 ? gridPosterWidth : LIST_POSTER_WIDTH}
         marginVertical={0}
       />
       <SkeletonLoader
         height={viewType === 1 ? 12 : 18}
-        width={viewType === 1 ? 97 : '65%'}
+        width={viewType === 1 ? gridPosterWidth : '65%'}
         marginVertical={viewType === 1 ? 8 : 0}
         style={viewType === 1 ? undefined : {marginLeft: 12}}
       />
+    </View>
+  );
+
+  // The footer sits outside the grid, so it is not laid out into columns.
+  // Render a full row of placeholders instead of a single stray one.
+  const renderLoadingMoreSkeletons = () => (
+    <View className={viewType === 1 ? 'flex-row flex-wrap' : ''}>
+      {Array.from({length: viewType === 1 ? gridColumns : 2}).map((_, i) => (
+        <View key={`footer-skeleton-${i}`}>{renderSkeletonItem()}</View>
+      ))}
     </View>
   );
 
@@ -181,13 +212,15 @@ const ScrollList = ({route}: Props): React.ReactElement => {
         <FlashList
           ListFooterComponent={
             <View className={posts.length > 0 && isLoading ? 'mb-16' : ''}>
-              {posts.length > 0 && isLoading ? renderSkeletonItem() : null}
+              {posts.length > 0 && isLoading
+                ? renderLoadingMoreSkeletons()
+                : null}
               <View className="h-32" />
             </View>
           }
           data={listData}
-          numColumns={viewType === 1 ? 3 : 1}
-          key={`view-type-${viewType}`}
+          numColumns={numColumns}
+          key={`view-type-${viewType}-${numColumns}`}
           contentContainerStyle={{paddingBottom: 80}}
           keyExtractor={(item, i) =>
             'isSkeleton' in item ? item.id : `${item.title}-${i}`
@@ -220,19 +253,21 @@ const ScrollList = ({route}: Props): React.ReactElement => {
                   }}
                   style={
                     viewType === 1
-                      ? {width: GRID_POSTER_WIDTH, height: GRID_POSTER_HEIGHT}
+                      ? {width: gridPosterWidth, height: gridPosterHeight}
                       : {width: LIST_POSTER_WIDTH, height: LIST_POSTER_HEIGHT}
                   }
                 />
                 <Text
+                  numberOfLines={2}
+                  style={
+                    viewType === 1 ? {width: gridPosterWidth} : undefined
+                  }
                   className={
                     viewType === 1
-                      ? 'text-white text-center truncate w-24 text-xs'
+                      ? 'text-white text-center text-xs'
                       : 'text-white ml-3 truncate w-72 font-semibold text-base'
                   }>
-                  {item?.title?.length > 24 && viewType === 1
-                    ? item.title.slice(0, 24) + '...'
-                    : item.title}
+                  {item.title}
                 </Text>
               </TouchableOpacity>
             );

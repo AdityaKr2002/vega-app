@@ -89,8 +89,8 @@ const DownloadComponent = ({
   synopsis?: string;
   infoUrl?: string;
 }) => {
-  const {primary} = useThemeStore(state => state);
-  const {provider} = useContentStore(state => state);
+  const primary = useThemeStore(state => state.primary);
+  const provider = useContentStore(state => state.provider);
   const download = useDownloadsStore(state => state.downloads[downloadId]);
   const removeDownload = useDownloadsStore(state => state.removeDownload);
   const [legacyDownloadedFile, setLegacyDownloadedFile] = useState<

@@ -6,7 +6,7 @@ import {
   Text,
 } from 'react-native';
 import Slider from '../../components/Slider';
-import React, {useCallback, useMemo, useState} from 'react';
+import React, {useCallback, useEffect, useMemo, useState} from 'react';
 import HeroOptimized from '../../components/Hero';
 import {mainStorage} from '../../lib/storage';
 import useContentStore from '../../lib/zustand/contentStore';
@@ -24,6 +24,7 @@ import {Drawer} from 'react-native-drawer-layout';
 import {GestureHandlerRootView} from 'react-native-gesture-handler';
 import ContinueWatching from '../../components/ContinueWatching';
 import {providerManager} from '../../lib/services/ProviderManager';
+import {Catalog} from '../../lib/providers/types';
 import Tutorial from '../../components/Touturial';
 import {QueryErrorBoundary} from '../../components/ErrorBoundary';
 import {StatusBar} from 'expo-status-bar';
@@ -31,8 +32,8 @@ import {StatusBar} from 'expo-status-bar';
 type Props = NativeStackScreenProps<HomeStackParamList, 'Home'>;
 
 const Home = ({}: Props) => {
-  const {primary} = useThemeStore(state => state);
-  const [backgroundColor, setBackgroundColor] = useState('transparent');
+  const primary = useThemeStore(state => state.primary);
+  const [_, setBackgroundColor] = useState('transparent');
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
 
   // Memoize static values
@@ -41,8 +42,9 @@ const Home = ({}: Props) => {
     [],
   );
 
-  const {provider, installedProviders} = useContentStore(state => state);
-  const {setHero} = useHeroStore(state => state);
+  const provider = useContentStore(state => state.provider);
+  const installedProviders = useContentStore(state => state.installedProviders);
+  const setHero = useHeroStore(state => state.setHero);
 
   // React Query for home page data with better error handling
   const {
@@ -92,15 +94,36 @@ const Home = ({}: Props) => {
     }
   }, [refetch, provider?.value]);
 
-  // Memoized loading skeleton
-  const loadingSliders = useMemo(() => {
-    if (!provider?.value) {
-      return [];
-    }
+  // Catalog now runs in the provider sandbox, so it resolves asynchronously.
+  const [skeletonCatalog, setSkeletonCatalog] = useState<Catalog[]>([]);
 
-    return providerManager
+  useEffect(() => {
+    if (!provider?.value) {
+      setSkeletonCatalog([]);
+      return;
+    }
+    let cancelled = false;
+    providerManager
       .getCatalog({providerValue: provider.value})
-      .map((item, index) => (
+      .then(catalog => {
+        if (!cancelled) {
+          setSkeletonCatalog(catalog);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setSkeletonCatalog([]);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [provider?.value]);
+
+  // Memoized loading skeleton
+  const loadingSliders = useMemo(
+    () =>
+      skeletonCatalog.map((item, index) => (
         <Slider
           isLoading={true}
           key={`loading-${item.filter}-${index}`}
@@ -108,8 +131,9 @@ const Home = ({}: Props) => {
           posts={[]}
           filter={item.filter}
         />
-      ));
-  }, [provider?.value]);
+      )),
+    [skeletonCatalog],
+  );
 
   // Memoized content sliders
   const contentSliders = useMemo(() => {

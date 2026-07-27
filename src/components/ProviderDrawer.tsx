@@ -8,7 +8,7 @@ const ProviderDrawer = ({onClose}: {onClose: () => void}) => {
   const {provider, setProvider, installedProviders} = useContentStore(
     state => state,
   );
-  const {primary} = useThemeStore(state => state);
+  const primary = useThemeStore(state => state.primary);
 
   return (
     <View className="flex-1" style={{backgroundColor: 'rgba(0,0,0,0.8)'}}>

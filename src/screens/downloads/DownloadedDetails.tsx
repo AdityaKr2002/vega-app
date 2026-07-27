@@ -43,7 +43,7 @@ const getSeasonTitle = (item: DownloadItem): string =>
   item.seasonTitle || 'Downloaded';
 
 const DownloadedDetails = ({navigation, route}: DownloadedDetailsProps) => {
-  const {primary} = useThemeStore(state => state);
+  const primary = useThemeStore(state => state.primary);
   const completed = useDownloadsStore(selectCompletedDownloads);
   const markMissing = useDownloadsStore(state => state.markMissing);
   const removeDownload = useDownloadsStore(state => state.removeDownload);

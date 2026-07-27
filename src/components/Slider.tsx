@@ -28,8 +28,8 @@ const Slider = ({
   isSearch?: boolean;
   error?: string;
 }): React.ReactElement => {
-  const {provider} = useContentStore(state => state);
-  const {primary} = useThemeStore(state => state);
+  const provider = useContentStore(state => state.provider);
+  const primary = useThemeStore(state => state.primary);
   const navigation =
     useNavigation<NativeStackNavigationProp<HomeStackParamList>>();
   const [isSelected, setSelected] = React.useState('');

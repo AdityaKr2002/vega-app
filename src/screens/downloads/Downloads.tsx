@@ -19,7 +19,7 @@ const GRID_GAP = 10;
 const MIN_CARD_WIDTH = 100;
 
 const Downloads = () => {
-  const {primary} = useThemeStore(state => state);
+  const primary = useThemeStore(state => state.primary);
   const navigation =
     useNavigation<NativeStackNavigationProp<DownloadsStackParamList>>();
   const completed = useDownloadsStore(selectCompletedDownloads);

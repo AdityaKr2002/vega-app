@@ -39,31 +39,32 @@ const DownloadBottomSheet = ({
   error,
 }: Props) => {
   const bottomSheetRef = useRef<BottomSheet>(null);
-  const {primary} = useThemeStore(state => state);
+  const primary = useThemeStore(state => state.primary);
   const [activeTab, setActiveTab] = React.useState<1 | 2>(1);
+  const streams = Array.isArray(data) ? data : [];
 
-  const subtitle = data.map(server => {
+  const subtitle = streams.map(server => {
     if (server.subtitles && server.subtitles.length > 0) {
       return server.subtitles;
     }
   });
   useEffect(() => {
     if (showModal) {
-      bottomSheetRef.current?.expand();
+      bottomSheetRef.current?.expand?.();
     } else {
-      bottomSheetRef.current?.close();
+      bottomSheetRef.current?.close?.();
     }
   }, [showModal]);
   return (
     <Modal
       onRequestClose={() => {
-        bottomSheetRef.current?.close();
+        bottomSheetRef.current?.close?.();
       }}
       visible={showModal}
       transparent={true}>
       <GestureHandlerRootView>
         <Pressable
-          onPress={() => bottomSheetRef.current?.close()}
+          onPress={() => bottomSheetRef.current?.close?.()}
           className="flex-1">
           <BottomSheet
             // detached={true}
@@ -119,7 +120,7 @@ const DownloadBottomSheet = ({
                       />
                     ))
                   : activeTab === 1
-                    ? data.map(item => (
+                    ? streams.map(item => (
                         <TouchableOpacity
                           className="p-2 bg-white/30 rounded-md my-1"
                           key={item.link}
@@ -141,7 +142,7 @@ const DownloadBottomSheet = ({
                           }}
                           onPress={() => {
                             onPressVideo(item);
-                            bottomSheetRef.current?.close();
+                            bottomSheetRef.current?.close?.();
                           }}>
                           <Text style={{color: 'white'}}>{item.server}</Text>
                         </TouchableOpacity>
@@ -178,7 +179,7 @@ const DownloadBottomSheet = ({
                                       : 'srt',
                                   title: item.title,
                                 });
-                                bottomSheetRef.current?.close();
+                                bottomSheetRef.current?.close?.();
                               }}>
                               <Text style={{color: 'white'}}>
                                 {item.language}
@@ -188,7 +189,7 @@ const DownloadBottomSheet = ({
                           )),
                         )
                       : null}
-                {data.length === 0 && !loading && (
+                {streams.length === 0 && !loading && (
                   <Text className="text-red-500 text-lg text-center">
                     {error || 'No server found'}
                   </Text>

@@ -10,10 +10,10 @@ import {StatusBar} from 'expo-status-bar';
 import MediaPosterCard from '../components/MediaPosterCard';
 
 const WatchList = () => {
-  const {primary} = useThemeStore(state => state);
+  const primary = useThemeStore(state => state.primary);
   const navigation =
     useNavigation<NativeStackNavigationProp<WatchListStackParamList>>();
-  const {watchList} = useWatchListStore(state => state);
+  const watchList = useWatchListStore(state => state.watchList);
 
   // Calculate how many items can fit per row
   const screenWidth = Dimensions.get('window').width;

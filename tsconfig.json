@@ -3,5 +3,6 @@
   "compilerOptions": {
     "jsx": "react-native",
     "module": "es2020"
-  }
+  },
+  "exclude": ["src/lib/sandbox/runtime", "scripts"]
 }

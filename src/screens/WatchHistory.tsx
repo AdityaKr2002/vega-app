@@ -17,8 +17,9 @@ import {mainStorage} from '../lib/storage';
 
 type Props = NativeStackScreenProps<WatchHistoryStackParamList, 'WatchHistory'>;
 const WatchHistory = ({navigation}: Props) => {
-  const {primary} = useThemeStore(state => state);
-  const {history, clearHistory} = useWatchHistoryStore(state => state);
+  const primary = useThemeStore(state => state.primary);
+  const history = useWatchHistoryStore(state => state.history);
+  const clearHistory = useWatchHistoryStore(state => state.clearHistory);
   const [progressData, setProgressData] = useState<Record<string, number>>({});
 
   // Filter out duplicates by link, keeping only the most recent entry

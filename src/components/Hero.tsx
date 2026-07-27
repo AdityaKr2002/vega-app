@@ -28,8 +28,8 @@ interface HeroProps {
 
 const Hero = memo(({isDrawerOpen, onOpenDrawer}: HeroProps) => {
   const [searchActive, setSearchActive] = useState(false);
-  const {provider} = useContentStore(state => state);
-  const {hero} = useHeroStore(state => state);
+  const provider = useContentStore(state => state.provider);
+  const hero = useHeroStore(state => state.hero);
 
   // Memoize settings to prevent re-renders
   const [showHamburgerMenu] = useState(() =>

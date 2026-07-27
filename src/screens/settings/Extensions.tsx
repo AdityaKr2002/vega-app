@@ -46,15 +46,19 @@ const isSameProvider = (
   left?.value === right.value && left.source?.author === right.source?.author;
 
 const Extensions = ({navigation}: Props) => {
-  const {primary} = useThemeStore(state => state);
-  const {
-    provider: activeExtensionProvider,
-    setProvider: setActiveExtensionProvider,
-    installedProviders,
-    availableProviders,
-    setInstalledProviders,
-    setAvailableProviders,
-  } = useContentStore(state => state);
+  const primary = useThemeStore(state => state.primary);
+  const activeExtensionProvider = useContentStore(state => state.provider);
+  const setActiveExtensionProvider = useContentStore(
+    state => state.setProvider,
+  );
+  const installedProviders = useContentStore(state => state.installedProviders);
+  const availableProviders = useContentStore(state => state.availableProviders);
+  const setInstalledProviders = useContentStore(
+    state => state.setInstalledProviders,
+  );
+  const setAvailableProviders = useContentStore(
+    state => state.setAvailableProviders,
+  );
   const [activeTab, setActiveTab] = useState<TabType>(
     installedProviders?.length > 0 ? 'installed' : 'available',
   );

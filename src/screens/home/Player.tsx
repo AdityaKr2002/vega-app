@@ -100,7 +100,7 @@ const Player = ({route}: Props): React.JSX.Element => {
     );
   }, []);
 
-  const {primary} = useThemeStore(state => state);
+  const primary = useThemeStore(state => state.primary);
   const {provider} = useContentStore();
   const navigation = useNavigation();
   const {history, addItem, updatePlaybackInfo, updateItemWithInfo} =

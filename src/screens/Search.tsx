@@ -95,7 +95,7 @@ const HistoryItem = memo(
 );
 
 const Search = () => {
-  const {primary} = useThemeStore(state => state);
+  const primary = useThemeStore(state => state.primary);
   const navigation =
     useNavigation<NativeStackNavigationProp<SearchStackParamList>>();
   const [searchText, setSearchText] = useState('');

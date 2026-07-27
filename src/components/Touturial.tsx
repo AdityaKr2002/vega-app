@@ -16,7 +16,7 @@ import {RootStackParamList} from '../App';
 
 const Tutorial = () => {
   const navigation = useNavigation<NavigationProp<RootStackParamList>>();
-  const {primary} = useThemeStore(state => state);
+  const primary = useThemeStore(state => state.primary);
   const {provider: currentProvider, installedProviders} = useContentStore(
     state => state,
   );

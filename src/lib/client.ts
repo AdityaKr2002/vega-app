@@ -10,8 +10,10 @@ export const queryClient = new QueryClient({
         if (error.name === 'AbortError') {
           return false;
         }
-        if (error.message?.includes('4')) {
-          return false; // 4xx errors
+        // Match a real 4xx status code (e.g. "404", "HTTP 429") rather than any
+        // message that merely contains the digit "4".
+        if (/\b4\d{2}\b/.test(error.message ?? '')) {
+          return false; // 4xx errors are not worth retrying
         }
         if (error.message?.includes('WAF')) {
           return false; // Don't retry if user cancelled or failed captcha
