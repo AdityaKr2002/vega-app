@@ -5,7 +5,7 @@ import type {OpenWebViewOptions, OpenWebViewResult} from '../providers/types';
 import {bytesToBase64} from './base64';
 import {providerFetch} from './providerFetch';
 import type {RpcOperation, SerializedRequest} from './protocol';
-import {isSameSite, validateProviderUrl} from './urlGuard';
+import {validateProviderUrl} from './urlGuard';
 
 const digestAlgorithms: Record<string, Crypto.CryptoDigestAlgorithm> = {
   MD5: Crypto.CryptoDigestAlgorithm.MD5,
@@ -57,27 +57,7 @@ const handleOpenWebView = async (
     | OpenWebViewOptions
     | undefined;
 
-  const result = await openWebView(url.toString(), options);
-
-  let baseHost = '';
-  try {
-    const baseUrl = await getBaseUrl(providerValue);
-    baseHost = baseUrl ? new URL(baseUrl).hostname : '';
-  } catch {
-    baseHost = '';
-  }
-
-  const cookiesAllowed =
-    Boolean(baseHost) && isSameSite(url.hostname, baseHost);
-  if (cookiesAllowed) {
-    return result;
-  }
-
-  return {
-    ...result,
-    cookies: '',
-    cookieMap: {},
-  };
+  return openWebView(url.toString(), options);
 };
 
 export const handleProviderRpc = async (

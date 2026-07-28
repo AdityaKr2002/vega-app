@@ -161,4 +161,7 @@ export const reconcileDownloadState = async (): Promise<void> => {
     .catch(() => undefined);
   await Promise.all(records.map(reconcileRecord));
   await cleanupOrphanStaging(records);
+  const {scheduleQueuedDownloads} =
+    require('./downloadManager') as typeof import('./downloadManager');
+  await scheduleQueuedDownloads();
 };

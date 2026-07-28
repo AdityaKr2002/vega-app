@@ -39,12 +39,18 @@ const CurrentDownloadRow = ({
   item,
   primary,
   onCancel,
+  onPause,
+  onResume,
   onRetry,
+  onStartNow,
 }: {
   item: DownloadItem;
   primary: string;
   onCancel: () => void;
+  onPause: () => void;
+  onResume: () => void;
   onRetry: () => void;
+  onStartNow: () => void;
 }) => {
   const progress =
     item.totalBytes > 0 ? item.downloadedBytes / item.totalBytes : 0;
@@ -120,6 +126,41 @@ const CurrentDownloadRow = ({
       )}
 
       <View className="mt-3 flex-row justify-end gap-2">
+        {item.status === 'queued' && (
+          <TouchableOpacity
+            testID={`start-now-download-${item.id}`}
+            accessibilityLabel={`Start ${item.title} now`}
+            onPress={onStartNow}
+            className="flex-row items-center rounded-lg px-3 py-2"
+            style={{backgroundColor: `${primary}22`}}>
+            <MaterialCommunityIcons
+              name="play-circle-outline"
+              size={18}
+              color={primary}
+            />
+            <Text className="ml-1 text-sm font-medium" style={{color: primary}}>
+              Start now
+            </Text>
+          </TouchableOpacity>
+        )}
+        {item.canPause && item.status === 'downloading' && (
+          <TouchableOpacity
+            testID={`pause-download-${item.id}`}
+            onPress={onPause}
+            className="flex-row items-center rounded-lg bg-white/10 px-3 py-2">
+            <MaterialCommunityIcons name="pause" size={18} color={primary} />
+            <Text className="ml-1 text-sm font-medium text-white">Pause</Text>
+          </TouchableOpacity>
+        )}
+        {item.canResume && item.status === 'paused' && (
+          <TouchableOpacity
+            testID={`resume-download-${item.id}`}
+            onPress={onResume}
+            className="flex-row items-center rounded-lg bg-white/10 px-3 py-2">
+            <MaterialCommunityIcons name="play" size={18} color={primary} />
+            <Text className="ml-1 text-sm font-medium text-white">Resume</Text>
+          </TouchableOpacity>
+        )}
         {failed && item.retryable && (
           <TouchableOpacity
             onPress={onRetry}

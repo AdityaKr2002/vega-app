@@ -1,6 +1,12 @@
 import React from 'react';
 import {Text, View} from 'react-native';
-import {cancelDownload, retryDownload} from '../../../lib/downloadManager';
+import {
+  cancelDownload,
+  pauseDownload,
+  resumeDownload,
+  retryDownload,
+  startQueuedDownloadNow,
+} from '../../../lib/downloadManager';
 import useDownloadsStore, {
   selectCurrentDownloads,
 } from '../../../lib/zustand/downloadsStore';
@@ -27,7 +33,12 @@ const CurrentDownloadsSection = ({primary}: {primary: string}) => {
           item={item}
           primary={primary}
           onCancel={() => cancelDownload(item.id).catch(console.error)}
+          onPause={() => pauseDownload(item.id).catch(console.error)}
+          onResume={() => resumeDownload(item.id).catch(console.error)}
           onRetry={() => retryDownload(item.id).catch(console.error)}
+          onStartNow={() =>
+            startQueuedDownloadNow(item.id).catch(console.error)
+          }
         />
       ))}
     </View>

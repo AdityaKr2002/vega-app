@@ -12,7 +12,6 @@ import {
   View,
 } from 'react-native';
 import {MaterialCommunityIcons, MaterialIcons} from '@expo/vector-icons';
-import {Dropdown} from 'react-native-element-dropdown';
 import {
   extensionStorage,
   ProviderSource,
@@ -26,36 +25,23 @@ type Props = {
   onSourceChanged: (source: ProviderSource | undefined) => void | Promise<void>;
 };
 
-type SourceDropdownItem = {
-  label: string;
-  value: string;
-  url: string;
-  isDefault: boolean;
-};
-
 const ProviderSourceManager = ({primary, visible, onSourceChanged}: Props) => {
   const [sources, setSources] = useState<ProviderSource[]>([]);
   const [showAddDialog, setShowAddDialog] = useState(false);
-  const [isDropdownFocused, setIsDropdownFocused] = useState(false);
+  const [showSourcePicker, setShowSourcePicker] = useState(false);
   const [inputValue, setInputValue] = useState('');
 
   const defaultSource = useMemo(() => {
     return sources.find(item => item.isDefault) || sources[0];
   }, [sources]);
 
-  const dropdownData: SourceDropdownItem[] = useMemo(
-    () =>
-      sources.map(source => ({
-        label: source.author,
-        value: source.author,
-        url: source.url,
-        isDefault: !!source.isDefault,
-      })),
-    [sources],
-  );
-
   const reloadSources = () => {
-    setSources(extensionStorage.getProviderSources());
+    const nextSources = extensionStorage.getProviderSources();
+    setSources(nextSources);
+    if (nextSources.length === 0) {
+      setShowSourcePicker(false);
+      setShowAddDialog(true);
+    }
   };
 
   useEffect(() => {
@@ -72,6 +58,7 @@ const ProviderSourceManager = ({primary, visible, onSourceChanged}: Props) => {
   }, [visible]);
 
   const handleSelectSource = async (source: ProviderSource) => {
+    setShowSourcePicker(false);
     extensionStorage.setDefaultProviderSource(source.author);
     reloadSources();
     await onSourceChanged(extensionStorage.getProviderSource());
@@ -98,11 +85,6 @@ const ProviderSourceManager = ({primary, visible, onSourceChanged}: Props) => {
   };
 
   const handleRemoveSource = (author: string) => {
-    if (sources.length <= 1) {
-      Alert.alert('Cannot remove', 'At least one source must remain.');
-      return;
-    }
-
     Alert.alert('Remove source', `Remove ${author} from provider sources?`, [
       {text: 'Cancel', style: 'cancel'},
       {
@@ -131,104 +113,121 @@ const ProviderSourceManager = ({primary, visible, onSourceChanged}: Props) => {
 
   return (
     <View className="mx-4 mt-4">
+      <Text className="mb-2 text-xs font-semibold uppercase text-gray-500">
+        Provider source
+      </Text>
       <View className="flex-row items-center gap-2">
-        <View className="flex-1 bg-tertiary rounded-xl px-3 py-2 border border-quaternary">
-          <View className="flex-row items-center mb-1">
-            <Text className="text-gray-400 text-xs">Provider Source</Text>
-            {defaultSource && (
-              <MaterialCommunityIcons
-                name="check-circle"
-                size={14}
-                color={primary}
-                style={{marginLeft: 6}}
-              />
-            )}
-          </View>
-
-          <Dropdown
-            style={{minHeight: 34}}
-            data={dropdownData}
-            labelField="label"
-            valueField="value"
-            value={defaultSource?.author}
-            placeholder="Select a provider source"
-            placeholderStyle={{color: '#9CA3AF'}}
-            selectedTextStyle={{
-              color: 'white',
-              fontSize: 15,
-              fontWeight: '600',
-            }}
-            containerStyle={{
-              backgroundColor: '#171717',
-              borderColor: '#2B2B2B',
-              borderWidth: 1,
-              borderRadius: 12,
-              overflow: 'hidden',
-            }}
-            activeColor="#262626"
-            itemContainerStyle={{backgroundColor: '#171717'}}
-            iconStyle={{width: 20, height: 20}}
-            onFocus={() => setIsDropdownFocused(true)}
-            onBlur={() => setIsDropdownFocused(false)}
-            onChange={item => {
-              const selected = sources.find(
-                source => source.author === item.value,
-              );
-              if (selected) {
-                handleSelectSource(selected);
-              }
-            }}
-            renderRightIcon={() => (
-              <MaterialIcons
-                name={isDropdownFocused ? 'expand-less' : 'expand-more'}
-                size={22}
-                color="#9CA3AF"
-              />
-            )}
-            renderItem={item => {
-              const isSelected = item.value === defaultSource?.author;
-              return (
-                <View className="px-4 py-3 border-b border-quaternary">
-                  <View className="flex-row items-center justify-between">
-                    <View className="flex-1 pr-2">
-                      <Text className="text-white font-medium">
-                        {item.label}
-                      </Text>
-                      <Text className="text-gray-400 text-xs" numberOfLines={1}>
-                        {item.url}
-                      </Text>
-                    </View>
-                    {isSelected && (
-                      <MaterialCommunityIcons
-                        name="check"
-                        size={20}
-                        color={primary}
-                      />
-                    )}
-                    {!isSelected && (
-                      <TouchableOpacity
-                        onPress={() => handleRemoveSource(item.value)}>
-                        <MaterialCommunityIcons
-                          name="trash-can-outline"
-                          size={20}
-                          color="#F87171"
-                        />
-                      </TouchableOpacity>
-                    )}
-                  </View>
-                </View>
-              );
-            }}
-          />
+        <View className="flex-1 overflow-hidden rounded-lg border border-[#2f302f] bg-black">
+          <TouchableOpacity
+            accessibilityRole="button"
+            accessibilityLabel="Select provider source"
+            className="h-[52px] flex-row items-center px-3"
+            onPress={() => setShowSourcePicker(true)}>
+            <Text
+              className={`flex-1 text-base font-bold ${
+                defaultSource ? '' : 'text-gray-400'
+              }`}
+              style={defaultSource ? {color: primary} : undefined}
+              numberOfLines={1}>
+              {defaultSource?.author || 'Add a provider source'}
+            </Text>
+            <MaterialIcons name="expand-more" size={22} color="#9CA3AF" />
+          </TouchableOpacity>
         </View>
 
         <TouchableOpacity
-          className="w-11 h-11 rounded-xl items-center justify-center"
+          accessibilityLabel="Add provider source"
+          className="h-[52px] w-[52px] items-center justify-center rounded-lg"
           style={{backgroundColor: primary}}
           onPress={() => setShowAddDialog(true)}>
           <MaterialCommunityIcons name="plus" size={24} color="white" />
         </TouchableOpacity>
       </View>
+
+      <Modal
+        visible={showSourcePicker}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowSourcePicker(false)}>
+        <TouchableOpacity
+          activeOpacity={1}
+          className="flex-1 justify-end bg-black/70"
+          onPress={() => setShowSourcePicker(false)}>
+          <TouchableOpacity
+            activeOpacity={1}
+            className="max-h-[70%] rounded-t-xl border-t border-gray-700 bg-tertiary px-4 pb-8 pt-4">
+            <View className="mb-3 flex-row items-center justify-between">
+              <View>
+                <Text className="text-lg font-semibold text-white">
+                  Provider source
+                </Text>
+                <Text className="mt-1 text-xs text-gray-400">
+                  Select or remove a source
+                </Text>
+              </View>
+              <TouchableOpacity
+                accessibilityLabel="Close source picker"
+                className="h-10 w-10 items-center justify-center"
+                onPress={() => setShowSourcePicker(false)}>
+                <MaterialCommunityIcons
+                  name="close"
+                  size={24}
+                  color="#9CA3AF"
+                />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView nestedScrollEnabled>
+              {sources.map(source => {
+                const isSelected = source.author === defaultSource?.author;
+                return (
+                  <View
+                    key={source.author}
+                    className={`mb-2 flex-row items-center rounded-lg border px-3 py-3 ${
+                      isSelected
+                        ? 'border-primary bg-quaternary'
+                        : 'border-gray-700 bg-black'
+                    }`}>
+                    <TouchableOpacity
+                      accessibilityRole="button"
+                      accessibilityLabel={`Use ${source.author} source`}
+                      className="flex-1 flex-row items-center pr-2"
+                      onPress={() => handleSelectSource(source)}>
+                      <View className="flex-1">
+                        <Text className="font-semibold text-white">
+                          {source.author}
+                        </Text>
+                        <Text
+                          className="mt-1 text-xs text-gray-400"
+                          numberOfLines={1}>
+                          {source.url}
+                        </Text>
+                      </View>
+                      {isSelected && (
+                        <MaterialCommunityIcons
+                          name="check-circle"
+                          size={22}
+                          color={primary}
+                        />
+                      )}
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      accessibilityLabel={`Remove ${source.author} source`}
+                      className="ml-3 h-10 w-10 items-center justify-center rounded-md bg-red-950"
+                      onPress={() => handleRemoveSource(source.author)}>
+                      <MaterialCommunityIcons
+                        name="trash-can-outline"
+                        size={20}
+                        color="#F87171"
+                      />
+                    </TouchableOpacity>
+                  </View>
+                );
+              })}
+            </ScrollView>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
 
       <Modal
         visible={showAddDialog}
@@ -272,7 +271,7 @@ const ProviderSourceManager = ({primary, visible, onSourceChanged}: Props) => {
                 Enter source name or url to add provider
               </Text>
               <Text className="text-gray-400 text-sm mt-[4px]">
-                How to get source url check instructions{' '}
+                How to create or add provider check{' '}
                 <TouchableOpacity
                   onPress={() =>
                     Linking.openURL(socialLinks.github + '#vega-app')

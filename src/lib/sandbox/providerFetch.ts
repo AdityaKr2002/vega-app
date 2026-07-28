@@ -1,5 +1,6 @@
 import axios, {type AxiosRequestConfig} from 'axios';
 import {headers as commonHeaders} from '../providers/headers';
+import {buildCookieString, getCookies} from '../services/cookieManager';
 import {bytesToBase64, base64ToBytes} from './base64';
 import {providerRateLimiter} from './rateLimiter';
 import {
@@ -21,13 +22,6 @@ const toAxiosBody = (body: SerializedRequest['body']): unknown => {
   if (body.kind === 'text') {
     return body.value;
   }
-  if (body.kind === 'form-data') {
-    const formData = new FormData();
-    for (const [key, value] of body.entries) {
-      formData.append(key, value);
-    }
-    return formData;
-  }
   return base64ToBytes(body.value);
 };
 
@@ -48,6 +42,9 @@ const normalizeHeaders = (
   }
   return merged;
 };
+
+const hasHeader = (headers: Record<string, string>, name: string): boolean =>
+  Object.keys(headers).some(key => key.toLowerCase() === name.toLowerCase());
 
 const toBytes = (data: unknown): Uint8Array => {
   if (data == null) {
@@ -100,13 +97,29 @@ export const providerFetch = async (
   const release = await providerRateLimiter.acquire(url.hostname);
 
   try {
+    const headers = normalizeHeaders(request.headers ?? []);
+    const body = request.body ?? {kind: 'none'};
+    if (
+      body.kind === 'base64' &&
+      body.contentType &&
+      !hasHeader(headers, 'content-type')
+    ) {
+      headers['Content-Type'] = body.contentType;
+    }
+    if (!hasHeader(headers, 'cookie')) {
+      const cookies = buildCookieString(await getCookies(url.toString()));
+      if (cookies) {
+        headers.Cookie = cookies;
+      }
+    }
+
     const config: AxiosRequestConfig = {
       url: url.toString(),
       method: (
         request.method || 'GET'
       ).toUpperCase() as AxiosRequestConfig['method'],
-      headers: normalizeHeaders(request.headers ?? []),
-      data: toAxiosBody(request.body ?? {kind: 'none'}),
+      headers,
+      data: toAxiosBody(body),
       responseType: 'arraybuffer',
       timeout: REQUEST_TIMEOUT_MS,
       maxRedirects: request.redirect === 'manual' ? 0 : 5,

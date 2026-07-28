@@ -154,6 +154,7 @@ const INTERRUPTIBLE_STATUSES: ReadonlySet<DownloadStatus> = new Set([
   'starting',
   'downloading',
   'pausing',
+  'paused',
   'finalizing',
   'canceling',
 ]);
@@ -367,6 +368,8 @@ export const useDownloadsStore = create<DownloadState>()(
               errorCode: undefined,
               errorMessage: undefined,
               retryable: undefined,
+              canPause: false,
+              canResume: false,
               headers: undefined,
             }),
           };
@@ -377,6 +380,8 @@ export const useDownloadsStore = create<DownloadState>()(
         set(state => ({
           downloads: updateStatus(state.downloads, id, 'error', {
             speed: 0,
+            canPause: false,
+            canResume: false,
             errorCode: error.code,
             errorMessage: error.message,
             retryable: error.retryable ?? true,
@@ -431,6 +436,8 @@ export const useDownloadsStore = create<DownloadState>()(
                   ...item,
                   status: 'interrupted' as const,
                   speed: 0,
+                  canPause: false,
+                  canResume: false,
                   errorMessage: 'Download was interrupted',
                   retryable: true,
                   updatedAt: now,

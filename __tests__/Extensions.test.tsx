@@ -1,7 +1,7 @@
 import React from 'react';
-import {Alert} from 'react-native';
 import renderer, {act} from 'react-test-renderer';
 import Extensions from '../src/screens/settings/Extensions';
+import {ProviderDiagnosticError} from '../src/lib/services/providerDiagnostics';
 
 const existingProvider = {
   value: 'existing',
@@ -44,6 +44,8 @@ const mockSetProvider = jest.fn();
 const mockSetInstalledProviders = jest.fn();
 const mockSetAvailableProviders = jest.fn();
 const mockInstallProvider = jest.fn();
+const mockTestProvider = jest.fn();
+const mockUninstallProvider = jest.fn();
 
 jest.mock('../src/lib/zustand/themeStore', () => ({
   __esModule: true,
@@ -74,6 +76,7 @@ jest.mock('../src/lib/storage/extensionStorage', () => ({
     getInstalledProviders: jest.fn(() => mockInstalledProviders),
     getAvailableProviders: jest.fn(() => mockAvailableProviders),
     isProviderInstalled: jest.fn(() => false),
+    uninstallProvider: (...args: unknown[]) => mockUninstallProvider(...args),
   },
 }));
 
@@ -89,6 +92,22 @@ jest.mock('../src/lib/services/UpdateProviders', () => ({
     checkForUpdatesManual: jest.fn(async () => []),
   },
 }));
+
+jest.mock('../src/lib/services/providerDiagnostics', () => {
+  class MockProviderDiagnosticError extends Error {
+    stage: string;
+
+    constructor(mockStage: string, message: string) {
+      super(message);
+      this.name = 'ProviderDiagnosticError';
+      this.stage = mockStage;
+    }
+  }
+  return {
+    ProviderDiagnosticError: MockProviderDiagnosticError,
+    testProvider: (...args: unknown[]) => mockTestProvider(...args),
+  };
+});
 
 jest.mock('../src/lib/storage', () => ({
   settingsStorage: {
@@ -132,7 +151,8 @@ describe('Extensions provider installation', () => {
     mockSetInstalledProviders.mockClear();
     mockSetAvailableProviders.mockClear();
     mockInstallProvider.mockReset();
-    jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+    mockTestProvider.mockReset();
+    mockUninstallProvider.mockReset();
     jest.spyOn(console, 'error').mockImplementation(() => undefined);
   });
 
@@ -162,12 +182,6 @@ describe('Extensions provider installation', () => {
       );
     });
 
-    act(() => {
-      tree!.root
-        .findByProps({testID: 'available-providers-tab'})
-        .props.onPress();
-    });
-
     await act(async () => {
       await tree!.root
         .findByProps({testID: 'install-provider-fixture:slow-provider'})
@@ -179,10 +193,6 @@ describe('Extensions provider installation', () => {
       mockInstalledProviders,
     );
     expect(mockSetProvider).not.toHaveBeenCalled();
-    expect(Alert.alert).toHaveBeenCalledWith(
-      'Success',
-      'Slow Provider has been installed successfully!',
-    );
   });
 
   it('does not change the active provider when installation fails', async () => {
@@ -197,12 +207,6 @@ describe('Extensions provider installation', () => {
       );
     });
 
-    act(() => {
-      tree!.root
-        .findByProps({testID: 'available-providers-tab'})
-        .props.onPress();
-    });
-
     await act(async () => {
       await tree!.root
         .findByProps({testID: 'install-provider-fixture:slow-provider'})
@@ -210,10 +214,12 @@ describe('Extensions provider installation', () => {
     });
 
     expect(mockSetProvider).not.toHaveBeenCalled();
-    expect(Alert.alert).toHaveBeenCalledWith(
-      'Error',
-      'Failed to install provider. Please try again.',
-    );
+    expect(
+      tree!.root.findByProps({testID: 'app-dialog-title'}).props.children,
+    ).toBe('Error');
+    expect(
+      tree!.root.findByProps({testID: 'app-dialog-message'}).props.children,
+    ).toBe('Failed to install provider. Please try again.');
   });
 
   it('activates the first provider installed during initial setup', async () => {
@@ -283,12 +289,6 @@ describe('Extensions provider installation', () => {
       );
     });
 
-    act(() => {
-      tree!.root
-        .findByProps({testID: 'available-providers-tab'})
-        .props.onPress();
-    });
-
     await act(async () => {
       await tree!.root
         .findByProps({testID: 'install-provider-alternate:existing'})
@@ -354,5 +354,148 @@ describe('Extensions provider installation', () => {
 
     expect(mockSetProvider).toHaveBeenCalledTimes(1);
     expect(mockSetProvider).toHaveBeenCalledWith(newProvider);
+  });
+
+  it('shows a success summary after testing an installed provider', async () => {
+    mockTestProvider.mockImplementation(async (_provider, onProgress) => {
+      for (const stage of [
+        'catalog',
+        'posts',
+        'metadata',
+        'playback',
+        'streams',
+      ]) {
+        onProgress({stage, status: 'running'});
+        onProgress({stage, status: 'completed'});
+      }
+      return {
+        catalog: {title: 'Popular', filter: 'popular'},
+        post: {title: 'Random Show', link: '/show/1', image: 'poster.jpg'},
+        metadata: {title: 'Random Show'},
+        episode: {title: 'Episode 1', link: '/episode/1'},
+        streams: [{server: 'Primary', link: 'https://video.test/1'}],
+      };
+    });
+
+    await act(async () => {
+      tree = renderer.create(
+        <Extensions
+          navigation={{navigate: jest.fn()} as never}
+          route={{} as never}
+        />,
+      );
+    });
+
+    await act(async () => {
+      await tree!.root
+        .findByProps({testID: 'test-provider-fixture:existing'})
+        .props.onPress();
+    });
+
+    expect(mockTestProvider).toHaveBeenCalledWith(
+      'existing',
+      expect.any(Function),
+    );
+    for (const stage of [
+      'catalog',
+      'posts',
+      'metadata',
+      'playback',
+      'streams',
+    ]) {
+      expect(
+        tree!.root.findByProps({
+          testID: `provider-test-step-${stage}-completed`,
+        }),
+      ).toBeDefined();
+    }
+    expect(
+      tree!.root.findByProps({testID: 'provider-test-result'}).props.children,
+    ).toContain('Streams: 1');
+    expect(
+      tree!.root.findByProps({
+        testID: 'provider-status-fixture:existing-working',
+      }),
+    ).toBeDefined();
+  });
+
+  it('shows the failed stage and provider error', async () => {
+    mockTestProvider.mockImplementation(async (_provider, onProgress) => {
+      for (const stage of ['catalog', 'posts', 'metadata', 'playback']) {
+        onProgress({stage, status: 'running'});
+        onProgress({stage, status: 'completed'});
+      }
+      onProgress({stage: 'streams', status: 'running'});
+      onProgress({
+        stage: 'streams',
+        status: 'failed',
+        detail: 'HTTP 503 Service Unavailable',
+      });
+      throw new ProviderDiagnosticError(
+        'streams' as never,
+        'HTTP 503 Service Unavailable',
+      );
+    });
+
+    await act(async () => {
+      tree = renderer.create(
+        <Extensions
+          navigation={{navigate: jest.fn()} as never}
+          route={{} as never}
+        />,
+      );
+    });
+
+    await act(async () => {
+      await tree!.root
+        .findByProps({testID: 'test-provider-fixture:existing'})
+        .props.onPress();
+    });
+
+    expect(
+      tree!.root.findByProps({
+        testID: 'provider-test-step-streams-failed',
+      }),
+    ).toBeDefined();
+    const message = tree!.root.findByProps({
+      testID: 'provider-test-result',
+    }).props.children;
+    expect(message).toContain('Stage: streams');
+    expect(message).toContain('HTTP 503 Service Unavailable');
+    expect(
+      tree!.root.findByProps({
+        testID: 'provider-status-fixture:existing-failed',
+      }),
+    ).toBeDefined();
+  });
+
+  it('confirms uninstall from the button beside provider test', async () => {
+    await act(async () => {
+      tree = renderer.create(
+        <Extensions
+          navigation={{navigate: jest.fn()} as never}
+          route={{} as never}
+        />,
+      );
+    });
+
+    act(() => {
+      tree!.root
+        .findByProps({testID: 'uninstall-provider-fixture:existing'})
+        .props.onPress();
+    });
+
+    expect(mockUninstallProvider).not.toHaveBeenCalled();
+    expect(
+      tree!.root.findByProps({testID: 'app-dialog-title'}).props.children,
+    ).toBe('Uninstall Provider');
+
+    act(() => {
+      tree!.root
+        .findByProps({testID: 'confirm-uninstall-existing'})
+        .props.onPress();
+    });
+
+    expect(mockUninstallProvider).toHaveBeenCalledWith('existing', 'fixture');
   });
 });

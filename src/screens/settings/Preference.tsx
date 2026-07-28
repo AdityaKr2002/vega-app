@@ -18,6 +18,7 @@ import Constants from 'expo-constants';
 import DownloadLocationPreference from './components/DownloadLocationPreference';
 import {Dropdown} from 'react-native-element-dropdown';
 import useNavigationPreferencesStore from '../../lib/zustand/navigationPreferencesStore';
+import DownloadConcurrencyPreference from './components/DownloadConcurrencyPreference';
 // Lazy-load Firebase to allow running without google-services.json
 const getAnalytics = (): any | null => {
   try {
@@ -403,6 +404,8 @@ const Preferences = () => {
         </View>
 
         <DownloadLocationPreference primary={primary} />
+
+        <DownloadConcurrencyPreference primary={primary} />
 
         {/* Quality Settings */}
         <View className="mb-6">

@@ -69,6 +69,7 @@ const DownloadBottomSheet = ({
           <BottomSheet
             // detached={true}
             enablePanDownToClose={true}
+            enableDynamicSizing={false}
             snapPoints={['30%', 450]}
             containerStyle={{marginHorizontal: 5}}
             ref={bottomSheetRef}

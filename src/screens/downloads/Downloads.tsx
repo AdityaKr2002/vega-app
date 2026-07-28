@@ -1,11 +1,12 @@
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
-import {useNavigation} from '@react-navigation/native';
+import {useFocusEffect, useNavigation} from '@react-navigation/native';
 import type {NativeStackNavigationProp} from '@react-navigation/native-stack';
 import {StatusBar} from 'expo-status-bar';
-import React, {useMemo} from 'react';
+import React, {useCallback, useMemo} from 'react';
 import {Dimensions, FlatList, Platform, Text, View} from 'react-native';
 import type {DownloadsStackParamList} from '../../App';
 import MediaPosterCard from '../../components/MediaPosterCard';
+import {reconcileCompletedDownloadOutputs} from '../../lib/downloadReconciliation';
 import {groupCompletedDownloads} from '../../lib/downloadLibrary';
 import useDownloadsStore, {
   selectCompletedDownloads,
@@ -30,6 +31,14 @@ const Downloads = () => {
     Math.floor((availableWidth + GRID_GAP) / (MIN_CARD_WIDTH + GRID_GAP)),
   );
   const cardWidth = (availableWidth - GRID_GAP * (columns - 1)) / columns;
+
+  useFocusEffect(
+    useCallback(() => {
+      reconcileCompletedDownloadOutputs().catch(error =>
+        console.warn('Download library reconciliation failed:', error),
+      );
+    }, []),
+  );
 
   return (
     <View className="flex-1 bg-black">

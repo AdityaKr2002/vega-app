@@ -5,10 +5,7 @@ import {
   TouchableOpacity,
   StatusBar,
   FlatList,
-  ActivityIndicator,
-  Alert,
   RefreshControl,
-  Image,
 } from 'react-native';
 import {NativeStackScreenProps} from '@react-navigation/native-stack';
 import {SettingsStackParamList} from '../../App';
@@ -16,7 +13,6 @@ import {
   MaterialCommunityIcons,
   Feather,
   FontAwesome6,
-  MaterialIcons,
 } from '@expo/vector-icons';
 import useThemeStore from '../../lib/zustand/themeStore';
 import useContentStore from '../../lib/zustand/contentStore';
@@ -32,12 +28,43 @@ import {
 } from '../../lib/services/UpdateProviders';
 import ReactNativeHapticFeedback from 'react-native-haptic-feedback';
 import {settingsStorage} from '../../lib/storage';
-import RenderProviderFlagIcon from '../../components/RenderProviderFLagIcon';
 import ProviderSourceManager from './components/ProviderSourceManager';
+import ProviderCard, {ProviderTestStatus} from './components/ProviderCard';
+import {
+  ProviderDiagnosticError,
+  testProvider,
+} from '../../lib/services/providerDiagnostics';
+import AppDialog, {
+  AppDialogAction,
+  AppDialogVariant,
+} from '../../components/AppDialog';
+import ProviderTestProgressDialog, {
+  ProviderTestStepState,
+} from '../../components/ProviderTestProgressDialog';
+import type {ProviderDiagnosticProgress} from '../../lib/services/providerDiagnostics';
 
 type Props = NativeStackScreenProps<SettingsStackParamList, 'Extensions'>;
 
-type TabType = 'installed' | 'available';
+interface DialogState {
+  title: string;
+  message: string;
+  variant: AppDialogVariant;
+  actions?: AppDialogAction[];
+}
+
+interface ProviderTestState {
+  providerName: string;
+  steps: ProviderTestStepState;
+  resultMessage?: string;
+}
+
+const createProviderTestSteps = (): ProviderTestStepState => ({
+  catalog: 'pending',
+  posts: 'pending',
+  metadata: 'pending',
+  playback: 'pending',
+  streams: 'pending',
+});
 
 const isSameProvider = (
   left: ProviderExtension | undefined,
@@ -59,18 +86,28 @@ const Extensions = ({navigation}: Props) => {
   const setAvailableProviders = useContentStore(
     state => state.setAvailableProviders,
   );
-  const [activeTab, setActiveTab] = useState<TabType>(
-    installedProviders?.length > 0 ? 'installed' : 'available',
-  );
   const [installingProvider, setInstallingProvider] = useState<string | null>(
     null,
   );
   const [updatingProvider, setUpdatingProvider] = useState<string | null>(null);
   const [updateInfos, setUpdateInfos] = useState<UpdateInfo[]>([]);
   const [refreshing, setRefreshing] = useState(false);
+  const [dialog, setDialog] = useState<DialogState | null>(null);
+  const [providerTest, setProviderTest] = useState<ProviderTestState | null>(
+    null,
+  );
+  const [providerTestStatuses, setProviderTestStatuses] = useState<
+    Record<string, ProviderTestStatus>
+  >({});
   const [activeSourceAuthor, setActiveSourceAuthor] = useState<string>(
     extensionStorage.getProviderSource()?.author || '',
   );
+  const showDialog = (
+    title: string,
+    message: string,
+    variant: AppDialogVariant = 'info',
+    actions?: AppDialogAction[],
+  ) => setDialog({title, message, variant, actions});
   // Load providers on component mount
   useEffect(() => {
     const initializeExtensions = async () => {
@@ -127,7 +164,7 @@ const Extensions = ({navigation}: Props) => {
 
   const handleUpdateProvider = async (provider: ProviderExtension) => {
     if (!provider || !provider.value) {
-      Alert.alert('Error', 'Invalid provider data');
+      showDialog('Error', 'Invalid provider data', 'error');
       return;
     }
 
@@ -146,11 +183,6 @@ const Extensions = ({navigation}: Props) => {
         loadProviders();
         await checkForUpdates();
 
-        Alert.alert(
-          'Success',
-          `${provider.display_name} has been updated successfully!`,
-        );
-
         // Update the active provider if it was the one being updated
         if (
           activeExtensionProvider?.value === provider.value &&
@@ -159,28 +191,27 @@ const Extensions = ({navigation}: Props) => {
           setActiveExtensionProvider(provider);
         }
       } else {
-        Alert.alert('Error', 'Failed to update provider. Please try again.');
+        showDialog(
+          'Error',
+          'Failed to update provider. Please try again.',
+          'error',
+        );
       }
     } catch (error) {
       console.error('Update error:', error);
-      Alert.alert('Error', 'Failed to update provider. Please try again.');
+      showDialog(
+        'Error',
+        'Failed to update provider. Please try again.',
+        'error',
+      );
     } finally {
       setUpdatingProvider(null);
     }
   };
 
-  const handleTabChange = (tab: TabType) => {
-    if (settingsStorage.isHapticFeedbackEnabled()) {
-      ReactNativeHapticFeedback.trigger('effectTick', {
-        enableVibrateFallback: true,
-        ignoreAndroidSystemSettings: false,
-      });
-    }
-    setActiveTab(tab);
-  };
   const handleInstallProvider = async (provider: ProviderExtension) => {
     if (!provider || !provider.value) {
-      Alert.alert('Error', 'Invalid provider data');
+      showDialog('Error', 'Invalid provider data', 'error');
       return;
     }
 
@@ -222,27 +253,33 @@ const Extensions = ({navigation}: Props) => {
       }
     } catch (error) {
       console.error('Installation error:', error);
-      Alert.alert('Error', 'Failed to install provider. Please try again.');
+      showDialog(
+        'Error',
+        'Failed to install provider. Please try again.',
+        'error',
+      );
     } finally {
       setInstallingProvider(null);
     }
   };
   const handleUninstallProvider = (provider: ProviderExtension) => {
     if (!provider || !provider.value) {
-      Alert.alert('Error', 'Invalid provider data');
+      showDialog('Error', 'Invalid provider data', 'error');
       return;
     }
 
-    Alert.alert(
+    showDialog(
       'Uninstall Provider',
       `Are you sure you want to uninstall ${
         provider.display_name || 'this provider'
       }?`,
+      'warning',
       [
-        {text: 'Cancel', style: 'cancel'},
+        {label: 'Cancel'},
         {
-          text: 'Uninstall',
-          style: 'destructive',
+          label: 'Uninstall',
+          variant: 'destructive',
+          testID: `confirm-uninstall-${provider.value}`,
           onPress: () => {
             extensionStorage.uninstallProvider(
               provider.value,
@@ -276,7 +313,7 @@ const Extensions = ({navigation}: Props) => {
   };
   const handleSetActiveProvider = (provider: ProviderExtension) => {
     if (!provider || !provider.value) {
-      Alert.alert('Error', 'Invalid provider data');
+      showDialog('Error', 'Invalid provider data', 'error');
       return;
     }
 
@@ -287,6 +324,75 @@ const Extensions = ({navigation}: Props) => {
       });
     }
     setActiveExtensionProvider(provider);
+  };
+
+  const handleTestProvider = async (provider: ProviderExtension) => {
+    const providerKey = `${provider.source?.author || ''}:${provider.value}`;
+    setProviderTestStatuses(current => ({
+      ...current,
+      [providerKey]: 'testing',
+    }));
+    setProviderTest({
+      providerName: provider.display_name,
+      steps: createProviderTestSteps(),
+    });
+    const handleProgress = (progress: ProviderDiagnosticProgress) => {
+      setProviderTest(current =>
+        current
+          ? {
+              ...current,
+              steps: {
+                ...current.steps,
+                [progress.stage]: progress.status,
+              },
+              resultMessage:
+                progress.status === 'failed'
+                  ? progress.detail
+                  : current.resultMessage,
+            }
+          : current,
+      );
+    };
+    try {
+      const result = await testProvider(provider.value, handleProgress);
+      const playableTitle =
+        result.episode?.title || result.directLink?.title || 'Direct stream';
+      setProviderTest(current =>
+        current
+          ? {
+              ...current,
+              resultMessage: [
+                `Provider: ${provider.display_name}`,
+                `Catalog: ${result.catalog.title}`,
+                `List: ${result.post.title}`,
+                `Metadata: ${result.metadata.title}`,
+                `Playback: ${playableTitle}`,
+                `Streams: ${result.streams.length}`,
+              ].join('\n'),
+            }
+          : current,
+      );
+      setProviderTestStatuses(current => ({
+        ...current,
+        [providerKey]: 'working',
+      }));
+    } catch (error) {
+      const stage =
+        error instanceof ProviderDiagnosticError ? error.stage : 'unknown';
+      const message = error instanceof Error ? error.message : String(error);
+      setProviderTest(current =>
+        current
+          ? {
+              ...current,
+              resultMessage: `Stage: ${stage}\n${message}`,
+            }
+          : current,
+      );
+      setProviderTestStatuses(current => ({
+        ...current,
+        [providerKey]: 'failed',
+      }));
+    }
   };
 
   const refreshProviders = async (sourceAuthor: string) => {
@@ -314,9 +420,10 @@ const Extensions = ({navigation}: Props) => {
       await checkForUpdates();
     } catch (error) {
       console.error('Refresh error:', error);
-      Alert.alert(
+      showDialog(
         'Error',
         'Failed to refresh providers list. Please check your internet connection.',
+        'error',
       );
     } finally {
       setRefreshing(false);
@@ -327,14 +434,15 @@ const Extensions = ({navigation}: Props) => {
     await refreshProviders(activeSourceAuthor);
   };
   const renderProviderCard = ({item}: {item: ProviderExtension}) => {
-    if (!item || !item.value) return null;
+    if (!item || !item.value) {
+      return null;
+    }
     const itemKey = `${item.source?.author || ''}:${item.value}`;
     const isActive =
       activeExtensionProvider?.value === item.value &&
       activeExtensionProvider?.source?.author === item.source?.author;
-    const isInstalled = extensionStorage.isProviderInstalled(
-      item.value,
-      item.source?.author,
+    const isInstalled = (installedProviders || []).some(installedProvider =>
+      isSameProvider(installedProvider, item),
     );
     const isInstalling = installingProvider === itemKey;
     const isUpdating = updatingProvider === itemKey;
@@ -346,126 +454,35 @@ const Extensions = ({navigation}: Props) => {
     const hasUpdate = updateInfo?.hasUpdate || false;
 
     return (
-      <View
-        className="bg-tertiary rounded-2xl p-5 py-3 mb-4 mx-4 shadow-lg border border-quaternary"
-        style={{elevation: 4}}>
-        <View className="flex-row items-center mb-4 gap-4 justify-between">
-          {/* Left: Icon */}
-          {item.icon ? (
-            <Image
-              source={{uri: item.icon}}
-              className="w-12 h-12 rounded-xl border-2 border-primary bg-quaternary"
-              style={{resizeMode: 'cover'}}
-            />
-          ) : (
-            <View className="px-3 py-2 bg-quaternary rounded-xl border border-gray-700">
-              <RenderProviderFlagIcon type={item.type} />
-            </View>
-          )}
-          {/* Middle: Info */}
-          <View className="flex-1 mx-3">
-            <View className="flex-row items-center flex-wrap">
-              <Text className="text-white text-lg font-bold tracking-wide flex-1">
-                {item.display_name || 'Unknown Provider'}{' '}
-                <Text className="font-medium text-sm text-gray-400">
-                  v{item.version || 'Unknown'}
-                </Text>
-              </Text>
-              {hasUpdate && updateInfo && (
-                <View
-                  style={{backgroundColor: primary}}
-                  className="px-2 py-0.5 rounded-full ml-1">
-                  <Text className="text-xs text-white font-semibold bg-gray-800">
-                    Update
-                  </Text>
-                </View>
-              )}
-            </View>
-            <Text className="text-gray-400 text-xs capitalize">
-              • {item.type || 'Unknown'}
-            </Text>
-            {item?.source?.author && (
-              <Text className="text-gray-400 text-xs" numberOfLines={1}>
-                • {item.source.author}
-              </Text>
-            )}
-          </View>
-          {/* Right: Buttons */}
-          <View className="flex-row gap-3 items-center">
-            {activeTab === 'installed' ? (
-              <>
-                <TouchableOpacity
-                  onPress={() => handleSetActiveProvider(item)}
-                  className={`w-9 h-9 rounded-full items-center justify-center ${
-                    isActive ? 'bg-green-600' : 'bg-gray-700'
-                  }`}
-                  style={{opacity: isActive ? 1 : 0.9}}>
-                  <MaterialIcons
-                    name={isActive ? 'check-circle' : 'radio-button-unchecked'}
-                    size={20}
-                    color="white"
-                  />
-                </TouchableOpacity>
-                {hasUpdate && (
-                  <TouchableOpacity
-                    onPress={() => handleUpdateProvider(updateInfo!.provider)}
-                    disabled={isUpdating}
-                    className="w-9 h-9 rounded-full items-center justify-center"
-                    style={{
-                      backgroundColor: primary,
-                      opacity: isUpdating ? 0.7 : 1,
-                    }}>
-                    {isUpdating ? (
-                      <ActivityIndicator size="small" color="white" />
-                    ) : (
-                      <MaterialCommunityIcons
-                        name="update"
-                        size={20}
-                        color="white"
-                      />
-                    )}
-                  </TouchableOpacity>
-                )}
-                <TouchableOpacity
-                  onPress={() => handleUninstallProvider(item)}
-                  className="w-9 h-9 rounded-full items-center justify-center bg-red-600">
-                  <MaterialCommunityIcons
-                    name="delete"
-                    size={20}
-                    color="white"
-                  />
-                </TouchableOpacity>
-              </>
-            ) : (
-              <TouchableOpacity
-                testID={`install-provider-${itemKey}`}
-                onPress={() => handleInstallProvider(item)}
-                disabled={isInstalled || isInstalling}
-                className={'w-9 h-9 rounded-full items-center justify-center'}
-                style={{
-                  opacity: isInstalling ? 0.7 : 1,
-                  backgroundColor: isInstalled ? 'gray' : primary,
-                }}>
-                {isInstalling ? (
-                  <ActivityIndicator size="small" color="white" />
-                ) : (
-                  <MaterialCommunityIcons
-                    name={isInstalled ? 'check' : 'download'}
-                    size={20}
-                    color="white"
-                  />
-                )}
-              </TouchableOpacity>
-            )}
-          </View>
-        </View>
-      </View>
+      <ProviderCard
+        provider={item}
+        itemKey={itemKey}
+        installed={isInstalled}
+        active={isActive}
+        installing={isInstalling}
+        updating={isUpdating}
+        testStatus={providerTestStatuses[itemKey] || 'untested'}
+        hasUpdate={hasUpdate}
+        primary={primary}
+        onActivate={() => handleSetActiveProvider(item)}
+        onInstall={() => handleInstallProvider(item)}
+        onUpdate={() => updateInfo && handleUpdateProvider(updateInfo.provider)}
+        onTest={() => handleTestProvider(item)}
+        onUninstall={() => handleUninstallProvider(item)}
+      />
     );
   };
-  const currentData =
-    activeTab === 'installed'
-      ? (installedProviders || []).filter(item => item && item.value)
-      : (availableProviders || []).filter(item => item && item.value);
+  const currentData = Array.from(
+    [...(availableProviders || []), ...(installedProviders || [])]
+      .filter(item => item && item.value)
+      .reduce((providers, item) => {
+        const key = `${item.source?.author || ''}:${item.value}`;
+        const existing = providers.get(key);
+        providers.set(key, existing ? {...item, ...existing} : item);
+        return providers;
+      }, new Map<string, ProviderExtension>())
+      .values(),
+  );
 
   return (
     <View className="flex-1 bg-black pt-10 pb-16">
@@ -480,42 +497,8 @@ const Extensions = ({navigation}: Props) => {
           <Feather name="refresh-cw" size={24} color={primary} />
         </TouchableOpacity>
       </View>
-      {/* Tabs */}
-      <View className="flex-row bg-quaternary mx-4 mt-4 rounded-xl">
-        <TouchableOpacity
-          onPress={() => handleTabChange('installed')}
-          className="flex-1 py-3 rounded-xl"
-          style={{
-            backgroundColor:
-              activeTab === 'installed' ? primary : 'transparent',
-          }}>
-          <Text
-            className={`text-center font-medium ${
-              activeTab === 'installed' ? 'text-white' : 'text-gray-400'
-            }`}>
-            Installed ({(installedProviders || []).length})
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          testID="available-providers-tab"
-          onPress={() => handleTabChange('available')}
-          className="flex-1 py-3 rounded-xl"
-          style={{
-            backgroundColor:
-              activeTab === 'available' ? primary : 'transparent',
-          }}>
-          <Text
-            className={`text-center font-medium ${
-              activeTab === 'available' ? 'text-white' : 'text-gray-400'
-            }`}>
-            Available ({(availableProviders || []).length})
-          </Text>
-        </TouchableOpacity>
-      </View>
-
       <ProviderSourceManager
-        visible={activeTab === 'available'}
+        visible
         primary={primary}
         onSourceChanged={async (source: ProviderSource | undefined) => {
           const author = source?.author || '';
@@ -550,17 +533,30 @@ const Extensions = ({navigation}: Props) => {
               color="gray"
             />
             <Text className="text-gray-400 text-lg mt-4">
-              {activeTab === 'installed'
-                ? 'No providers installed'
-                : 'No providers available'}
+              No providers available
             </Text>
             <Text className="text-gray-500 text-sm mt-2 text-center px-8">
-              {activeTab === 'installed'
-                ? 'Install providers from the Available tab to get started'
-                : 'Pull to refresh to check for available providers'}
+              Add or refresh a source to check for available providers
             </Text>
           </View>
         }
+      />
+      <AppDialog
+        visible={dialog !== null}
+        title={dialog?.title || ''}
+        message={dialog?.message || ''}
+        primary={primary}
+        variant={dialog?.variant}
+        actions={dialog?.actions}
+        onDismiss={() => setDialog(null)}
+      />
+      <ProviderTestProgressDialog
+        visible={providerTest !== null}
+        providerName={providerTest?.providerName || ''}
+        steps={providerTest?.steps || createProviderTestSteps()}
+        resultMessage={providerTest?.resultMessage}
+        primary={primary}
+        onClose={() => setProviderTest(null)}
       />
     </View>
   );

@@ -3,7 +3,7 @@ import {
   ensureDownloadLocationAccess,
   getDownloadFileName,
 } from './downloadLocation';
-import {startDownload} from './downloadManager';
+import {scheduleQueuedDownloads} from './downloadManager';
 import {settingsStorage} from './storage';
 import useDownloadsStore, {
   DownloadMediaInput,
@@ -118,5 +118,5 @@ export const downloadManager = async ({
     status: 'queued',
   });
 
-  await startDownload(downloadId, downloadLocation);
+  await scheduleQueuedDownloads();
 };

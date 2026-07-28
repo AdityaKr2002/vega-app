@@ -6,6 +6,20 @@ export type RuntimeRpc = <T>(
   args: unknown,
 ) => Promise<T>;
 
+export const getErrorMessage = (error: unknown): string => {
+  if (error instanceof Error) {
+    return error.message;
+  }
+  if (typeof error === 'string') {
+    return error;
+  }
+  try {
+    return JSON.stringify(error);
+  } catch {
+    return String(error);
+  }
+};
+
 export const serializeBody = async (body: unknown): Promise<SerializedBody> => {
   if (body == null) {
     return {kind: 'none'};
@@ -26,14 +40,13 @@ export const serializeBody = async (body: unknown): Promise<SerializedBody> => {
     return {kind: 'text', value: body.toString()};
   }
   if (typeof FormData !== 'undefined' && body instanceof FormData) {
-    const entries: Array<[string, string]> = [];
-    body.forEach((value, key) => {
-      if (typeof value !== 'string') {
-        throw new Error('Provider FormData file uploads are not supported');
-      }
-      entries.push([key, value]);
-    });
-    return {kind: 'form-data', entries};
+    const serialized = new Response(body);
+    const bytes = new Uint8Array(await serialized.arrayBuffer());
+    return {
+      kind: 'base64',
+      value: bytesToBase64(bytes),
+      contentType: serialized.headers.get('content-type') ?? undefined,
+    };
   }
   try {
     return {kind: 'text', value: JSON.stringify(body) ?? ''};

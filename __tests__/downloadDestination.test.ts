@@ -35,7 +35,9 @@ jest.mock('@dr.pogodin/react-native-fs', () => ({
 
 jest.mock('expo-file-system/legacy', () => ({
   StorageAccessFramework: {
-    readDirectoryAsync: async (directory: string) => getSafChildren(directory),
+    readDirectoryAsync: jest.fn(async (directory: string) =>
+      getSafChildren(directory),
+    ),
     makeDirectoryAsync: async (parent: string, name: string) => {
       const uri = `${parent}/${name}`;
       mockSafDirectories.add(uri);
@@ -51,10 +53,10 @@ jest.mock('expo-file-system/legacy', () => ({
       mockSafDirectories.delete(uri);
     },
   },
-  getInfoAsync: async (uri: string) => ({
+  getInfoAsync: jest.fn(async (uri: string) => ({
     exists: mockSafFiles.has(uri),
     size: mockSafFiles.get(uri),
-  }),
+  })),
 }));
 
 jest.mock('react-native', () => ({
@@ -70,10 +72,12 @@ jest.mock('react-native', () => ({
 
 import {
   deleteDownloadOutput,
+  downloadOutputExists,
   finalizeDownloadOutput,
   getDownloadStagingDirectory,
   prepareDownloadDestination,
 } from '../src/lib/downloadDestination';
+import * as FileSystem from 'expo-file-system/legacy';
 
 describe('download destination service', () => {
   beforeEach(() => {
@@ -216,6 +220,33 @@ describe('download destination service', () => {
 
     expect(mockSafDirectories.has(seasonUri)).toBe(false);
     expect(mockSafDirectories.has(showUri)).toBe(false);
+  });
+
+  it('treats an inaccessible stale SAF URI as already deleted', async () => {
+    const fileUri = 'content://downloads/missing.mp4';
+    const getInfoAsync = FileSystem.getInfoAsync as jest.Mock;
+    getInfoAsync.mockRejectedValueOnce(new Error('Document no longer exists'));
+
+    await expect(deleteDownloadOutput(fileUri)).resolves.toBe(true);
+    await expect(downloadOutputExists(fileUri)).resolves.toBe(false);
+  });
+
+  it('succeeds when the deleted file parent tree is inaccessible', async () => {
+    const fileUri = 'content://downloads/tree/show/Episode_1.mp4';
+    const readDirectoryAsync = FileSystem.StorageAccessFramework
+      .readDirectoryAsync as jest.Mock;
+    readDirectoryAsync.mockRejectedValueOnce(new Error('Tree unavailable'));
+
+    await expect(
+      deleteDownloadOutput(fileUri, {
+        downloadLocation: {
+          type: 'saf',
+          uri: 'content://downloads/tree',
+          label: 'Downloads',
+        },
+        outputDirectoryNames: ['show'],
+      }),
+    ).resolves.toBe(true);
   });
 
   it('succeeds when the local file was already deleted manually', async () => {

@@ -58,6 +58,8 @@ export const torrentDownloadBackend: DownloadBackend = {
     useDownloadsStore.getState().updateDownload(record.id, {
       backendJobId: addData.infoHash,
       status: 'downloading',
+      canPause: true,
+      canResume: false,
     });
 
     try {
@@ -76,6 +78,22 @@ export const torrentDownloadBackend: DownloadBackend = {
     } finally {
       activeTorrents.delete(record.id);
     }
+  },
+
+  async pause(downloadId: string): Promise<void> {
+    const active = activeTorrents.get(downloadId);
+    if (!active?.infoHash) {
+      throw new Error('Torrent download is not currently active');
+    }
+    await torrentManager.pauseTorrent(active.infoHash);
+  },
+
+  async resume(downloadId: string): Promise<void> {
+    const active = activeTorrents.get(downloadId);
+    if (!active?.infoHash) {
+      throw new Error('Paused torrent cannot be resumed');
+    }
+    await torrentManager.resumeTorrent(active.infoHash);
   },
 
   async cancel(downloadId: string): Promise<void> {

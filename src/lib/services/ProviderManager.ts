@@ -5,6 +5,21 @@ import {extensionManager} from './ExtensionManager';
 import {MAX_STATE_BYTES} from '../sandbox/protocol';
 import {sandboxBridge, setSandboxStateHandler} from '../sandbox/sandboxBridge';
 
+const getErrorMessage = (error: unknown, fallback: string): string => {
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+  if (typeof error === 'string' && error) {
+    return error;
+  }
+  try {
+    const serialized = JSON.stringify(error);
+    return serialized || fallback;
+  } catch {
+    return fallback;
+  }
+};
+
 export class ProviderManager {
   private readonly providerState = new Map<string, Record<string, unknown>>();
 
@@ -108,7 +123,12 @@ export class ProviderManager {
       );
     } catch (error) {
       console.error('Error loading catalog:', error);
-      throw new Error(`Invalid catalog module for provider: ${providerValue}`);
+      throw new Error(
+        getErrorMessage(
+          error,
+          `Invalid catalog module for provider: ${providerValue}`,
+        ),
+      );
     }
   };
   getGenres = async ({
@@ -132,7 +152,12 @@ export class ProviderManager {
       );
     } catch (error) {
       console.error('Error loading genres:', error);
-      throw new Error(`Invalid catalog module for provider: ${providerValue}`);
+      throw new Error(
+        getErrorMessage(
+          error,
+          `Invalid catalog module for provider: ${providerValue}`,
+        ),
+      );
     }
   };
   getPosts = async ({
@@ -159,12 +184,14 @@ export class ProviderManager {
         signal,
       );
       return this.requireArray<Post>(posts, providerValue, 'getPosts');
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error in posts function:', error);
-      // Re-throw the original error message if it exists, otherwise use generic message
-      const errorMessage =
-        error?.message || `Failed to get posts from provider: ${providerValue}`;
-      throw new Error(errorMessage);
+      throw new Error(
+        getErrorMessage(
+          error,
+          `Failed to get posts from provider: ${providerValue}`,
+        ),
+      );
     }
   };
   getSearchPosts = async ({
@@ -191,13 +218,14 @@ export class ProviderManager {
         signal,
       );
       return this.requireArray<Post>(posts, providerValue, 'getSearchPosts');
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error in search posts function:', error);
-      // Re-throw the original error message if it exists, otherwise use generic message
-      const errorMessage =
-        error?.message ||
-        `Failed to search posts from provider: ${providerValue}`;
-      throw new Error(errorMessage);
+      throw new Error(
+        getErrorMessage(
+          error,
+          `Failed to search posts from provider: ${providerValue}`,
+        ),
+      );
     }
   };
   getMetaData = async ({
@@ -218,12 +246,14 @@ export class ProviderManager {
         'getMeta',
         {link, provider},
       );
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error in meta data function:', error);
-      // Re-throw the original error message if it exists, otherwise use generic message
-      const errorMessage =
-        error?.message || `Failed to get metadata from provider: ${provider}`;
-      throw new Error(errorMessage);
+      throw new Error(
+        getErrorMessage(
+          error,
+          `Failed to get metadata from provider: ${provider}`,
+        ),
+      );
     }
   };
   getStream = async ({
@@ -250,13 +280,14 @@ export class ProviderManager {
         signal,
       );
       return this.requireArray<Stream>(streams, providerValue, 'getStream');
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error in stream function:', error);
-      // Re-throw the original error message if it exists, otherwise use generic message
-      const errorMessage =
-        error?.message ||
-        `Failed to get stream from provider: ${providerValue}`;
-      throw new Error(errorMessage);
+      throw new Error(
+        getErrorMessage(
+          error,
+          `Failed to get stream from provider: ${providerValue}`,
+        ),
+      );
     }
   };
   getEpisodes = async ({
@@ -284,12 +315,12 @@ export class ProviderManager {
         providerValue,
         'getEpisodes',
       );
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error in episodes function:', error);
-      // Re-throw the original error message if it exists, otherwise use generic message
-      const errorMessage =
-        error?.message ||
-        `Failed to get episodes from provider: ${providerValue}`;
+      const errorMessage = getErrorMessage(
+        error,
+        `Failed to get episodes from provider: ${providerValue}`,
+      );
       ToastAndroid.show(errorMessage, ToastAndroid.LONG);
       throw new Error(errorMessage);
     }

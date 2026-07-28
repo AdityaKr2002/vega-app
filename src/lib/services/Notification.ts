@@ -1,5 +1,6 @@
 import notifee, {
   AndroidImportance,
+  AndroidGroupAlertBehavior,
   EventDetail,
   EventType,
   AndroidForegroundServiceType,
@@ -10,11 +11,12 @@ import * as RNFS from '@dr.pogodin/react-native-fs';
 import RNApkInstaller from '@himanshu8443/react-native-apk-installer';
 import type {DownloadSourceType} from '../zustand/downloadsStore';
 
-type NotificationData = Record<string, string | number | boolean>;
+type NotificationData = Record<string, string | number | object>;
 
 interface DownloadNotificationData extends NotificationData {
   downloadId: string;
   sourceType: DownloadSourceType;
+  navigationTarget: 'downloads';
 }
 
 export interface NotificationOptions {
@@ -31,10 +33,15 @@ export interface NotificationOptions {
     title: string;
     pressAction: {
       id: string;
+      launchActivity?: string;
     };
   }>;
   onlyAlertOnce?: boolean;
   asForegroundService?: boolean;
+  groupId?: string;
+  sortKey?: string;
+  groupSummary?: boolean;
+  groupAlertBehavior?: AndroidGroupAlertBehavior;
 }
 
 export interface ChannelOptions {
@@ -51,6 +58,7 @@ class NotificationService {
   private _downloadForegroundId = 'downloadForegroundService';
   private initialized = false;
   private permissionRequest?: Promise<boolean>;
+  private readonly notificationOperations = new Map<string, Promise<void>>();
 
   constructor() {
     this.initialize();
@@ -165,14 +173,25 @@ class NotificationService {
         pressAction: {
           id: 'default',
         },
-
-        progress: options.progress,
-        actions: options.actions,
+        ...(options.progress ? {progress: options.progress} : {}),
+        ...(options.actions ? {actions: options.actions} : {}),
+        ...(options.groupId ? {groupId: options.groupId} : {}),
+        ...(options.sortKey ? {sortKey: options.sortKey} : {}),
+        ...(options.groupSummary !== undefined
+          ? {groupSummary: options.groupSummary}
+          : {}),
+        ...(options.groupAlertBehavior !== undefined
+          ? {groupAlertBehavior: options.groupAlertBehavior}
+          : {}),
         onlyAlertOnce: options.onlyAlertOnce || false,
         asForegroundService: options.asForegroundService ?? false,
-        foregroundServiceTypes: options.asForegroundService
-          ? [AndroidForegroundServiceType.FOREGROUND_SERVICE_TYPE_DATA_SYNC]
-          : undefined,
+        ...(options.asForegroundService
+          ? {
+              foregroundServiceTypes: [
+                AndroidForegroundServiceType.FOREGROUND_SERVICE_TYPE_DATA_SYNC,
+              ],
+            }
+          : {}),
       },
     });
   }
@@ -183,7 +202,9 @@ class NotificationService {
   async displayDownloadNotification(
     options: NotificationOptions,
   ): Promise<void> {
-    await this.displayNotification(options, this._downloadChannelId);
+    await this.enqueueNotificationOperation(options.id, () =>
+      this.displayNotification(options, this._downloadChannelId),
+    );
   }
 
   /**
@@ -197,8 +218,10 @@ class NotificationService {
    * Cancel a notification
    */
   async cancelNotification(notificationId: string): Promise<void> {
-    await this.ensureInitialized();
-    await notifee.cancelNotification(notificationId);
+    await this.enqueueNotificationOperation(notificationId, async () => {
+      await this.ensureInitialized();
+      await notifee.cancelNotification(notificationId);
+    });
   }
 
   /**
@@ -220,8 +243,13 @@ class NotificationService {
       id: this._downloadForegroundId,
       title: count === 1 ? 'Download in progress' : 'Downloads in progress',
       body: count === 1 ? '1 active download' : `${count} active downloads`,
+      data: {navigationTarget: 'downloads'},
       onlyAlertOnce: true,
       asForegroundService: true,
+      groupId: 'vega-downloads',
+      sortKey: '0000-summary',
+      groupSummary: true,
+      groupAlertBehavior: AndroidGroupAlertBehavior.CHILDREN,
     });
   }
 
@@ -248,7 +276,7 @@ class NotificationService {
     downloadId: string,
     sourceType: DownloadSourceType,
   ): DownloadNotificationData {
-    return {downloadId, sourceType};
+    return {downloadId, sourceType, navigationTarget: 'downloads'};
   }
 
   /**
@@ -264,11 +292,39 @@ class NotificationService {
       title: title,
       body: 'Starting download',
       data: this.getDownloadData(downloadId, sourceType),
+      groupId: 'vega-downloads',
+      sortKey: downloadId,
       progress: {
         max: 100,
         current: 0,
         indeterminate: true,
       },
+    });
+  }
+
+  async showDownloadQueued(
+    title: string,
+    downloadId: string,
+    sourceType: DownloadSourceType,
+  ): Promise<void> {
+    await this.displayDownloadNotification({
+      id: downloadId,
+      title,
+      body: 'Queued',
+      data: this.getDownloadData(downloadId, sourceType),
+      groupId: 'vega-downloads',
+      sortKey: downloadId,
+      actions: [
+        {
+          title: 'Start now',
+          pressAction: {
+            id: 'start-now-download',
+            launchActivity: 'default',
+          },
+        },
+        {title: 'Cancel', pressAction: {id: 'cancel-download'}},
+      ],
+      onlyAlertOnce: true,
     });
   }
 
@@ -281,25 +337,29 @@ class NotificationService {
     progress: number,
     progressText: string,
     sourceType: DownloadSourceType,
+    action: 'pause' | 'resume' | 'none' = 'none',
   ): Promise<void> {
+    const actions: NotificationOptions['actions'] = [];
+    if (action === 'pause') {
+      actions.push({title: 'Pause', pressAction: {id: 'pause-download'}});
+    } else if (action === 'resume') {
+      actions.push({title: 'Resume', pressAction: {id: 'resume-download'}});
+    }
+    actions.push({title: 'Cancel', pressAction: {id: 'cancel-download'}});
+
     await this.displayDownloadNotification({
       id: downloadId,
       title: title,
       body: progressText,
       data: this.getDownloadData(downloadId, sourceType),
+      groupId: 'vega-downloads',
+      sortKey: downloadId,
       progress: {
         max: 100,
         current: Math.min(Math.max(progress * 100, 0), 100),
         indeterminate: false,
       },
-      actions: [
-        {
-          title: 'Cancel',
-          pressAction: {
-            id: 'cancel-download',
-          },
-        },
-      ],
+      actions,
       onlyAlertOnce: true,
     });
   }
@@ -355,24 +415,55 @@ class NotificationService {
   }
 
   async actionHandler({type, detail}: {type: EventType; detail: EventDetail}) {
+    const downloadAction = detail.pressAction?.id;
+    if (
+      type === EventType.PRESS &&
+      detail.notification?.data?.navigationTarget === 'downloads'
+    ) {
+      const {openDownloadsScreen} =
+        require('../../App') as typeof import('../../App');
+      openDownloadsScreen();
+      return;
+    }
     if (
       type === EventType.ACTION_PRESS &&
-      (detail.pressAction?.id === 'cancel-download' ||
+      (downloadAction === 'cancel-download' ||
+        downloadAction === 'pause-download' ||
+        downloadAction === 'resume-download' ||
+        downloadAction === 'start-now-download' ||
         Boolean(detail.notification?.data?.jobId) ||
         (Boolean(detail.notification?.data?.fileName) &&
-          detail.pressAction?.id !== 'default'))
+          downloadAction !== 'default'))
     ) {
       const notificationData = detail.notification?.data;
       const downloadId =
         notificationData?.downloadId ||
         notificationData?.fileName ||
-        (detail.pressAction?.id !== 'cancel-download'
-          ? detail.pressAction?.id
+        (downloadAction !== 'cancel-download' &&
+        downloadAction !== 'pause-download' &&
+        downloadAction !== 'resume-download' &&
+        downloadAction !== 'start-now-download'
+          ? downloadAction
           : undefined);
       if (downloadId) {
-        const {cancelDownload} =
+        const {
+          cancelDownload,
+          pauseDownload,
+          resumeDownload,
+          startQueuedDownloadNow,
+          waitForDownloadsHydration,
+        } =
           require('../downloadManager') as typeof import('../downloadManager');
-        await cancelDownload(String(downloadId));
+        await waitForDownloadsHydration();
+        if (downloadAction === 'pause-download') {
+          await pauseDownload(String(downloadId));
+        } else if (downloadAction === 'resume-download') {
+          await resumeDownload(String(downloadId));
+        } else if (downloadAction === 'start-now-download') {
+          await startQueuedDownloadNow(String(downloadId));
+        } else {
+          await cancelDownload(String(downloadId));
+        }
       }
       return;
     }
@@ -384,11 +475,12 @@ class NotificationService {
         detail.notification?.data?.action === 'install')
     ) {
       console.log('Install action pressed');
-      const apkPath = detail.notification?.data?.filePath;
+      const filePath = detail.notification?.data?.filePath;
+      const apkPath = typeof filePath === 'string' ? filePath : undefined;
       console.log('APK path:', apkPath);
       const res = apkPath ? await RNFS.exists(apkPath) : false;
       console.log('APK exists:', res);
-      if (res) {
+      if (apkPath && res) {
         console.log('Starting APK installation...');
         try {
           await RNApkInstaller.install(apkPath!);
@@ -442,6 +534,24 @@ class NotificationService {
   private async ensureInitialized(): Promise<void> {
     if (!this.initialized) {
       await this.initialize();
+    }
+  }
+
+  private async enqueueNotificationOperation(
+    notificationId: string,
+    operation: () => Promise<void>,
+  ): Promise<void> {
+    const previous = this.notificationOperations.get(notificationId);
+    const current = (previous || Promise.resolve())
+      .catch(() => undefined)
+      .then(operation);
+    this.notificationOperations.set(notificationId, current);
+    try {
+      await current;
+    } finally {
+      if (this.notificationOperations.get(notificationId) === current) {
+        this.notificationOperations.delete(notificationId);
+      }
     }
   }
 }

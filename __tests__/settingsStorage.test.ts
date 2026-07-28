@@ -1,4 +1,5 @@
 const mockBooleanValues = new Map<string, boolean>();
+const mockNumberValues = new Map<string, number>();
 
 jest.mock('../src/lib/storage/StorageService', () => ({
   mainStorage: {
@@ -7,8 +8,8 @@ jest.mock('../src/lib/storage/StorageService', () => ({
     setBool: (key: string, value: boolean) => mockBooleanValues.set(key, value),
     getString: () => undefined,
     setString: jest.fn(),
-    getNumber: () => undefined,
-    setNumber: jest.fn(),
+    getNumber: (key: string) => mockNumberValues.get(key),
+    setNumber: (key: string, value: number) => mockNumberValues.set(key, value),
     getArray: () => undefined,
     setArray: jest.fn(),
     delete: jest.fn(),
@@ -29,6 +30,7 @@ import {
 describe('settings defaults', () => {
   beforeEach(() => {
     mockBooleanValues.clear();
+    mockNumberValues.clear();
   });
 
   it('enables default-on preferences when no value is stored', () => {
@@ -48,6 +50,16 @@ describe('settings defaults', () => {
     expect(settingsStorage.isAutoDownloadEnabled()).toBe(false);
     expect(settingsStorage.hideSeekButtons()).toBe(false);
     expect(settingsStorage.isEnable2xGestureEnabled()).toBe(false);
+  });
+
+  it('defaults download concurrency to two and clamps saved values', () => {
+    expect(settingsStorage.getDownloadConcurrency()).toBe(2);
+
+    settingsStorage.setDownloadConcurrency(8);
+    expect(settingsStorage.getDownloadConcurrency()).toBe(5);
+
+    settingsStorage.setDownloadConcurrency(0);
+    expect(settingsStorage.getDownloadConcurrency()).toBe(1);
   });
 
   it('persists the Downloads tab preference', () => {

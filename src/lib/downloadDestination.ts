@@ -169,32 +169,40 @@ export const deleteDownloadOutput = async (
   }
 
   if (filePath.startsWith('content://')) {
-    const info = await FileSystem.getInfoAsync(filePath);
+    const info = await FileSystem.getInfoAsync(filePath).catch(() => ({
+      exists: false,
+    }));
     if (info.exists) {
-      await FileSystem.StorageAccessFramework.deleteAsync(filePath);
+      await FileSystem.StorageAccessFramework.deleteAsync(filePath).catch(
+        () => undefined,
+      );
     }
     const location = options?.downloadLocation;
     if (location && isSafDownloadLocation(location)) {
-      const directoryUris: string[] = [];
-      let currentUri = location.uri;
-      for (const directoryName of options?.outputDirectoryNames || []) {
-        const child = await findSafEntryByName(currentUri, directoryName);
-        if (!child) {
-          break;
+      try {
+        const directoryUris: string[] = [];
+        let currentUri = location.uri;
+        for (const directoryName of options?.outputDirectoryNames || []) {
+          const child = await findSafEntryByName(currentUri, directoryName);
+          if (!child) {
+            break;
+          }
+          directoryUris.push(child);
+          currentUri = child;
         }
-        directoryUris.push(child);
-        currentUri = child;
-      }
-      for (const directoryUri of directoryUris.reverse()) {
-        const entries =
-          await FileSystem.StorageAccessFramework.readDirectoryAsync(
+        for (const directoryUri of directoryUris.reverse()) {
+          const entries =
+            await FileSystem.StorageAccessFramework.readDirectoryAsync(
+              directoryUri,
+            ).catch(() => []);
+          if (entries.length > 0) {
+            break;
+          }
+          await FileSystem.StorageAccessFramework.deleteAsync(
             directoryUri,
-          );
-        if (entries.length > 0) {
-          break;
+          ).catch(() => undefined);
         }
-        await FileSystem.StorageAccessFramework.deleteAsync(directoryUri);
-      }
+      } catch {}
     }
     return true;
   }
@@ -213,7 +221,9 @@ export const downloadOutputExists = async (
     return false;
   }
   if (filePath.startsWith('content://')) {
-    return (await FileSystem.getInfoAsync(filePath)).exists;
+    return FileSystem.getInfoAsync(filePath)
+      .then(info => info.exists)
+      .catch(() => false);
   }
-  return RNFS.exists(filePath.replace(/^file:\/\//, ''));
+  return RNFS.exists(filePath.replace(/^file:\/\//, '')).catch(() => false);
 };

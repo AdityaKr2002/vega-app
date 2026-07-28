@@ -1,4 +1,13 @@
 const mockCancelDownload = jest.fn(async () => undefined);
+const mockPauseDownload = jest.fn(async () => undefined);
+const mockResumeDownload = jest.fn(async () => undefined);
+const mockStartQueuedDownloadNow = jest.fn(async () => undefined);
+const mockWaitForDownloadsHydration = jest.fn(async () => undefined);
+const mockOpenDownloadsScreen = jest.fn();
+
+jest.mock('../src/App', () => ({
+  openDownloadsScreen: mockOpenDownloadsScreen,
+}));
 
 jest.mock('@notifee/react-native', () => ({
   __esModule: true,
@@ -12,6 +21,7 @@ jest.mock('@notifee/react-native', () => ({
     requestPermission: jest.fn(async () => ({authorizationStatus: 1})),
   },
   AndroidImportance: {DEFAULT: 3, HIGH: 4},
+  AndroidGroupAlertBehavior: {ALL: 0, SUMMARY: 1, CHILDREN: 2},
   AndroidForegroundServiceType: {
     FOREGROUND_SERVICE_TYPE_DATA_SYNC: 1,
   },
@@ -39,6 +49,10 @@ jest.mock('@himanshu8443/react-native-apk-installer', () => ({
 
 jest.mock('../src/lib/downloadManager', () => ({
   cancelDownload: mockCancelDownload,
+  pauseDownload: mockPauseDownload,
+  resumeDownload: mockResumeDownload,
+  startQueuedDownloadNow: mockStartQueuedDownloadNow,
+  waitForDownloadsHydration: mockWaitForDownloadsHydration,
 }));
 
 import {EventType} from '@notifee/react-native';
@@ -50,6 +64,9 @@ const mockStopForegroundService = notifee.stopForegroundService as jest.Mock;
 const mockGetNotificationSettings =
   notifee.getNotificationSettings as jest.Mock;
 const mockRequestPermission = notifee.requestPermission as jest.Mock;
+
+const flushAsyncWork = () =>
+  new Promise<void>(resolve => setImmediate(resolve));
 
 describe('notification service download lifecycle', () => {
   beforeEach(async () => {
@@ -65,17 +82,92 @@ describe('notification service download lifecycle', () => {
       0.5,
       '50 / 100 MB',
       'http',
+      'pause',
     );
 
     expect(mockDisplayNotification).toHaveBeenCalledWith(
       expect.objectContaining({
         id: 'movie_direct_0',
-        data: {downloadId: 'movie_direct_0', sourceType: 'http'},
+        data: {
+          downloadId: 'movie_direct_0',
+          sourceType: 'http',
+          navigationTarget: 'downloads',
+        },
         android: expect.objectContaining({
+          groupId: 'vega-downloads',
+          sortKey: 'movie_direct_0',
           actions: [
+            expect.objectContaining({pressAction: {id: 'pause-download'}}),
             expect.objectContaining({pressAction: {id: 'cancel-download'}}),
           ],
         }),
+      }),
+    );
+  });
+
+  it('shows queued downloads with Start now and Cancel actions', async () => {
+    await notificationService.showDownloadQueued(
+      'Movie',
+      'movie_direct_0',
+      'http',
+    );
+
+    expect(mockDisplayNotification).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: 'movie_direct_0',
+        body: 'Queued',
+        data: {
+          downloadId: 'movie_direct_0',
+          sourceType: 'http',
+          navigationTarget: 'downloads',
+        },
+        android: expect.objectContaining({
+          groupId: 'vega-downloads',
+          sortKey: 'movie_direct_0',
+          actions: [
+            expect.objectContaining({
+              pressAction: {
+                id: 'start-now-download',
+                launchActivity: 'default',
+              },
+            }),
+            expect.objectContaining({pressAction: {id: 'cancel-download'}}),
+          ],
+        }),
+      }),
+    );
+  });
+
+  it('does not let an older queued update replace a starting notification', async () => {
+    let releaseQueued: (() => void) | undefined;
+    mockDisplayNotification.mockImplementationOnce(
+      () =>
+        new Promise<void>(resolve => {
+          releaseQueued = resolve;
+        }),
+    );
+
+    const queued = notificationService.showDownloadQueued(
+      'Movie',
+      'movie_direct_0',
+      'http',
+    );
+    await flushAsyncWork();
+    const cancel = notificationService.cancelNotification('movie_direct_0');
+    const starting = notificationService.showDownloadStarting(
+      'Movie',
+      'movie_direct_0',
+      'http',
+    );
+
+    expect(mockDisplayNotification).toHaveBeenCalledTimes(1);
+    releaseQueued?.();
+    await Promise.all([queued, cancel, starting]);
+
+    expect(mockDisplayNotification).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        id: 'movie_direct_0',
+        body: 'Starting download',
       }),
     );
   });
@@ -100,6 +192,17 @@ describe('notification service download lifecycle', () => {
 
   it('keeps the foreground service while another download remains active', async () => {
     await notificationService.startForegroundTask('first');
+
+    const foregroundNotification = mockDisplayNotification.mock.calls[0][0];
+    expect(foregroundNotification.android).toMatchObject({
+      groupId: 'vega-downloads',
+      sortKey: '0000-summary',
+      groupSummary: true,
+      groupAlertBehavior: 2,
+    });
+    expect(foregroundNotification.android).not.toHaveProperty('progress');
+    expect(foregroundNotification.android).not.toHaveProperty('actions');
+
     await notificationService.startForegroundTask('second');
 
     expect(mockDisplayNotification).toHaveBeenLastCalledWith(
@@ -143,14 +246,22 @@ describe('notification service download lifecycle', () => {
       1,
       expect.objectContaining({
         id: 'show_s1_e1',
-        android: expect.objectContaining({asForegroundService: false}),
+        android: expect.objectContaining({
+          asForegroundService: false,
+          groupId: 'vega-downloads',
+          sortKey: 'show_s1_e1',
+        }),
       }),
     );
     expect(mockDisplayNotification).toHaveBeenNthCalledWith(
       2,
       expect.objectContaining({
         id: 'show_s1_e2',
-        android: expect.objectContaining({asForegroundService: false}),
+        android: expect.objectContaining({
+          asForegroundService: false,
+          groupId: 'vega-downloads',
+          sortKey: 'show_s1_e2',
+        }),
       }),
     );
   });
@@ -167,6 +278,59 @@ describe('notification service download lifecycle', () => {
     });
 
     expect(mockCancelDownload).toHaveBeenCalledWith('movie_direct_0');
+  });
+
+  it('opens Downloads when a download notification body is pressed', async () => {
+    await notificationService.actionHandler({
+      type: EventType.PRESS,
+      detail: {
+        pressAction: {id: 'default'},
+        notification: {
+          data: {navigationTarget: 'downloads'},
+        },
+      } as never,
+    });
+
+    expect(mockOpenDownloadsScreen).toHaveBeenCalledTimes(1);
+  });
+
+  it('routes pause and resume actions through the global manager', async () => {
+    await notificationService.actionHandler({
+      type: EventType.ACTION_PRESS,
+      detail: {
+        pressAction: {id: 'pause-download'},
+        notification: {
+          data: {downloadId: 'movie_direct_0', sourceType: 'http'},
+        },
+      } as never,
+    });
+    await notificationService.actionHandler({
+      type: EventType.ACTION_PRESS,
+      detail: {
+        pressAction: {id: 'resume-download'},
+        notification: {
+          data: {downloadId: 'movie_direct_0', sourceType: 'http'},
+        },
+      } as never,
+    });
+
+    expect(mockPauseDownload).toHaveBeenCalledWith('movie_direct_0');
+    expect(mockResumeDownload).toHaveBeenCalledWith('movie_direct_0');
+  });
+
+  it('routes Start now through the global manager', async () => {
+    await notificationService.actionHandler({
+      type: EventType.ACTION_PRESS,
+      detail: {
+        pressAction: {id: 'start-now-download'},
+        notification: {
+          data: {downloadId: 'movie_direct_0', sourceType: 'http'},
+        },
+      } as never,
+    });
+
+    expect(mockStartQueuedDownloadNow).toHaveBeenCalledWith('movie_direct_0');
+    expect(mockWaitForDownloadsHydration).toHaveBeenCalledTimes(1);
   });
 
   it('temporarily supports legacy filename cancellation payloads', async () => {

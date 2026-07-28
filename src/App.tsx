@@ -179,6 +179,24 @@ export type TabStackParamList = {
 };
 const Tab = createBottomTabNavigator<TabStackParamList>();
 export const navigationRef = createNavigationContainerRef<RootStackParamList>();
+let pendingDownloadsNavigation = false;
+
+export const openDownloadsScreen = (): void => {
+  if (!navigationRef.isReady()) {
+    pendingDownloadsNavigation = true;
+    return;
+  }
+  pendingDownloadsNavigation = false;
+  if (settingsStorage.hideDownloadsTab()) {
+    navigationRef.navigate('TabStack', {
+      screen: 'SettingsStack',
+      params: {screen: 'DownloadsStack'},
+    });
+    return;
+  }
+  navigationRef.navigate('TabStack', {screen: 'DownloadsStack'});
+};
+
 const App = () => {
   LogBox.ignoreLogs([
     'You have passed a style to FlashList',
@@ -626,6 +644,9 @@ const App = () => {
             <NavigationContainer
               ref={navigationRef}
               onReady={async () => {
+                if (pendingDownloadsNavigation) {
+                  openDownloadsScreen();
+                }
                 // Hide bootsplash
                 await BootSplash.hide({fade: true});
                 // Track initial screen

@@ -2,11 +2,14 @@ import {describe, expect, it, jest} from '@jest/globals';
 import React from 'react';
 import renderer, {act} from 'react-test-renderer';
 
+const mockBottomSheetProps = jest.fn();
+
 jest.mock('@gorhom/bottom-sheet', () => {
   const ReactModule = require('react');
   const ReactNative = require('react-native');
   const BottomSheet = ReactModule.forwardRef(
     (props: Record<string, unknown>, ref: React.Ref<unknown>) => {
+      mockBottomSheetProps(props);
       // Reproduce the library lifecycle window where the ref is populated but
       // its imperative close/expand methods have not been attached yet.
       ReactModule.useImperativeHandle(ref, () => ({}));
@@ -49,6 +52,30 @@ jest.mock('react-native-video', () => ({
 import DownloadBottomSheet from '../src/components/DownloadBottomSheet';
 
 describe('DownloadBottomSheet', () => {
+  it('keeps fixed snap points when no servers are found', () => {
+    act(() => {
+      renderer.create(
+        <DownloadBottomSheet
+          data={[]}
+          loading={false}
+          title="Streams"
+          showModal={true}
+          setModal={jest.fn()}
+          onPressVideo={jest.fn()}
+          onPressSubs={jest.fn()}
+          error="No server found"
+        />,
+      );
+    });
+
+    expect(mockBottomSheetProps).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        enableDynamicSizing: false,
+        snapPoints: ['30%', 450],
+      }),
+    );
+  });
+
   it('does not call a missing close method while mounted hidden', () => {
     expect(() => {
       act(() => {

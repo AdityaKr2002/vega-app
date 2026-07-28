@@ -4,6 +4,7 @@ const mockFiles = new Map<string, number>();
 const mockDirectories = new Set<string>();
 const mockSafFiles = new Map<string, number>();
 const mockSafDirectories = new Set<string>();
+const mockScheduleQueuedDownloads = jest.fn(async () => undefined);
 
 const getSafChildren = (parent: string) =>
   [
@@ -67,6 +68,10 @@ jest.mock('../src/lib/services/Notification', () => ({
   },
 }));
 
+jest.mock('../src/lib/downloadManager', () => ({
+  scheduleQueuedDownloads: mockScheduleQueuedDownloads,
+}));
+
 jest.mock('react-native-mmkv-storage', () => ({
   MMKVLoader: class {
     withInstanceID() {
@@ -113,6 +118,7 @@ describe('download startup reconciliation', () => {
     mockSafDirectories.clear();
     mockCancelNotification.mockClear();
     mockResetForeground.mockClear();
+    mockScheduleQueuedDownloads.mockClear();
     useDownloadsStore.setState({downloads: {}});
   });
 
@@ -170,9 +176,9 @@ describe('download startup reconciliation', () => {
 
     await reconcileCompletedDownloadOutputs();
 
-    expect(useDownloadsStore.getState().downloads.movie_completed_0.status).toBe(
-      'missing',
-    );
+    expect(
+      useDownloadsStore.getState().downloads.movie_completed_0.status,
+    ).toBe('missing');
     expect(useDownloadsStore.getState().downloads.movie_active_0.status).toBe(
       'downloading',
     );
@@ -224,6 +230,12 @@ describe('download startup reconciliation', () => {
   it('clears stale foreground notification state', async () => {
     await reconcileDownloadState();
     expect(mockResetForeground).toHaveBeenCalledTimes(1);
+  });
+
+  it('starts persisted queued downloads after reconciliation', async () => {
+    await reconcileDownloadState();
+
+    expect(mockScheduleQueuedDownloads).toHaveBeenCalledTimes(1);
   });
 
   it('removes orphan app-private staging directories', async () => {

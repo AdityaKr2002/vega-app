@@ -36,6 +36,7 @@ export enum SettingsKeys {
 
   // Download settings
   DOWNLOAD_LOCATION = 'downloadLocation',
+  DOWNLOAD_CONCURRENCY = 'downloadConcurrency',
 
   // Subtitle settings
   SUBTITLE_FONT_SIZE = 'subtitleFontSize',
@@ -200,6 +201,20 @@ export class SettingsStorage {
 
   resetDownloadLocation(): void {
     mainStorage.delete(SettingsKeys.DOWNLOAD_LOCATION);
+  }
+
+  getDownloadConcurrency(): number {
+    const value = mainStorage.getNumber(SettingsKeys.DOWNLOAD_CONCURRENCY);
+    return typeof value === 'number' && Number.isFinite(value)
+      ? Math.min(Math.max(Math.round(value), 1), 5)
+      : 2;
+  }
+
+  setDownloadConcurrency(value: number): void {
+    mainStorage.setNumber(
+      SettingsKeys.DOWNLOAD_CONCURRENCY,
+      Math.min(Math.max(Math.round(value), 1), 5),
+    );
   }
 
   // Subtitle settings

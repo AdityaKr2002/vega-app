@@ -18,7 +18,12 @@ import axios, {AxiosHeaders, type AxiosAdapter} from 'axios';
 import * as cheerio from 'cheerio';
 import {base64ToBytes} from '../base64';
 import type {HostMessage, RpcOperation, SerializedResponse} from '../protocol';
-import {createAwaiter, createCryptoShim, serializeBody} from './runtimeSupport';
+import {
+  createAwaiter,
+  createCryptoShim,
+  getErrorMessage,
+  serializeBody,
+} from './runtimeSupport';
 
 type WorkerScope = typeof globalThis & {
   postMessage: (message: unknown) => void;
@@ -358,7 +363,7 @@ addMessageListener('message', async (event: {data: HostMessage}) => {
     sendMessage({
       type: 'result',
       token: activeToken,
-      error: error instanceof Error ? error.message : String(error),
+      error: getErrorMessage(error),
     });
   }
 });

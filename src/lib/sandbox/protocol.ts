@@ -3,8 +3,7 @@ export type RpcOperation = 'fetch' | 'getBaseUrl' | 'openWebView' | 'crypto';
 export type SerializedBody =
   | {kind: 'none'}
   | {kind: 'text'; value: string}
-  | {kind: 'base64'; value: string}
-  | {kind: 'form-data'; entries: Array<[string, string]>};
+  | {kind: 'base64'; value: string; contentType?: string};
 
 export interface SerializedRequest {
   method?: string;
