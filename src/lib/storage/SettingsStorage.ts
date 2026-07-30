@@ -322,7 +322,7 @@ export class SettingsStorage {
   }
 
   getDohProvider(): string {
-    return mainStorage.getString(SettingsKeys.DOH_PROVIDER) || 'google';
+    return mainStorage.getString(SettingsKeys.DOH_PROVIDER) || 'cloudflare';
   }
 
   setDohProvider(provider: string): void {
