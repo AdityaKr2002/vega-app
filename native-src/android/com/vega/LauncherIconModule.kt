@@ -3,6 +3,7 @@ package com.vega
 import android.content.ComponentName
 import android.content.Context
 import android.content.pm.PackageManager
+import android.os.Build
 import com.facebook.react.bridge.NativeModule
 import com.facebook.react.bridge.Promise
 import com.facebook.react.bridge.ReactApplicationContext
@@ -22,18 +23,33 @@ class LauncherIconModule(reactContext: ReactApplicationContext) : ReactContextBa
             "blue" to "LauncherBlue",
             "lavender" to "LauncherLavender",
         )
+        val splashThemes = mapOf(
+            "white" to R.style.BootTheme_White,
+            "tomato" to R.style.BootTheme_Tomato,
+            "gray" to R.style.BootTheme_Gray,
+            "blue" to R.style.BootTheme_Blue,
+            "lavender" to R.style.BootTheme_Lavender,
+        )
         val selectedAlias = aliases[icon]
-        if (selectedAlias == null) {
+        val selectedSplashTheme = splashThemes[icon]
+        if (selectedAlias == null || selectedSplashTheme == null) {
             promise.reject("LAUNCHER_ICON_ERROR", "Unknown launcher icon: $icon")
             return
         }
 
         try {
+            // Android 12+ creates the first splash frame before MainActivity.onCreate.
+            // Persist its native theme now so it matches RNBootSplash on the next launch.
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                reactApplicationContext.currentActivity
+                    ?.splashScreen
+                    ?.setSplashScreenTheme(selectedSplashTheme)
+            }
             reactApplicationContext
                 .getSharedPreferences("vega_launcher", Context.MODE_PRIVATE)
                 .edit()
                 .putString("icon", icon)
-                .apply()
+                .commit()
             val packageManager = reactApplicationContext.packageManager
             val packageName = reactApplicationContext.packageName
             aliases.values.forEach { alias ->

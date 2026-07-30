@@ -131,6 +131,12 @@ const bootThemeMethod = `  private fun getBootTheme(): Int {
 
 `;
 
+const bootSplashInitialization = `val bootTheme = getBootTheme()
+    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+      splashScreen.setSplashScreenTheme(bootTheme)
+    }
+    RNBootSplash.init(this, bootTheme)`;
+
 const withLauncherMainActivity = config =>
   withMainActivity(config, activityConfig => {
     let contents = activityConfig.modResults.contents;
@@ -141,8 +147,8 @@ const withLauncherMainActivity = config =>
       );
     }
     contents = contents.replace(
-      /RNBootSplash\.init\(this,\s*R\.style\.BootTheme\)/,
-      'RNBootSplash.init(this, getBootTheme())',
+      /RNBootSplash\.init\(this,\s*(?:R\.style\.BootTheme|getBootTheme\(\))\)/,
+      bootSplashInitialization,
     );
     activityConfig.modResults.contents = contents;
     return activityConfig;
@@ -203,8 +209,8 @@ const patchGeneratedBootSplashFiles = (projectRoot, packageName) => {
   );
   let mainActivity = fs.readFileSync(mainActivityPath, 'utf8');
   mainActivity = mainActivity.replace(
-    /RNBootSplash\.init\(this,\s*R\.style\.BootTheme\)/,
-    'RNBootSplash.init(this, getBootTheme())',
+    /RNBootSplash\.init\(this,\s*(?:R\.style\.BootTheme|getBootTheme\(\))\)/,
+    bootSplashInitialization,
   );
   fs.writeFileSync(mainActivityPath, mainActivity, 'utf8');
 };

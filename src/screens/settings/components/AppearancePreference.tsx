@@ -45,13 +45,11 @@ const AppearancePreference = () => {
           testID="accent-source-wallpaper"
           disabled={!isDynamicColorAvailable}
           onPress={() => setSource('wallpaper')}
+          className="flex-row items-center p-4"
           style={({pressed}) => ({
-            alignItems: 'center',
             backgroundColor: pressed
               ? colors.surfaceContainerHighest
               : 'transparent',
-            flexDirection: 'row',
-            padding: 16,
           })}>
           <View
             className="mr-4 h-11 w-11 items-center justify-center rounded-2xl"
@@ -62,12 +60,16 @@ const AppearancePreference = () => {
               color={colors.onTertiaryContainer}
             />
           </View>
-          <View className="mr-4 flex-1">
-            <AppText role="bodyLargeEmphasized" className="text-m3-on-surface">
+          <View className="mr-4 flex-1 shrink">
+            <AppText
+              role="bodyLargeEmphasized"
+              numberOfLines={1}
+              className="text-m3-on-surface">
               Wallpaper colors
             </AppText>
             <AppText
               role="bodySmall"
+              numberOfLines={2}
               className="mt-1 text-m3-on-surface-variant">
               {isDynamicColorAvailable
                 ? 'Match the system Material You palette'
