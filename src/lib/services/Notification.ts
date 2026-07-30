@@ -349,6 +349,7 @@ class NotificationService {
     sourceType: DownloadSourceType,
     action: 'pause' | 'resume' | 'none' = 'none',
     color?: string,
+    indeterminate = false,
   ): Promise<void> {
     const actions: NotificationOptions['actions'] = [];
     if (action === 'pause') {
@@ -369,7 +370,7 @@ class NotificationService {
       progress: {
         max: 100,
         current: Math.min(Math.max(progress * 100, 0), 100),
-        indeterminate: false,
+        indeterminate,
       },
       actions,
       onlyAlertOnce: true,

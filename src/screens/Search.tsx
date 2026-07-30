@@ -1,4 +1,4 @@
-import {View, FlatList, Pressable} from 'react-native';
+import {View, FlatList, Pressable, Text} from 'react-native';
 import React, {useState, useEffect, useCallback, memo} from 'react';
 import {useNavigation} from '@react-navigation/native';
 import {NativeStackNavigationProp} from '@react-navigation/native-stack';
@@ -6,17 +6,12 @@ import {SearchStackParamList} from '../App';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import {MMKV} from '../lib/Mmkv';
 import {SafeAreaView} from 'react-native-safe-area-context';
-import Animated, {
-  FadeInDown,
-  SlideInRight,
-  Layout,
-} from 'react-native-reanimated';
+import Animated, {FadeInDown} from 'react-native-reanimated';
 import {searchOMDB} from '../lib/services/omdb';
 import debounce from 'lodash/debounce';
 import {OMDBResult} from '../types/omdb';
 import Button from '../components/ui/Button';
 import IconButton from '../components/ui/IconButton';
-import Surface from '../components/ui/Surface';
 import AppText from '../components/ui/Text';
 import SearchField from '../components/ui/SearchField';
 import {useM3Colors} from '../theme/M3PaletteContext';
@@ -105,30 +100,39 @@ const HistoryItem = memo(
     }, [search, onRemove]);
 
     return (
-      <Surface level="low" className="mb-2 flex-row items-center p-2">
-        <Pressable
-          onPress={handlePress}
-          className="flex-row flex-1 items-center p-2">
-          <View className="rounded-2xl bg-m3-secondary-container p-2.5">
-            <MaterialCommunityIcons
-              name="history"
-              size={18}
-              color={colors.onSecondaryContainer}
-            />
-          </View>
-          <AppText
-            role="bodyMediumEmphasized"
-            className="ml-3 text-m3-on-surface">
-            {search}
-          </AppText>
-        </Pressable>
-        <IconButton
-          icon="close"
-          label={`Remove ${search} from recent searches`}
-          onPress={handleRemove}
-          size={18}
+      <Pressable
+        onPress={handlePress}
+        className="flex-row items-center rounded-[20px] mb-2 px-4 py-3.5"
+        style={({pressed}) => ({
+          backgroundColor: colors.surfaceContainerLow,
+          opacity: pressed ? 0.72 : 1,
+        })}>
+        <MaterialCommunityIcons
+          name="history"
+          size={22}
+          color={colors.onSurfaceVariant}
         />
-      </Surface>
+        <Text
+          numberOfLines={1}
+          className="flex-1 mx-3"
+          style={{
+            color: colors.onSurface,
+            fontSize: 16,
+            fontWeight: '500',
+          }}>
+          {search}
+        </Text>
+        <Pressable
+          onPress={handleRemove}
+          hitSlop={8}
+          accessibilityLabel={`Remove ${search} from recent searches`}>
+          <MaterialCommunityIcons
+            name="close"
+            size={18}
+            color={colors.onSurfaceVariant}
+          />
+        </Pressable>
+      </Pressable>
     );
   },
 );
@@ -270,8 +274,7 @@ const Search = () => {
     <SafeAreaView className="flex-1 bg-m3-background">
       {/* Title Section */}
       <AnimatedContainer
-        entering={FadeInDown.springify()}
-        layout={Layout.springify()}
+        entering={FadeInDown.duration(300)}
         className="px-4 pt-5">
         {/* <AppText
           role="headlineLargeEmphasized"
@@ -302,16 +305,7 @@ const Search = () => {
       </AnimatedContainer>
 
       {/* Search Results */}
-      <AnimatedContainer
-        layout={Layout.springify()}
-        className="flex-1"
-        key={
-          searchResults.length > 0
-            ? 'results'
-            : searchHistory.length > 0
-              ? 'history'
-              : 'empty'
-        }>
+      <View className="flex-1">
         {searchResults.length > 0 ? (
           <FlatList
             data={searchResults}
@@ -327,8 +321,7 @@ const Search = () => {
           />
         ) : searchHistory.length > 0 ? (
           <AnimatedContainer
-            entering={SlideInRight.springify()}
-            layout={Layout.springify()}
+            entering={FadeInDown.duration(250)}
             className="px-4 flex-1 pt-4">
             <View className="flex-row items-center justify-between mb-3">
               <AppText
@@ -347,7 +340,7 @@ const Search = () => {
               showsVerticalScrollIndicator={false}
               contentContainerStyle={{paddingBottom: 20}}
               renderItem={renderHistoryItem}
-              removeClippedSubviews={true}
+              removeClippedSubviews={false}
               maxToRenderPerBatch={10}
               updateCellsBatchingPeriod={50}
               windowSize={10}
@@ -357,7 +350,7 @@ const Search = () => {
         ) : (
           // Empty State - Only show when no history and no results
           <AnimatedContainer
-            layout={Layout.springify()}
+            entering={FadeInDown.duration(300)}
             className="items-center justify-center flex-1 px-8">
             <View className="mb-5 rounded-[28px] bg-m3-secondary-container p-7">
               <MaterialCommunityIcons
@@ -378,7 +371,7 @@ const Search = () => {
             </AppText>
           </AnimatedContainer>
         )}
-      </AnimatedContainer>
+      </View>
     </SafeAreaView>
   );
 };

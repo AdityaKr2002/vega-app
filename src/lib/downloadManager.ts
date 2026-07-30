@@ -157,6 +157,7 @@ const showProgressNotification = async (
     record.sourceType,
     record.canPause ? 'pause' : record.canResume ? 'resume' : 'none',
     color,
+    !record.totalBytes,
   );
 };
 
@@ -183,6 +184,7 @@ const showCurrentDownloadNotification = async (
     record.sourceType,
     record.status === 'paused' ? 'resume' : record.canPause ? 'pause' : 'none',
     color,
+    !record.totalBytes && record.status !== 'paused',
   );
 };
 
