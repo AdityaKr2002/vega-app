@@ -1,5 +1,5 @@
 import {View, FlatList, Pressable, Text} from 'react-native';
-import React, {useState, useEffect, useCallback, memo} from 'react';
+import React, {useState, useEffect, useCallback, memo, useRef} from 'react';
 import {useNavigation} from '@react-navigation/native';
 import {NativeStackNavigationProp} from '@react-navigation/native-stack';
 import {SearchStackParamList} from '../App';
@@ -13,7 +13,7 @@ import {OMDBResult} from '../types/omdb';
 import Button from '../components/ui/Button';
 import IconButton from '../components/ui/IconButton';
 import AppText from '../components/ui/Text';
-import SearchField from '../components/ui/SearchField';
+import SearchField, {type SearchFieldRef} from '../components/ui/SearchField';
 import {useM3Colors} from '../theme/M3PaletteContext';
 
 const MAX_VISIBLE_RESULTS = 15; // Limit number of animated items to prevent excessive callbacks
@@ -146,6 +146,21 @@ const Search = () => {
     MMKV.getArray<string>('searchHistory') || [],
   );
   const [searchResults, setSearchResults] = useState<OMDBResult[]>([]);
+  const searchFieldRef = useRef<SearchFieldRef>(null);
+
+  useEffect(() => {
+    const tabNavigation = navigation.getParent();
+    if (!tabNavigation) {
+      return;
+    }
+
+    return tabNavigation.addListener('tabPress', () => {
+      const state = tabNavigation.getState();
+      if (state.routes[state.index]?.name === 'SearchStack') {
+        searchFieldRef.current?.focus();
+      }
+    });
+  }, [navigation]);
 
   const debouncedSearch = useCallback(
     debounce(async (text: string) => {
@@ -287,6 +302,7 @@ const Search = () => {
         <View className="flex-row items-center space-x-3 mb-3">
           <View className="flex-1">
             <SearchField
+              ref={searchFieldRef}
               value={searchText}
               onChangeText={setSearchText}
               onSubmit={handleSearch}
