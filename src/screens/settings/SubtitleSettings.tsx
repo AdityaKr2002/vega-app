@@ -1,16 +1,11 @@
-import {
-  View,
-  Text,
-  StatusBar,
-  TouchableOpacity,
-  TouchableNativeFeedback,
-  ScrollView,
-} from 'react-native';
+import {View, ScrollView} from 'react-native';
 import React from 'react';
 import {startActivityAsync, ActivityAction} from 'expo-intent-launcher';
 import {settingsStorage} from '../../lib/storage';
-import useThemeStore from '../../lib/zustand/themeStore';
-import {Feather, Entypo} from '@expo/vector-icons';
+import IconButton from '../../components/ui/IconButton';
+import SettingsRow from '../../components/ui/SettingsRow';
+import SettingsSection from '../../components/ui/SettingsSection';
+import AppText from '../../components/ui/Text';
 
 const SubtitlePreference = () => {
   const [fontSize, setFontSize] = React.useState(
@@ -22,8 +17,6 @@ const SubtitlePreference = () => {
   const [bottomElevation, setBottomElevation] = React.useState(
     settingsStorage.getSubtitleBottomPadding(),
   );
-  const {primary} = useThemeStore();
-
   const handleSubtitleSize = (action: 'increase' | 'decrease') => {
     if (fontSize < 5 || fontSize > 30) return;
     if (action === 'increase') {
@@ -67,104 +60,118 @@ const SubtitlePreference = () => {
 
   return (
     <ScrollView
-      className="w-full h-full bg-black"
-      contentContainerStyle={{
-        paddingTop: StatusBar.currentHeight || 0,
-      }}>
-      <View className="p-5">
-        <Text className="text-2xl font-bold text-white mb-6">
+      className="h-full w-full bg-m3-background"
+      showsVerticalScrollIndicator={false}
+      contentContainerStyle={{paddingBottom: 40, paddingTop: 20}}>
+      <View className="px-5">
+        <AppText
+          role="headlineLargeEmphasized"
+          className="text-m3-on-background">
           Subtitle Preferences
-        </Text>
+        </AppText>
+        <AppText
+          role="bodyLarge"
+          className="mb-7 mt-1 text-m3-on-surface-variant">
+          Tune subtitle readability for your player
+        </AppText>
 
-        <View className="bg-[#1A1A1A] rounded-xl overflow-hidden">
-          <View className="flex-row items-center justify-between p-4 border-b border-[#262626]">
-            <Text className="text-white text-base">Font Size</Text>
-            <View className="flex-row items-center gap-4">
-              <TouchableOpacity onPress={() => handleSubtitleSize('decrease')}>
-                <Entypo name="minus" size={23} color={primary} />
-              </TouchableOpacity>
-              <Text className="text-white text-base bg-[#262626] px-3 rounded-md w-12 text-center">
-                {fontSize}
-              </Text>
-              <TouchableOpacity onPress={() => handleSubtitleSize('increase')}>
-                <Entypo name="plus" size={23} color={primary} />
-              </TouchableOpacity>
-            </View>
-          </View>
-
-          {/* opacity */}
-          <View className="flex-row items-center justify-between p-4 border-b border-[#262626]">
-            <Text className="text-white text-base">Opacity</Text>
-            <View className="flex-row items-center gap-4">
-              <TouchableOpacity
-                onPress={() => handleSubtitleOpacity('decrease')}>
-                <Entypo name="minus" size={23} color={primary} />
-              </TouchableOpacity>
-              <Text className="text-white text-base bg-[#262626] px-3 rounded-md w-12 text-center">
-                {opacity}
-              </Text>
-              <TouchableOpacity
-                onPress={() => handleSubtitleOpacity('increase')}>
-                <Entypo name="plus" size={23} color={primary} />
-              </TouchableOpacity>
-            </View>
-          </View>
-
-          {/* bottom padding */}
-          <View className="flex-row items-center justify-between p-4 border-b border-[#262626]">
-            <Text className="text-white text-base">Bottom Elevation</Text>
-            <View className="flex-row items-center gap-4">
-              <TouchableOpacity
-                onPress={() => handleSubtitleBottomPadding('decrease')}>
-                <Entypo name="minus" size={23} color={primary} />
-              </TouchableOpacity>
-              <Text className="text-white text-base bg-[#262626] px-3 rounded-md w-12 text-center">
-                {bottomElevation}
-              </Text>
-              <TouchableOpacity
-                onPress={() => handleSubtitleBottomPadding('increase')}>
-                <Entypo name="plus" size={23} color={primary} />
-              </TouchableOpacity>
-            </View>
-          </View>
-
-          {/* More Settings */}
-          <TouchableNativeFeedback
+        <SettingsSection title="Text">
+          <SettingsRow
+            title="Font size"
+            description="Size in scaled pixels"
+            trailing={
+              <View className="flex-row items-center gap-2">
+                <IconButton
+                  icon="minus"
+                  label="Decrease subtitle font size"
+                  onPress={() => handleSubtitleSize('decrease')}
+                />
+                <AppText
+                  role="titleMediumEmphasized"
+                  className="w-10 text-center text-m3-on-surface">
+                  {fontSize}
+                </AppText>
+                <IconButton
+                  icon="plus"
+                  label="Increase subtitle font size"
+                  onPress={() => handleSubtitleSize('increase')}
+                />
+              </View>
+            }
+          />
+          <SettingsRow
+            title="Opacity"
+            description="Subtitle background opacity"
+            trailing={
+              <View className="flex-row items-center gap-2">
+                <IconButton
+                  icon="minus"
+                  label="Decrease subtitle opacity"
+                  onPress={() => handleSubtitleOpacity('decrease')}
+                />
+                <AppText
+                  role="titleMediumEmphasized"
+                  className="w-10 text-center text-m3-on-surface">
+                  {opacity}
+                </AppText>
+                <IconButton
+                  icon="plus"
+                  label="Increase subtitle opacity"
+                  onPress={() => handleSubtitleOpacity('increase')}
+                />
+              </View>
+            }
+          />
+          <SettingsRow
+            title="Bottom elevation"
+            description="Distance from the bottom edge"
+            trailing={
+              <View className="flex-row items-center gap-2">
+                <IconButton
+                  icon="minus"
+                  label="Decrease subtitle bottom elevation"
+                  onPress={() => handleSubtitleBottomPadding('decrease')}
+                />
+                <AppText
+                  role="titleMediumEmphasized"
+                  className="w-10 text-center text-m3-on-surface">
+                  {bottomElevation}
+                </AppText>
+                <IconButton
+                  icon="plus"
+                  label="Increase subtitle bottom elevation"
+                  onPress={() => handleSubtitleBottomPadding('increase')}
+                />
+              </View>
+            }
+          />
+          <SettingsRow
+            title="System caption settings"
+            description="Open Android accessibility caption controls"
+            icon="closed-caption-outline"
             onPress={async () => {
               await startActivityAsync(ActivityAction.CAPTIONING_SETTINGS);
             }}
-            background={TouchableNativeFeedback.Ripple('#333333', false)}>
-            <View className="flex-row items-center justify-between p-4 border-b border-[#262626]">
-              <View className="flex-row items-center">
-                <Text className="text-white text-base">
-                  More Subtitle Settings
-                </Text>
-              </View>
-              <Feather name="chevron-right" size={20} color="gray" />
-            </View>
-          </TouchableNativeFeedback>
-
-          {/* reset */}
-          <View className="flex-row items-center justify-between p-4 border-b border-[#262626]">
-            <Text className="text-white text-base">Reset to Default</Text>
-            <TouchableOpacity
-              onPress={() => {
-                settingsStorage.setSubtitleFontSize(16);
-                settingsStorage.setSubtitleOpacity(1);
-                settingsStorage.setSubtitleBottomPadding(10);
-                setFontSize(16);
-                setOpacity(1);
-                setBottomElevation(10);
-              }}>
-              <View className="w-32 flex-row items-center justify-center">
-                <Text className="text-white text-base bg-[#262626] px-3 py-1 rounded-md text-center">
-                  Reset
-                </Text>
-              </View>
-            </TouchableOpacity>
-          </View>
-        </View>
-        <View className="h-16" />
+          />
+          <SettingsRow
+            title="Reset to defaults"
+            description="Font 16, full opacity, elevation 10"
+            divider={false}
+            trailing={
+              <IconButton
+                icon="restore"
+                label="Reset subtitle preferences"
+                onPress={() => {
+                  settingsStorage.setSubtitleFontSize(16);
+                  settingsStorage.setSubtitleOpacity(1);
+                  settingsStorage.setSubtitleBottomPadding(10);
+                  setFontSize(16);
+                  setOpacity(1);
+                  setBottomElevation(10);
+                }}></IconButton>
+            }
+          />
+        </SettingsSection>
       </View>
     </ScrollView>
   );

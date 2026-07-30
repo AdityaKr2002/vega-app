@@ -1,18 +1,12 @@
 import * as Crypto from 'expo-crypto';
 import {settingsStorage} from '../storage';
 import {
-  WatchHistoryKeys,
-  watchHistoryStorage,
-  type WatchHistoryItem,
-} from '../storage/WatchHistoryStorage';
-import {
   WatchListKeys,
   watchListStorage,
   type WatchListItem,
 } from '../storage/WatchListStorage';
 import {mainStorage} from '../storage/StorageService';
 import useDownloadsStore, {type DownloadItem} from '../zustand/downloadsStore';
-import useWatchHistoryStore from '../zustand/watchHistrory';
 import useWatchListStore from '../zustand/watchListStore';
 import {getSafEntryName, isSafDownloadLocation} from '../downloadLocation';
 import {
@@ -22,7 +16,6 @@ import {
   VEGA_SYNC_SCHEMA_VERSION,
   type SyncTombstone,
   type SyncedDownload,
-  type SyncedHistory,
   type SyncedWatchListItem,
   type VegaSyncManifest,
 } from './manifest';
@@ -42,7 +35,6 @@ let applyingRemoteState = false;
 let publishTimer: ReturnType<typeof setTimeout> | undefined;
 let syncRequest: Promise<void> | undefined;
 let previousDownloads: Record<string, DownloadItem> = {};
-let previousHistory: WatchHistoryItem[] = [];
 let previousWatchList: WatchListItem[] = [];
 
 const getDeviceId = () => {
@@ -107,12 +99,6 @@ const toSyncedDownload = (item: DownloadItem): SyncedDownload => {
   return download;
 };
 
-const toSyncedHistory = (item: WatchHistoryItem): SyncedHistory => ({
-  ...item,
-  id: item.id || item.link,
-  updatedAt: item.timestamp || Date.now(),
-});
-
 const toSyncedWatchListItem = (item: WatchListItem): SyncedWatchListItem => ({
   ...item,
   updatedAt: item.updatedAt || 0,
@@ -126,11 +112,6 @@ const buildManifest = (): VegaSyncManifest => {
       .filter(item => item.status === 'completed')
       .map(item => [item.id, toSyncedDownload(item)]),
   );
-  const history = Object.fromEntries(
-    watchHistoryStorage
-      .getWatchHistory()
-      .map(item => [item.id || item.link, toSyncedHistory(item)]),
-  );
   const watchlist = Object.fromEntries(
     watchListStorage
       .getWatchList()
@@ -142,7 +123,7 @@ const buildManifest = (): VegaSyncManifest => {
     revision,
     generatedAt: Date.now(),
     downloads,
-    history,
+    history: {},
     watchlist,
     tombstones: getTombstones(),
   };
@@ -224,21 +205,6 @@ const applyRemoteDownloads = async (
   }
 };
 
-const applyRemoteHistory = (history: Record<string, SyncedHistory>) => {
-  const items: WatchHistoryItem[] = Object.values(history)
-    .sort((a, b) => b.updatedAt - a.updatedAt)
-    .slice(0, 100)
-    .map(({updatedAt, ...item}) => ({...item, timestamp: updatedAt}));
-  mainStorage.setArray(WatchHistoryKeys.WATCH_HISTORY, items);
-  useWatchHistoryStore.setState({
-    history: items.map(item => ({
-      ...item,
-      lastPlayed: item.timestamp,
-      currentTime: item.progress || 0,
-    })),
-  });
-};
-
 const applyRemoteWatchList = (
   watchlist: Record<string, SyncedWatchListItem>,
 ) => {
@@ -251,7 +217,6 @@ const applyRemoteWatchList = (
 
 const applyTombstones = (tombstones: Record<string, SyncTombstone>) => {
   const store = useDownloadsStore.getState();
-  let history = watchHistoryStorage.getWatchHistory();
   for (const tombstone of Object.values(tombstones)) {
     if (tombstone.kind === 'download') {
       for (const item of Object.values(store.downloads)) {
@@ -264,15 +229,8 @@ const applyTombstones = (tombstones: Record<string, SyncTombstone>) => {
           store.removeDownload(item.id);
         }
       }
-    } else if (tombstone.kind === 'history') {
-      history = history.filter(
-        item =>
-          (item.id || item.link) !== tombstone.id ||
-          (item.timestamp || 0) > tombstone.deletedAt,
-      );
     }
   }
-  mainStorage.setArray(WatchHistoryKeys.WATCH_HISTORY, history);
 };
 
 const runSharedFolderSync = async (): Promise<void> => {
@@ -288,13 +246,11 @@ const runSharedFolderSync = async (): Promise<void> => {
     saveTombstones(merged.tombstones);
     applyTombstones(merged.tombstones);
     await applyRemoteDownloads(merged.downloads);
-    applyRemoteHistory(merged.history);
     applyRemoteWatchList(merged.watchlist);
   } finally {
     applyingRemoteState = false;
   }
   previousDownloads = useDownloadsStore.getState().downloads;
-  previousHistory = watchHistoryStorage.getWatchHistory();
   previousWatchList = watchListStorage.getWatchList();
   await publishSyncManifest();
 };
@@ -312,7 +268,6 @@ export const initializeSyncService = async (): Promise<void> => {
   if (!initialized) {
     initialized = true;
     previousDownloads = useDownloadsStore.getState().downloads;
-    previousHistory = watchHistoryStorage.getWatchHistory();
     previousWatchList = watchListStorage.getWatchList();
     useDownloadsStore.subscribe(state => {
       if (applyingRemoteState) {
@@ -329,23 +284,6 @@ export const initializeSyncService = async (): Promise<void> => {
         }
       }
       previousDownloads = state.downloads;
-      schedulePublish();
-    });
-    useWatchHistoryStore.subscribe(state => {
-      if (applyingRemoteState) {
-        previousHistory = watchHistoryStorage.getWatchHistory();
-        return;
-      }
-      const currentIds = new Set(
-        state.history.map(item => item.id || item.link),
-      );
-      for (const item of previousHistory) {
-        const id = item.id || item.link;
-        if (!currentIds.has(id)) {
-          addTombstone('history', id);
-        }
-      }
-      previousHistory = watchHistoryStorage.getWatchHistory();
       schedulePublish();
     });
     useWatchListStore.subscribe(state => {

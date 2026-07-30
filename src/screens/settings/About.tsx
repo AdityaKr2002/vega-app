@@ -1,22 +1,17 @@
-import {
-  View,
-  Text,
-  TouchableNativeFeedback,
-  ToastAndroid,
-  Linking,
-  Alert,
-  Switch,
-} from 'react-native';
+import {View, ToastAndroid, Linking} from 'react-native';
 // import pkg from '../../../package.json';
 import React, {useState} from 'react';
-import {Feather} from '@expo/vector-icons';
 import {settingsStorage} from '../../lib/storage';
 import * as RNFS from '@dr.pogodin/react-native-fs';
-import {MaterialCommunityIcons} from '@expo/vector-icons';
-import useThemeStore from '../../lib/zustand/themeStore';
 import * as Application from 'expo-application';
 import Constants from 'expo-constants';
 import {notificationService} from '../../lib/services/Notification';
+import SettingsRow from '../../components/ui/SettingsRow';
+import SettingsSection from '../../components/ui/SettingsSection';
+import SettingsSwitchRow from '../../components/ui/SettingsSwitchRow';
+import AppText from '../../components/ui/Text';
+import LoadingIndicator from '../../components/ui/LoadingIndicator';
+import {showAppDialog} from '../../lib/zustand/appDialogStore';
 
 const deletePartialFile = async (filePath: string) => {
   try {
@@ -105,24 +100,32 @@ export const checkForUpdate = async (
     );
     if (compareVersions(localVersion || '', data.tag_name.replace('v', ''))) {
       ToastAndroid.show('New update available', ToastAndroid.SHORT);
-      Alert.alert(`Update v${localVersion} -> ${data.tag_name}`, data.body, [
-        {text: 'Cancel'},
-        {
-          text: 'Update',
-          onPress: () => {
-            // Prioritize the universal APK since we don't check device architecture
-            const apkAsset =
-              data?.assets?.find(
-                (a: any) =>
-                  a.name?.endsWith('.apk') &&
-                  a.name?.toLowerCase().includes('universal'),
-              ) || data?.assets?.find((a: any) => a.name?.endsWith('.apk'));
-            return autoDownload && apkAsset
-              ? downloadUpdate(apkAsset.browser_download_url, apkAsset.name)
-              : Linking.openURL(data.html_url);
+      showAppDialog({
+        title: `Update v${localVersion} -> ${data.tag_name}`,
+        message: data.body,
+        messageFormat: 'markdown',
+        actions: [
+          {label: 'Cancel'},
+          {
+            label: 'Update',
+            variant: 'primary',
+            onPress: () => {
+              const apkAsset =
+                data?.assets?.find(
+                  (asset: any) =>
+                    asset.name?.endsWith('.apk') &&
+                    asset.name?.toLowerCase().includes('universal'),
+                ) ||
+                data?.assets?.find((asset: any) =>
+                  asset.name?.endsWith('.apk'),
+                );
+              return autoDownload && apkAsset
+                ? downloadUpdate(apkAsset.browser_download_url, apkAsset.name)
+                : Linking.openURL(data.html_url);
+            },
           },
-        },
-      ]);
+        ],
+      });
       console.log(
         'local version',
         localVersion,
@@ -146,7 +149,6 @@ export const checkForUpdate = async (
 };
 
 const About = () => {
-  const primary = useThemeStore(state => state.primary);
   const [updateLoading, setUpdateLoading] = useState(false);
   const [autoDownload, setAutoDownload] = useState(
     settingsStorage.isAutoDownloadEnabled(),
@@ -156,82 +158,63 @@ const About = () => {
   );
 
   return (
-    <View className="flex-1 bg-black mt-8">
-      <View className="px-4 py-3 border-b border-white/10">
-        <Text className="text-2xl font-bold text-white">About</Text>
-        <Text className="text-gray-400 mt-1 text-sm">
+    <View className="flex-1 bg-m3-background px-5 pt-5">
+      <View className="mb-7">
+        <AppText
+          role="headlineLargeEmphasized"
+          className="text-m3-on-background">
+          About Vega
+        </AppText>
+        <AppText role="bodyLarge" className="mt-1 text-m3-on-surface-variant">
           App information and updates
-        </Text>
+        </AppText>
       </View>
 
-      <View className="p-4 gap-4 pb-24">
-        {/* Version */}
-        <View className="bg-white/10 p-4 rounded-lg flex-row justify-between items-center">
-          <Text className="text-white text-base">Version</Text>
-          <Text className="text-white/70">
-            v{Application.nativeApplicationVersion}
-          </Text>
-        </View>
+      <SettingsSection title="App">
+        <SettingsRow
+          title="Version"
+          description={`Vega ${Application.nativeApplicationVersion || ''}`}
+          icon="information-outline"
+          divider={Constants.expoConfig?.extra?.isPlayStore}
+        />
 
         {!Constants.expoConfig?.extra?.isPlayStore && (
           <>
-            {/* Auto Install Updates */}
-            <View className="bg-white/10 p-4 rounded-lg flex-row justify-between items-center">
-              <Text className="text-white text-base">Auto Install Updates</Text>
-              <Switch
-                value={autoDownload}
-                onValueChange={() => {
-                  setAutoDownload(!autoDownload);
-                  settingsStorage.setAutoDownloadEnabled(!autoDownload);
-                }}
-                thumbColor={autoDownload ? primary : 'gray'}
-              />
-            </View>
-
-            {/* Auto Check Updates */}
-            <View className="bg-white/10 p-3 rounded-lg flex-row justify-between items-center">
-              <View className="flex-1 mr-2">
-                <Text className="text-white text-base">
-                  Check Updates on Start
-                </Text>
-                <Text className="text-gray-400 text-sm">
-                  Automatically check for updates when app starts
-                </Text>
-              </View>
-              <Switch
-                value={autoCheckUpdate}
-                onValueChange={() => {
-                  setAutoCheckUpdate(!autoCheckUpdate);
-                  settingsStorage.setAutoCheckUpdateEnabled(!autoCheckUpdate);
-                }}
-                thumbColor={autoCheckUpdate ? primary : 'gray'}
-              />
-            </View>
-
-            {/* Check Updates Button */}
-            <TouchableNativeFeedback
-              onPress={() =>
-                checkForUpdate(setUpdateLoading, autoDownload, true)
+            <SettingsSwitchRow
+              title="Auto install updates"
+              description="Download and install new releases automatically"
+              value={autoDownload}
+              onValueChange={next => {
+                setAutoDownload(next);
+                settingsStorage.setAutoDownloadEnabled(next);
+              }}
+            />
+            <SettingsSwitchRow
+              title="Check on startup"
+              description="Look for a new release when Vega opens"
+              value={autoCheckUpdate}
+              onValueChange={next => {
+                setAutoCheckUpdate(next);
+                settingsStorage.setAutoCheckUpdateEnabled(next);
+              }}
+            />
+            <SettingsRow
+              title="Check for updates"
+              description="Compare this build with the latest release"
+              icon="update"
+              divider={false}
+              trailing={
+                updateLoading ? <LoadingIndicator size={14} /> : undefined
               }
-              disabled={updateLoading}
-              background={TouchableNativeFeedback.Ripple('#ffffff20', false)}>
-              <View className="bg-white/10 p-4 rounded-lg flex-row justify-between items-center">
-                <View className="flex-row items-center space-x-3">
-                  <MaterialCommunityIcons
-                    name="update"
-                    size={22}
-                    color="white"
-                  />
-                  <Text className="text-white text-base">
-                    Check for Updates
-                  </Text>
-                </View>
-                <Feather name="chevron-right" size={20} color="white" />
-              </View>
-            </TouchableNativeFeedback>
+              onPress={
+                updateLoading
+                  ? undefined
+                  : () => checkForUpdate(setUpdateLoading, autoDownload, true)
+              }
+            />
           </>
         )}
-      </View>
+      </SettingsSection>
     </View>
   );
 };

@@ -29,6 +29,7 @@ const useContentStore = create<Content>()(
         disabled: false,
         version: '0.0.1',
         icon: '',
+        source: {author: '', url: ''},
         installedAt: 0,
         lastUpdated: 0,
       },

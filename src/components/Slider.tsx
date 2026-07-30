@@ -1,15 +1,16 @@
-import {Image, Pressable, Text, TouchableOpacity, View} from 'react-native';
+import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
+import {FlatList, Pressable, View} from 'react-native';
 import React, {memo, useCallback} from 'react';
 import type {Post} from '../lib/providers/types';
 import {NativeStackNavigationProp} from '@react-navigation/native-stack';
 import {useNavigation} from '@react-navigation/native';
 import {HomeStackParamList} from '../App';
 import useContentStore from '../lib/zustand/contentStore';
-import {FlashList} from '@shopify/flash-list';
 import SkeletonLoader from './Skeleton';
+import MediaPosterCard from './MediaPosterCard';
+import {useM3Colors} from '../theme/M3PaletteContext';
 
-// import useWatchHistoryStore from '../lib/zustand/watchHistrory';
-import useThemeStore from '../lib/zustand/themeStore';
+import AppText from './ui/Text';
 
 const Slider = ({
   isLoading,
@@ -29,11 +30,10 @@ const Slider = ({
   error?: string;
 }): React.ReactElement => {
   const provider = useContentStore(state => state.provider);
-  const primary = useThemeStore(state => state.primary);
+  const colors = useM3Colors();
   const navigation =
     useNavigation<NativeStackNavigationProp<HomeStackParamList>>();
   const [isSelected, setSelected] = React.useState('');
-  // const {removeItem} = useWatchHistoryStore(state => state);
 
   const handleMorePress = useCallback(() => {
     navigation.navigate('ScrollList', {
@@ -58,31 +58,12 @@ const Slider = ({
 
   const renderItem = useCallback(
     ({item}: {item: Post}) => (
-      <View className="flex flex-col mx-2">
-        <TouchableOpacity
-          onLongPress={e => {
-            e.stopPropagation();
-          }}
-          onPress={e => {
-            e.stopPropagation();
-            handleItemPress(item);
-          }}>
-          <Image
-            className="rounded-md"
-            source={{
-              uri:
-                item?.image ||
-                'https://placehold.jp/24/363636/ffffff/100x150.png?text=vega',
-            }}
-            style={{width: 100, height: 150}}
-          />
-        </TouchableOpacity>
-        <Text className="text-white text-center truncate w-24 text-xs">
-          {item.title.length > 24
-            ? `${item.title.slice(0, 24)}...`
-            : item.title}
-        </Text>
-      </View>
+      <MediaPosterCard
+        title={item.title}
+        poster={item.image}
+        width={124}
+        onPress={() => handleItemPress(item)}
+      />
     ),
     [handleItemPress],
   );
@@ -90,52 +71,110 @@ const Slider = ({
   const keyExtractor = useCallback((item: Post) => item.link, []);
 
   return (
-    <Pressable onPress={() => setSelected('')} className="gap-3 mt-3 px-2">
-      <View className="flex flex-row items-center justify-between">
-        <Text
-          className="text-2xl font-semibold flex-1"
-          numberOfLines={1}
-          style={{color: primary}}>
+    <Pressable onPress={() => setSelected('')} style={{gap: 14, marginTop: 28}}>
+      <View
+        style={{
+          alignItems: 'center',
+          flexDirection: 'row',
+          justifyContent: 'space-between',
+          paddingHorizontal: 20,
+        }}>
+        <AppText
+          role="titleLargeEmphasized"
+          style={{
+            color: colors.onBackground,
+            flex: 1,
+            marginRight: 12,
+            minWidth: 0,
+          }}
+          numberOfLines={1}>
           {title}
-        </Text>
+        </AppText>
         {filter !== 'recent' && (
-          <TouchableOpacity onPress={handleMorePress}>
-            <Text className="text-white text-sm">more</Text>
-          </TouchableOpacity>
+          <Pressable
+            accessibilityRole="button"
+            onPress={handleMorePress}
+            style={({pressed}) => ({
+              alignItems: 'center',
+              backgroundColor: pressed
+                ? colors.surfaceContainerHighest
+                : colors.surfaceContainerHigh,
+              borderRadius: 18,
+              flexShrink: 0,
+              justifyContent: 'center',
+              minHeight: 36,
+              width: 92,
+            })}>
+            <View
+              style={{
+                alignItems: 'center',
+                flexDirection: 'row',
+                flexWrap: 'nowrap',
+                height: 36,
+                justifyContent: 'center',
+                width: 72,
+              }}>
+              <AppText
+                role="labelLargeEmphasized"
+                numberOfLines={1}
+                style={{color: colors.primary, width: 50}}>
+                See all
+              </AppText>
+              <MaterialCommunityIcons
+                name="chevron-right"
+                color={colors.primary}
+                size={18}
+                style={{height: 18, width: 18}}
+              />
+            </View>
+          </Pressable>
         )}
       </View>
       {isLoading ? (
         <View className="flex flex-row gap-2 overflow-hidden">
           {Array.from({length: 20}).map((_, index) => (
             <View
-              className="mx-3 gap-0 flex mb-3 justify-center items-center"
+              className="gap-2 flex mb-3 justify-center"
+              style={{marginLeft: index === 0 ? 18 : 0, marginRight: 12}}
               key={index}>
-              <SkeletonLoader height={150} width={100} />
-              <SkeletonLoader height={12} width={97} />
+              <SkeletonLoader height={186} width={124} />
+              <SkeletonLoader height={14} width={110} />
             </View>
           ))}
         </View>
       ) : (
-        <FlashList
+        <FlatList
           showsHorizontalScrollIndicator={false}
           data={posts}
           extraData={isSelected}
           horizontal
-          contentContainerStyle={{paddingHorizontal: 3, paddingTop: 7}}
+          contentContainerStyle={{
+            paddingBottom: 4,
+            paddingHorizontal: 20,
+          }}
+          ItemSeparatorComponent={() => <View style={{width: 14}} />}
           renderItem={renderItem}
           keyExtractor={keyExtractor}
-          removeClippedSubviews={true}
-          drawDistance={300}
+          initialNumToRender={6}
+          maxToRenderPerBatch={6}
+          windowSize={5}
+          removeClippedSubviews={false}
           ListFooterComponent={
             !isLoading && error ? (
               <View className="flex flex-row w-96 justify-center h-10 items-center">
-                <Text className="text-red-500 text-center">{error}</Text>
+                <AppText
+                  role="bodyMedium"
+                  className="text-center text-m3-error">
+                  {error}
+                </AppText>
               </View>
             ) : !isLoading && posts.length === 0 ? (
               <View className="flex flex-row w-96 justify-center h-10 items-center">
-                <Text className="text-whiter text-center text-white">
+                <AppText
+                  role="bodyMedium"
+                  className="text-center text-m3-on-surface-variant">
                   No content found
-                </Text>
+                </AppText>
               </View>
             ) : null
           }

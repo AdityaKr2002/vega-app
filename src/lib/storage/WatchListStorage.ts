@@ -26,13 +26,21 @@ export class WatchListStorage {
    * Get all watchlist items
    */
   getWatchList(): WatchListItem[] {
-    return mainStorage.getArray<WatchListItem>(WatchListKeys.WATCH_LIST) || [];
+    const watchList =
+      mainStorage.getArray<Partial<WatchListItem>>(WatchListKeys.WATCH_LIST) ||
+      [];
+    return watchList.filter((item): item is WatchListItem =>
+      Boolean(item.title && item.poster && item.link && item.provider),
+    );
   }
 
   /**
    * Add an item to the watchlist
    */
   addToWatchList(item: WatchListItem): WatchListItem[] {
+    if (!item.provider) {
+      return this.getWatchList();
+    }
     const watchList = this.getWatchList();
 
     // Filter out any existing item with the same link

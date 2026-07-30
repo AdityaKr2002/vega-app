@@ -2,7 +2,6 @@ import React, {useCallback, useEffect, useRef, useState} from 'react';
 import {
   Modal,
   View,
-  Text,
   TouchableOpacity,
   ActivityIndicator,
   BackHandler,
@@ -12,13 +11,14 @@ import {WebView, WebViewMessageEvent} from 'react-native-webview';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import {useWafStore, WafRequest} from '../lib/zustand/wafStore';
 import {headers as commonHeaders} from '../lib/providers/headers';
-import useThemeStore from '../lib/zustand/themeStore';
 import type {OpenWebViewResult} from '../lib/providers/types';
 import {
   buildCookieString,
   getCookies,
   pickUserAgent,
 } from '../lib/services/cookieManager';
+import {useM3Colors} from '../theme/M3PaletteContext';
+import AppText from './ui/Text';
 
 const GRAB_HTML_JS =
   '(function(){try{window.ReactNativeWebView.postMessage(JSON.stringify({__waf:true,html:document.documentElement.outerHTML}));}catch(e){}})(); true;';
@@ -26,7 +26,7 @@ const GRAB_HTML_JS =
 const WafWebViewDialog = () => {
   const request = useWafStore(state => state.requests[0]);
   const remove = useWafStore(state => state.remove);
-  const primary = useThemeStore(state => state.primary);
+  const {primary, onPrimary} = useM3Colors();
 
   const [loading, setLoading] = useState(true);
   const webViewRef = useRef<WebView>(null);
@@ -206,15 +206,15 @@ const WafWebViewDialog = () => {
           {/* Header */}
           <View className="flex-row items-center justify-between px-4 py-3">
             <View className="flex-1 pr-2">
-              <Text
+              <AppText
                 className="text-white text-base font-bold"
                 numberOfLines={1}>
                 {request.title || 'Verify you are human'}
-              </Text>
-              <Text className="text-white/60 text-xs" numberOfLines={2}>
+              </AppText>
+              <AppText className="text-white/60 text-xs" numberOfLines={2}>
                 {request.description ||
                   'Complete the challenge below, then tap Done.'}
-              </Text>
+              </AppText>
             </View>
             <TouchableOpacity onPress={cancel} className="p-1">
               <MaterialIcons name="close" size={22} color="#c1c4c9" />
@@ -254,13 +254,17 @@ const WafWebViewDialog = () => {
             <TouchableOpacity
               onPress={() => webViewRef.current?.reload()}
               className="px-4 py-2 rounded-md bg-white/10">
-              <Text className="text-white text-sm">Reload</Text>
+              <AppText className="text-white text-sm">Reload</AppText>
             </TouchableOpacity>
             <TouchableOpacity
               onPress={resolveWithPage}
               className="flex-1 px-4 py-2 rounded-md items-center"
               style={{backgroundColor: primary}}>
-              <Text className="text-white text-sm font-semibold">Done</Text>
+              <AppText
+                style={{color: onPrimary}}
+                className="text-sm font-semibold">
+                Done
+              </AppText>
             </TouchableOpacity>
           </View>
         </View>

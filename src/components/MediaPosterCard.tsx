@@ -1,5 +1,8 @@
 import React from 'react';
-import {Image, Text, TouchableOpacity, View} from 'react-native';
+import {Image, Pressable, View} from 'react-native';
+import Animated, {FadeInDown} from 'react-native-reanimated';
+import {useM3Colors} from '../theme/M3PaletteContext';
+import AppText from './ui/Text';
 
 interface MediaPosterCardProps {
   title: string;
@@ -7,6 +10,7 @@ interface MediaPosterCardProps {
   width: number;
   subtitle?: string;
   onPress: () => void;
+  onLongPress?: () => void;
 }
 
 const MediaPosterCard = ({
@@ -15,41 +19,69 @@ const MediaPosterCard = ({
   width,
   subtitle,
   onPress,
-}: MediaPosterCardProps) => (
-  <TouchableOpacity
-    onPress={onPress}
-    style={{width, marginBottom: 18}}
-    activeOpacity={0.8}>
-    <View className="overflow-hidden rounded-lg bg-tertiary">
-      {poster ? (
-        <Image
-          source={{uri: poster}}
-          resizeMode="cover"
-          style={{width, aspectRatio: 2 / 3}}
-        />
-      ) : (
+  onLongPress,
+}: MediaPosterCardProps) => {
+  const colors = useM3Colors();
+
+  return (
+    <Animated.View entering={FadeInDown.duration(280)} style={{width}}>
+      <Pressable
+        onPress={onPress}
+        onLongPress={onLongPress}
+        delayLongPress={450}
+        style={({pressed}) => ({
+          opacity: pressed ? 0.86 : 1,
+          transform: [{scale: pressed ? 0.96 : 1}],
+        })}>
         <View
-          className="items-center justify-center bg-quaternary"
-          style={{width, aspectRatio: 2 / 3}}>
-          <Text className="text-3xl font-bold text-white/40">
-            {title.slice(0, 1).toUpperCase()}
-          </Text>
+          style={{
+            backgroundColor: colors.surfaceContainerHigh,
+            borderRadius: 20,
+            overflow: 'hidden',
+            width,
+          }}>
+          {poster ? (
+            <Image
+              source={{uri: poster}}
+              resizeMode="cover"
+              style={{aspectRatio: 2 / 3, width}}
+            />
+          ) : (
+            <View
+              style={{
+                alignItems: 'center',
+                aspectRatio: 2 / 3,
+                backgroundColor: colors.surfaceContainerHighest,
+                justifyContent: 'center',
+                width,
+              }}>
+              <AppText
+                role="headlineMediumEmphasized"
+                style={{color: colors.onSurfaceVariant}}>
+                {title.slice(0, 1).toUpperCase()}
+              </AppText>
+            </View>
+          )}
         </View>
-      )}
-    </View>
-    <Text
-      className="mt-2 text-sm font-medium text-white text-center"
-      numberOfLines={1}>
-      {title}
-    </Text>
-    {subtitle ? (
-      <Text
-        className="mt-0.5 text-xs text-gray-400 text-center"
-        numberOfLines={1}>
-        {subtitle}
-      </Text>
-    ) : null}
-  </TouchableOpacity>
-);
+        <AppText
+          role="labelMediumEmphasized"
+          ellipsizeMode="tail"
+          numberOfLines={1}
+          style={{color: colors.onSurface, marginTop: 7}}>
+          {title}
+        </AppText>
+        {subtitle ? (
+          <AppText
+            role="labelSmall"
+            ellipsizeMode="tail"
+            numberOfLines={1}
+            style={{color: colors.onSurfaceVariant, marginTop: 1}}>
+            {subtitle}
+          </AppText>
+        ) : null}
+      </Pressable>
+    </Animated.View>
+  );
+};
 
 export default MediaPosterCard;

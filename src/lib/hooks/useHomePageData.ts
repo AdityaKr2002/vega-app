@@ -70,8 +70,10 @@ export const getRandomHeroPost = (
     return null;
   }
 
-  const lastCategory = homeData[homeData.length - 1];
-  if (!lastCategory.Posts || lastCategory.Posts.length === 0) {
+  const populatedCategories = homeData
+    .map((category, categoryIndex) => ({category, categoryIndex}))
+    .filter(({category}) => category.Posts?.length > 0);
+  if (populatedCategories.length === 0) {
     return null;
   }
 
@@ -79,18 +81,27 @@ export const getRandomHeroPost = (
   const cached = heroSelectionCache.get(cacheKey);
 
   // If we have a cached index and it's still valid for this data, use it
-  if (cached && cached.postIndex < lastCategory.Posts.length) {
-    return lastCategory.Posts[cached.postIndex];
+  const cachedCategory = cached ? homeData[cached.categoryIndex] : undefined;
+  if (
+    cached &&
+    cachedCategory?.Posts &&
+    cached.postIndex < cachedCategory.Posts.length
+  ) {
+    return cachedCategory.Posts[cached.postIndex];
   }
 
-  // Otherwise, generate a new random index and cache it
-  const randomIndex = Math.floor(Math.random() * lastCategory.Posts.length);
+  // Otherwise, choose a random populated catalog and a random post within it.
+  const randomCategory =
+    populatedCategories[Math.floor(Math.random() * populatedCategories.length)];
+  const randomPostIndex = Math.floor(
+    Math.random() * randomCategory.category.Posts.length,
+  );
   heroSelectionCache.set(cacheKey, {
-    postIndex: randomIndex,
-    categoryIndex: homeData.length - 1,
+    postIndex: randomPostIndex,
+    categoryIndex: randomCategory.categoryIndex,
   });
 
-  return lastCategory.Posts[randomIndex];
+  return randomCategory.category.Posts[randomPostIndex];
 };
 
 // Function to clear hero cache when explicitly refreshing

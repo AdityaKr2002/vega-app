@@ -1,23 +1,17 @@
 import {useCallback, useRef, useState} from 'react';
-import {cacheStorage, mainStorage} from '../storage';
-import {getHistoryEpisodeId} from '../historyIdentity';
+import {cacheStorage} from '../storage';
 
 interface UsePlayerProgressOptions {
   activeEpisode: any;
-  routeParams: any;
-  playbackRate: number;
-  updatePlaybackInfo: (link: string, data: any) => void;
+  onProgressSaved?: (position: number, duration: number) => void;
 }
 
 export const usePlayerProgress = ({
   activeEpisode,
-  routeParams,
-  playbackRate,
-  updatePlaybackInfo,
+  onProgressSaved,
 }: UsePlayerProgressOptions) => {
   const videoPositionRef = useRef({position: 0, duration: 0});
   const lastSavedPositionRef = useRef(0);
-  const lastHistoryPositionRef = useRef(0);
 
   // Memoized progress handler
   const handleProgress = useCallback(
@@ -28,35 +22,6 @@ export const usePlayerProgress = ({
         position: currentTime,
         duration: seekableDuration,
       };
-
-      // Update playback info for watch history
-      if (
-        routeParams?.episodeList &&
-        routeParams?.linkIndex !== undefined &&
-        !routeParams?.doNotTrack
-      ) {
-        if (Math.abs(currentTime - lastHistoryPositionRef.current) >= 5) {
-          updatePlaybackInfo(
-            getHistoryEpisodeId(activeEpisode) ||
-              routeParams.episodeList[routeParams.linkIndex].link,
-            {
-              currentTime,
-              duration: seekableDuration,
-              playbackRate,
-            },
-          );
-          lastHistoryPositionRef.current = currentTime;
-        }
-      }
-
-      // Store progress data for watch history display
-      if (!routeParams?.doNotTrack) {
-        storeWatchProgressForHistory(
-          routeParams.episodeList[routeParams.linkIndex].link,
-          currentTime,
-          seekableDuration,
-        );
-      }
 
       // Save progress periodically (every 5 seconds)
       if (
@@ -70,60 +35,11 @@ export const usePlayerProgress = ({
             duration: seekableDuration,
           }),
         );
+        onProgressSaved?.(currentTime, seekableDuration);
         lastSavedPositionRef.current = currentTime;
       }
     },
-    [
-      activeEpisode.id,
-      activeEpisode.link,
-      routeParams.episodeList,
-      routeParams.linkIndex,
-      routeParams.infoUrl,
-      routeParams.primaryTitle,
-      routeParams.secondaryTitle,
-      updatePlaybackInfo,
-      playbackRate,
-    ],
-  );
-
-  // Dedicated function to store watch progress for history display
-  const storeWatchProgressForHistory = useCallback(
-    (link: string, currentTime: number, duration: number) => {
-      try {
-        if (currentTime > 0 && duration > 0) {
-          const historyKey = routeParams.infoUrl || link;
-          const historyProgressKey = `watch_history_progress_${historyKey}`;
-          const percentage = (currentTime / duration) * 100;
-
-          const progressData = {
-            currentTime,
-            duration,
-            percentage: percentage,
-            infoUrl: routeParams.infoUrl || '',
-            title: routeParams?.primaryTitle || '',
-            episodeTitle: routeParams?.secondaryTitle || '',
-            updatedAt: Date.now(),
-          };
-
-          mainStorage.setString(
-            historyProgressKey,
-            JSON.stringify(progressData),
-          );
-
-          // Also store with episodeTitle-specific key for series episodes
-          if (routeParams?.secondaryTitle) {
-            const episodeKey = `watch_history_progress_${historyKey}_${routeParams.secondaryTitle.replace(
-              /\s+/g,
-              '_',
-            )}`;
-            mainStorage.setString(episodeKey, JSON.stringify(progressData));
-          }
-        }
-      } catch (error) {
-        console.error('Error storing watch progress for history:', error);
-      }
-    },
-    [routeParams],
+    [activeEpisode.link, onProgressSaved],
   );
 
   return {

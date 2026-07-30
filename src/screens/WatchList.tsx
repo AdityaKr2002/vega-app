@@ -1,16 +1,18 @@
-import {View, Text, Platform, Dimensions, FlatList} from 'react-native';
+import {View, Platform, Dimensions, FlatList} from 'react-native';
 import React from 'react';
 import {useNavigation} from '@react-navigation/native';
 import {WatchListStackParamList} from '../App';
 import {NativeStackNavigationProp} from '@react-navigation/native-stack';
-import useThemeStore from '../lib/zustand/themeStore';
 import useWatchListStore from '../lib/zustand/watchListStore';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import {StatusBar} from 'expo-status-bar';
 import MediaPosterCard from '../components/MediaPosterCard';
+import AppText from '../components/ui/Text';
+import {useM3Colors} from '../theme/M3PaletteContext';
+import type {WatchListItem} from '../lib/storage';
 
 const WatchList = () => {
-  const primary = useThemeStore(state => state.primary);
+  const colors = useM3Colors();
   const navigation =
     useNavigation<NativeStackNavigationProp<WatchListStackParamList>>();
   const watchList = useWatchListStore(state => state.watchList);
@@ -33,7 +35,7 @@ const WatchList = () => {
     (availableWidth - itemSpacing * (numColumns - 1)) / numColumns;
 
   // Render each grid item
-  const renderItem = ({item, index}: {item: any; index: number}) => (
+  const renderItem = ({item, index}: {item: WatchListItem; index: number}) => (
     <MediaPosterCard
       key={item.link + index}
       title={item.title}
@@ -50,22 +52,22 @@ const WatchList = () => {
   );
 
   return (
-    <View className="flex-1 bg-black justify-center items-center">
+    <View className="flex-1 items-center justify-center bg-m3-background">
       <StatusBar />
 
       <View
-        className="w-full bg-black"
+        className="w-full bg-m3-background"
         style={{
           paddingTop: Platform.OS === 'android' ? 15 : 0, // Adjust for Android status bar height
         }}
       />
 
       <View className="flex-1 w-full px-3">
-        <Text
-          className="text-2xl text-center font-bold mb-6 mt-4"
-          style={{color: primary}}>
+        <AppText
+          role="headlineLargeEmphasized"
+          className="mb-6 mt-4 text-center text-m3-on-background">
           Watchlist
-        </Text>
+        </AppText>
 
         {watchList.length > 0 ? (
           <FlatList
@@ -86,13 +88,15 @@ const WatchList = () => {
           <View className="flex-1">
             <View className="items-center justify-center mt-20 mb-12">
               <MaterialCommunityIcons
-                name="playlist-remove"
-                size={80}
-                color={primary}
+                name="bookmark-off-outline"
+                size={72}
+                color={colors.onSurfaceVariant}
               />
-              <Text className="text-white/70 text-base mt-4 text-center">
-                Your WatchList is empty
-              </Text>
+              <AppText
+                role="bodyLarge"
+                className="mt-4 text-center text-m3-on-surface-variant">
+                Your watchlist is empty
+              </AppText>
             </View>
           </View>
         )}

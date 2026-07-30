@@ -314,7 +314,7 @@ export const deleteDownloadedFileByBaseName = async (
     return false;
   }
 
-  if (location.type === 'path') {
+  if (location?.type === 'path') {
     await RNFS.unlink(foundFile);
     return true;
   }

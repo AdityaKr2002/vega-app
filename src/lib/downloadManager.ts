@@ -21,18 +21,35 @@ import {
   createDownloadDirectoryName,
   createDownloadSeasonDirectoryName,
 } from './downloadId';
+import {getImageAccent} from './imageAccent';
 
 const activeDownloads = new Set<string>();
 const occupiedDownloadSlots = new Set<string>();
 const cancelledDownloads = new Set<string>();
 const pauseFailedDownloads = new Set<string>();
 const lastNotificationAt = new Map<string, number>();
+const downloadNotificationColors = new Map<string, Promise<string>>();
 let schedulerRunning = false;
 const HTTP_START_RETRY_DELAYS_MS = [750, 1500];
 const HTTP_DNS_RETRY_DELAYS_MS = [1000, 2000, 4000, 8000];
 
 const wait = (milliseconds: number): Promise<void> =>
   new Promise(resolve => setTimeout(resolve, milliseconds));
+
+const getDownloadNotificationColor = (
+  record: DownloadItem,
+): Promise<string> => {
+  const cached = downloadNotificationColors.get(record.id);
+  if (cached) {
+    return cached;
+  }
+  const color = getImageAccent(
+    record.background || record.poster,
+    settingsStorage.getPrimaryColor(),
+  );
+  downloadNotificationColors.set(record.id, color);
+  return color;
+};
 
 const isTransientHttpStartError = (error: unknown): boolean => {
   const message = error instanceof Error ? error.message : String(error);
@@ -131,6 +148,7 @@ const showProgressNotification = async (
     : 0;
   const downloadedMB = Math.round(record.downloadedBytes / 1024 / 1024);
   const totalMB = Math.round(record.totalBytes / 1024 / 1024);
+  const color = await getDownloadNotificationColor(record);
   await notificationService.showDownloadProgress(
     record.title,
     record.id,
@@ -138,6 +156,7 @@ const showProgressNotification = async (
     record.totalBytes ? `${downloadedMB} / ${totalMB} MB` : 'Downloading',
     record.sourceType,
     record.canPause ? 'pause' : record.canResume ? 'resume' : 'none',
+    color,
   );
 };
 
@@ -149,6 +168,7 @@ const showCurrentDownloadNotification = async (
     : 0;
   const downloadedMB = Math.round(record.downloadedBytes / 1024 / 1024);
   const totalMB = Math.round(record.totalBytes / 1024 / 1024);
+  const color = await getDownloadNotificationColor(record);
   await notificationService.showDownloadProgress(
     record.title,
     record.id,
@@ -162,6 +182,7 @@ const showCurrentDownloadNotification = async (
         : 'Downloading',
     record.sourceType,
     record.status === 'paused' ? 'resume' : record.canPause ? 'pause' : 'none',
+    color,
   );
 };
 
@@ -201,8 +222,15 @@ export const scheduleQueuedDownloads = async (): Promise<void> => {
       startDownload(record.id, record.downloadLocation!).catch(() => undefined);
     });
     queued.slice(availableSlots).forEach(record => {
-      notificationService
-        .showDownloadQueued(record.title, record.id, record.sourceType)
+      getDownloadNotificationColor(record)
+        .then(color =>
+          notificationService.showDownloadQueued(
+            record.title,
+            record.id,
+            record.sourceType,
+            color,
+          ),
+        )
         .catch(() => undefined);
     });
   } finally {
@@ -254,6 +282,7 @@ export const startDownload = async (
       record.title,
       downloadId,
       record.sourceType,
+      await getDownloadNotificationColor(record),
     );
     subscriptions.push(
       useDownloadsStore.subscribe(state => {
@@ -304,6 +333,7 @@ export const startDownload = async (
       record.title,
       downloadId,
       record.sourceType,
+      await getDownloadNotificationColor(record),
     );
   } catch (error) {
     const cancelled = cancelledDownloads.has(downloadId);
@@ -329,6 +359,7 @@ export const startDownload = async (
       record.title,
       downloadId,
       record.sourceType,
+      await getDownloadNotificationColor(record),
     );
     throw error;
   } finally {
@@ -338,6 +369,7 @@ export const startDownload = async (
     cancelledDownloads.delete(downloadId);
     pauseFailedDownloads.delete(downloadId);
     lastNotificationAt.delete(downloadId);
+    downloadNotificationColors.delete(downloadId);
     await scheduleQueuedDownloads();
     await notificationService
       .stopForegroundTask(downloadId)
@@ -366,6 +398,7 @@ const failPausedDownload = async (
     record.title,
     downloadId,
     record.sourceType,
+    await getDownloadNotificationColor(record),
   );
 };
 

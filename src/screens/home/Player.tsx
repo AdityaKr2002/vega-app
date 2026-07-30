@@ -39,10 +39,8 @@ import useContentStore from '../../lib/zustand/contentStore';
 import {SafeAreaView} from 'react-native-safe-area-context';
 // import GoogleCast from 'react-native-google-cast';
 import * as DocumentPicker from 'expo-document-picker';
-import useThemeStore from '../../lib/zustand/themeStore';
 import {FlashList} from '@shopify/flash-list';
 import SearchSubtitles from '../../components/SearchSubtitles';
-import useWatchHistoryStore from '../../lib/zustand/watchHistrory';
 import {useStream, useVideoSettings} from '../../lib/hooks/useStream';
 import {
   usePlayerProgress,
@@ -52,7 +50,8 @@ import * as NavigationBar from 'expo-navigation-bar';
 import {StatusBar} from 'react-native';
 import {torrentManager} from '../../lib/torrentManager';
 import {syncFromSharedFolder} from '../../lib/sync/syncService';
-import {getHistoryEpisodeId} from '../../lib/historyIdentity';
+import {useM3Colors} from '../../theme/M3PaletteContext';
+import useContinueWatchingStore from '../../lib/zustand/continueWatchingStore';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Player'>;
 
@@ -100,11 +99,16 @@ const Player = ({route}: Props): React.JSX.Element => {
     );
   }, []);
 
-  const primary = useThemeStore(state => state.primary);
+  const colors = useM3Colors();
+  const primary = colors.primary;
   const {provider} = useContentStore();
   const navigation = useNavigation();
-  const {history, addItem, updatePlaybackInfo, updateItemWithInfo} =
-    useWatchHistoryStore();
+  const upsertContinueWatching = useContinueWatchingStore(
+    state => state.upsertItem,
+  );
+  const updateContinueWatchingProgress = useContinueWatchingStore(
+    state => state.updateProgress,
+  );
 
   // Player ref
   const playerRef = useRef<VideoRef>(null as unknown as VideoRef);
@@ -227,13 +231,60 @@ const Player = ({route}: Props): React.JSX.Element => {
     unlockButtonTimerRef,
   } = usePlayerSettings();
   const isFullScreenRef = useRef(isFullScreen);
+  const continueWatchingId = route.params.infoUrl || activeEpisode?.link;
+
+  useEffect(() => {
+    if (
+      !continueWatchingId ||
+      !route.params.infoUrl ||
+      !route.params.primaryTitle ||
+      !route.params.providerValue ||
+      !activeEpisode?.link
+    ) {
+      return;
+    }
+    const cached = cacheStorage.getString(activeEpisode.link);
+    const progress = cached ? JSON.parse(cached) : {};
+    upsertContinueWatching({
+      id: continueWatchingId,
+      title: route.params.primaryTitle,
+      episodeTitle: route.params.secondaryTitle,
+      episode: activeEpisode,
+      type: route.params.type,
+      poster: route.params.poster?.poster,
+      background: route.params.poster?.background,
+      providerValue: route.params.providerValue,
+      infoUrl: route.params.infoUrl,
+      position: progress.position || 0,
+      duration: progress.duration || 0,
+      updatedAt: Date.now(),
+    });
+  }, [
+    activeEpisode,
+    continueWatchingId,
+    route.params.infoUrl,
+    route.params.poster?.background,
+    route.params.poster?.poster,
+    route.params.primaryTitle,
+    route.params.providerValue,
+    route.params.secondaryTitle,
+    route.params.type,
+    upsertContinueWatching,
+  ]);
+
+  const saveContinueWatchingProgress = useCallback(
+    (position: number, duration: number) => {
+      if (continueWatchingId) {
+        updateContinueWatchingProgress(continueWatchingId, position, duration);
+      }
+    },
+    [continueWatchingId, updateContinueWatchingProgress],
+  );
 
   // Custom hook for progress handling
   const {videoPositionRef, handleProgress} = usePlayerProgress({
     activeEpisode,
-    routeParams: route.params,
-    playbackRate,
-    updatePlaybackInfo,
+    onProgressSaved: saveContinueWatchingProgress,
   });
 
   // Memoized values
@@ -257,21 +308,9 @@ const Player = ({route}: Props): React.JSX.Element => {
 
   // Memoized watched duration
   const watchedDuration = useMemo(() => {
-    const historyKey = getHistoryEpisodeId(activeEpisode);
-    const syncedProgress = history.find(
-      item => item.id === historyKey,
-    )?.progress;
-    if (syncedProgress !== undefined) {
-      return syncedProgress;
-    }
     const cached = cacheStorage.getString(activeEpisode?.link);
     return cached ? JSON.parse(cached).position : 0;
-  }, [
-    activeEpisode?.id,
-    activeEpisode?.link,
-    activeEpisode?.sourceLink,
-    history,
-  ]);
+  }, [activeEpisode?.link]);
 
   useEffect(() => {
     resumeAppliedRef.current = false;
@@ -625,38 +664,6 @@ const Player = ({route}: Props): React.JSX.Element => {
   useEffect(() => {
     setSearchQuery(route.params?.primaryTitle || '');
   }, [route.params?.primaryTitle]);
-
-  // Add to watch history
-  useEffect(() => {
-    if (route.params?.primaryTitle && !route.params?.doNotTrack) {
-      addItem({
-        id: getHistoryEpisodeId(activeEpisode) || activeEpisode.link,
-        title: route.params.primaryTitle,
-        poster:
-          route.params.poster?.poster || route.params.poster?.background || '',
-        link: route.params.infoUrl || '',
-        provider: route.params?.providerValue || provider.value,
-        lastPlayed: Date.now(),
-        playbackRate: 1,
-        episodeTitle: route.params?.secondaryTitle,
-      });
-
-      updateItemWithInfo(
-        route.params.episodeList[route.params.linkIndex].link,
-        {
-          ...route.params,
-          cachedAt: Date.now(),
-        },
-      );
-    }
-  }, [
-    route.params?.primaryTitle,
-    activeEpisode.link,
-    addItem,
-    updateItemWithInfo,
-    route.params,
-    provider.value,
-  ]);
 
   // Set last selected audio and subtitle tracks
   useEffect(() => {

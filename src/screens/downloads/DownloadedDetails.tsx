@@ -4,7 +4,9 @@ import type {CompositeScreenProps} from '@react-navigation/native';
 import type {NativeStackScreenProps} from '@react-navigation/native-stack';
 import React, {useEffect, useMemo, useState} from 'react';
 import {
+  ActivityIndicator,
   Image,
+  Pressable,
   ScrollView,
   StatusBar,
   Text,
@@ -12,9 +14,9 @@ import {
   View,
 } from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
-import {Dropdown} from 'react-native-element-dropdown';
 import type {DownloadsStackParamList, RootStackParamList} from '../../App';
-import SingleOptionField from '../../components/SingleOptionField';
+import AppDialog from '../../components/AppDialog';
+import DropdownField from '../../components/ui/DropdownField';
 import {
   deleteDownloadOutput,
   downloadOutputExists,
@@ -32,7 +34,7 @@ import type {DownloadItem} from '../../lib/zustand/downloadsStore';
 import useDownloadsStore, {
   selectCompletedDownloads,
 } from '../../lib/zustand/downloadsStore';
-import useThemeStore from '../../lib/zustand/themeStore';
+import {useM3Colors} from '../../theme/M3PaletteContext';
 
 type DownloadedDetailsProps = CompositeScreenProps<
   NativeStackScreenProps<DownloadsStackParamList, 'DownloadedDetails'>,
@@ -43,11 +45,13 @@ const getSeasonTitle = (item: DownloadItem): string =>
   item.seasonTitle || 'Downloaded';
 
 const DownloadedDetails = ({navigation, route}: DownloadedDetailsProps) => {
-  const primary = useThemeStore(state => state.primary);
+  const colors = useM3Colors();
+  const primary = colors.primary;
   const completed = useDownloadsStore(selectCompletedDownloads);
   const markMissing = useDownloadsStore(state => state.markMissing);
   const removeDownload = useDownloadsStore(state => state.removeDownload);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<DownloadItem | null>(null);
   const group = useMemo(
     () =>
       groupCompletedDownloads(completed).find(
@@ -87,10 +91,12 @@ const DownloadedDetails = ({navigation, route}: DownloadedDetailsProps) => {
           This downloaded title is no longer available.
         </Text>
         <TouchableOpacity
-          className="mt-5 rounded-md px-5 py-3"
+          className="mt-5 px-6 py-3"
           style={{backgroundColor: primary}}
           onPress={() => navigation.goBack()}>
-          <Text className="font-semibold text-white">Go back</Text>
+          <Text className="font-semibold" style={{color: colors.onPrimary}}>
+            Go back
+          </Text>
         </TouchableOpacity>
       </View>
     );
@@ -128,7 +134,6 @@ const DownloadedDetails = ({navigation, route}: DownloadedDetailsProps) => {
       },
       providerValue: item.provider || metadata.provider || 'vega',
       infoUrl: item.infoUrl || metadata.infoUrl,
-      doNotTrack: !(item.infoUrl || metadata.infoUrl),
     });
   };
 
@@ -165,129 +170,197 @@ const DownloadedDetails = ({navigation, route}: DownloadedDetailsProps) => {
   return (
     <View className="h-full w-full bg-black">
       <StatusBar translucent backgroundColor="transparent" />
-      <View className="absolute h-[256px] w-full">
+      <View className="absolute h-[340px] w-full">
         <Image
           source={{uri: backgroundImage}}
-          className="h-[256px] w-full"
+          className="h-[340px] w-full"
           resizeMode="cover"
         />
       </View>
       <ScrollView showsVerticalScrollIndicator={false}>
-        <View className="relative h-[256px] w-full">
+        <View className="relative h-[340px] w-full">
           <LinearGradient
-            colors={['transparent', 'black']}
+            colors={['rgba(0,0,0,0.08)', 'rgba(0,0,0,0.18)', '#000000']}
+            locations={[0, 0.55, 1]}
             className="absolute h-full w-full"
           />
-          <TouchableOpacity
-            className="ml-4 mt-14 h-10 w-10 items-center justify-center rounded-full bg-black/70"
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Go back"
+            className="ml-5 mt-14 h-12 w-12 items-center justify-center"
+            style={({pressed}) => ({
+              backgroundColor: pressed
+                ? colors.secondaryContainer
+                : 'rgba(23,23,23,0.88)',
+              borderRadius: 18,
+            })}
             onPress={() => navigation.goBack()}>
-            <MaterialCommunityIcons name="arrow-left" size={24} color="white" />
-          </TouchableOpacity>
-          <View className="absolute bottom-0 right-0 w-full px-3 pb-2">
-            <Text className="w-3/4 text-2xl font-semibold capitalize text-white">
+            <MaterialCommunityIcons
+              name="arrow-left"
+              size={26}
+              color={colors.onSurface}
+            />
+          </Pressable>
+          <View className="absolute bottom-3 right-0 w-full px-5">
+            <Text
+              className="text-3xl font-bold capitalize"
+              style={{color: colors.onBackground}}>
               {group.title}
             </Text>
-            <Text className="mt-2 text-sm text-gray-300">
-              {`${group.items.length} download${
-                group.items.length === 1 ? '' : 's'
-              }`}
-              {'  '}·{'  '}
-              {formatDownloadBytes(totalBytes)}
-            </Text>
+            <View className="mt-3 flex-row items-center">
+              <MaterialCommunityIcons
+                name="download-circle-outline"
+                size={18}
+                color={colors.primary}
+              />
+              <Text
+                className="ml-2 text-sm font-medium"
+                style={{color: colors.onSurfaceVariant}}>
+                {`${group.items.length} download${
+                  group.items.length === 1 ? '' : 's'
+                }`}
+                {'  '}·{'  '}
+                {formatDownloadBytes(totalBytes)}
+              </Text>
+            </View>
           </View>
         </View>
 
-        <View className="bg-black p-4">
+        <View className="bg-black px-5 pb-6 pt-3">
           {metadata.synopsis ? (
-            <>
-              <Text className="mb-2 text-lg font-semibold text-white">
+            <View className="mb-7">
+              <Text
+                className="mb-2 text-xl font-bold"
+                style={{color: colors.onBackground}}>
                 Synopsis
               </Text>
-              <Text className="mb-6 rounded-md bg-tertiary px-2 py-1 text-sm leading-6 text-gray-200">
+              <Text
+                className="text-base leading-6"
+                style={{color: colors.onSurfaceVariant}}>
                 {metadata.synopsis}
               </Text>
-            </>
+            </View>
           ) : null}
 
-          {seasonOptions.length > 1 ? (
-            <Dropdown
-              selectedTextStyle={{
-                color: primary,
-                overflow: 'hidden',
-                height: 20,
-                fontWeight: 'bold',
-              }}
-              labelField="title"
-              valueField="title"
-              value={selectedSeason}
-              data={seasonOptions}
-              onChange={item => setSelectedSeason(item.title)}
-              style={{
-                overflow: 'hidden',
-                borderWidth: 1,
-                borderColor: '#2f302f',
-                paddingHorizontal: 12,
-                paddingVertical: 8,
-                borderRadius: 8,
-                backgroundColor: 'black',
-              }}
-              containerStyle={{
-                overflow: 'hidden',
-                borderWidth: 1,
-                borderColor: 'gray',
-                borderRadius: 8,
-                backgroundColor: 'black',
-              }}
-              renderItem={item => (
-                <View
-                  className={`flex-row items-center justify-start border-b border-gray-500 bg-black px-3 py-2 ${
-                    selectedSeason === item.title ? 'bg-quaternary' : ''
-                  }`}>
-                  <Text className="text-white">{item.title}</Text>
-                </View>
+          {seasonOptions.length > 0 ? (
+            <DropdownField
+              options={seasonOptions}
+              value={seasonOptions.find(
+                option => option.title === selectedSeason,
               )}
+              getKey={option => option.title}
+              getLabel={option => option.title}
+              onChange={option => setSelectedSeason(option.title)}
             />
-          ) : (
-            <SingleOptionField label={selectedSeason || 'Downloaded'} />
-          )}
+          ) : null}
 
-          <Text className="mb-1 mt-4 text-lg font-semibold text-white">
+          <Text
+            className="mb-3 mt-7 text-xl font-bold"
+            style={{color: colors.onBackground}}>
             Ready to watch
           </Text>
           {items.map((item, index) => (
             <View
               key={item.id}
-              className="my-2 w-full flex-row items-center justify-center gap-2">
-              <TouchableOpacity
-                className="relative h-12 flex-1 flex-row items-center gap-x-2 rounded-md bg-white/30 p-2"
+              className="mb-3 w-full flex-row items-stretch gap-2">
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`Play ${item.episodeName || item.title}`}
+                className="h-16 flex-1 flex-row items-center px-4"
+                style={({pressed}) => ({
+                  backgroundColor: pressed
+                    ? colors.surfaceBright
+                    : colors.surfaceContainerHigh,
+                  borderColor: colors.outlineVariant,
+                  borderRadius: 20,
+                  borderWidth: 1,
+                })}
                 onPress={() => playItem(item)}>
-                <Ionicons name="play-circle" size={28} color={primary} />
-                <Text className="flex-1 text-white" numberOfLines={1}>
-                  {item.episodeName || item.title}
-                </Text>
-                <Text className="text-xs text-gray-300">
-                  {items.length > 1 ? `E${index + 1} · ` : ''}
-                  {formatDownloadBytes(item.totalBytes)}
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                accessibilityLabel={`Delete ${item.episodeName || item.title}`}
-                className="h-12 w-12 items-center justify-center rounded-md bg-white/20"
-                disabled={deletingId !== null}
-                onPress={() => deleteItem(item)}>
+                <View
+                  className="h-10 w-10 items-center justify-center"
+                  style={{
+                    backgroundColor: colors.secondaryContainer,
+                    borderRadius: 16,
+                  }}>
+                  <Ionicons
+                    name="play"
+                    size={20}
+                    color={colors.onSecondaryContainer}
+                  />
+                </View>
+                <View className="ml-3 flex-1">
+                  <Text
+                    className="font-semibold"
+                    style={{color: colors.onSurface}}
+                    numberOfLines={1}>
+                    {item.episodeName || item.title}
+                  </Text>
+                  <Text
+                    className="mt-1 text-xs"
+                    style={{color: colors.onSurfaceVariant}}>
+                    {items.length > 1 ? `Episode ${index + 1}  ·  ` : ''}
+                    {formatDownloadBytes(item.totalBytes)}
+                  </Text>
+                </View>
                 <MaterialCommunityIcons
-                  name={
-                    deletingId === item.id ? 'progress-clock' : 'delete-outline'
-                  }
-                  size={25}
-                  color={deletingId === item.id ? primary : '#f87171'}
+                  name="chevron-right"
+                  size={22}
+                  color={colors.onSurfaceVariant}
                 />
-              </TouchableOpacity>
+              </Pressable>
+              <Pressable
+                accessibilityLabel={`Delete ${item.episodeName || item.title}`}
+                accessibilityRole="button"
+                className="h-16 w-16 items-center justify-center"
+                disabled={deletingId !== null}
+                style={({pressed}) => ({
+                  backgroundColor: pressed
+                    ? colors.error
+                    : colors.errorContainer,
+                  borderRadius: 20,
+                  opacity: deletingId && deletingId !== item.id ? 0.45 : 1,
+                })}
+                onPress={() => setPendingDelete(item)}>
+                {deletingId === item.id ? (
+                  <ActivityIndicator
+                    size="small"
+                    color={colors.onErrorContainer}
+                  />
+                ) : (
+                  <MaterialCommunityIcons
+                    name="delete-outline"
+                    size={26}
+                    color={colors.onErrorContainer}
+                  />
+                )}
+              </Pressable>
             </View>
           ))}
         </View>
         <View className="h-16" />
       </ScrollView>
+      <AppDialog
+        visible={pendingDelete !== null}
+        title="Delete download?"
+        message={`Remove ${pendingDelete?.episodeName || pendingDelete?.title || 'this download'} from your device?`}
+        primary={primary}
+        variant="warning"
+        actions={[
+          {label: 'Cancel'},
+          {
+            label: 'Delete',
+            variant: 'destructive',
+            onPress: () => {
+              const item = pendingDelete;
+              setPendingDelete(null);
+              if (item) {
+                deleteItem(item);
+              }
+            },
+          },
+        ]}
+        onDismiss={() => setPendingDelete(null)}
+      />
     </View>
   );
 };

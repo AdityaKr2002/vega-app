@@ -1,10 +1,11 @@
-import {View, Text, SafeAreaView, Linking, ToastAndroid} from 'react-native';
+import {View, SafeAreaView, Linking, ToastAndroid} from 'react-native';
 import React from 'react';
 import {WebView} from 'react-native-webview';
 import {NativeStackScreenProps} from '@react-navigation/native-stack';
 import {HomeStackParamList} from '../App';
-import {MaterialIcons} from '@expo/vector-icons';
 import {isSafeExternalUrl} from '../lib/sandbox/urlGuard';
+import IconButton from '../components/ui/IconButton';
+import AppText from '../components/ui/Text';
 
 type Props = NativeStackScreenProps<HomeStackParamList, 'Webview'>;
 
@@ -20,20 +21,20 @@ const Webview = ({route, navigation}: Props) => {
   };
 
   return (
-    <SafeAreaView className="bg-black w-full h-full">
-      <View className="bg-black w-full mt-6 h-16 flex flex-row justify-between p-3 items-center">
-        <Text className="text-white text-lg font-bold">Webview</Text>
-        <View className="flex flex-row items-center gap-5">
-          <MaterialIcons
-            name="open-in-browser"
-            size={24}
-            color="white"
+    <SafeAreaView className="h-full w-full bg-m3-background">
+      <View className="mt-6 h-16 w-full flex-row items-center justify-between bg-m3-surface-container px-4">
+        <AppText role="titleLargeEmphasized" className="text-m3-on-surface">
+          Web
+        </AppText>
+        <View className="flex-row items-center gap-2">
+          <IconButton
+            icon="open-in-new"
+            label="Open in browser"
             onPress={openExternally}
           />
-          <MaterialIcons
-            name="close"
-            size={24}
-            color="white"
+          <IconButton
+            icon="close"
+            label="Close web view"
             onPress={() => {
               navigation.goBack();
             }}
@@ -48,7 +49,9 @@ const Webview = ({route, navigation}: Props) => {
         />
       ) : (
         <View className="flex-1 items-center justify-center">
-          <Text className="text-white">Unsupported link</Text>
+          <AppText role="bodyLarge" className="text-m3-on-surface-variant">
+            Unsupported link
+          </AppText>
         </View>
       )}
     </SafeAreaView>

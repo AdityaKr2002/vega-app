@@ -4,7 +4,6 @@ import {
   Text,
   TouchableOpacity,
   ScrollView,
-  Alert,
   Dimensions,
   Clipboard,
 } from 'react-native';
@@ -13,6 +12,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import * as Application from 'expo-application';
 import * as Updates from 'expo-updates';
 import Constants from 'expo-constants';
+import {showAppDialog} from '../lib/zustand/appDialogStore';
 // Lazy-load Crashlytics to avoid requiring Firebase when not configured
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const getCrashlytics = (): any | null => {
@@ -141,17 +141,19 @@ Component Stack:
 ${errorInfo?.componentStack || 'Not available'}
     `;
 
-    Alert.alert(
-      'Error Report',
-      'Error details have been logged to console. You can copy this information for support.',
-      [
+    showAppDialog({
+      title: 'Error Report',
+      message:
+        'Error details have been logged to console. You can copy this information for support.',
+      variant: 'error',
+      actions: [
         {
-          text: 'Copy to Clipboard',
+          label: 'Copy report',
           onPress: () => Clipboard.setString(errorReport),
         },
-        {text: 'OK'},
+        {label: 'OK', variant: 'primary'},
       ],
-    );
+    });
   };
 
   toggleDetails = () => {

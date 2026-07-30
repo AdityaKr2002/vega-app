@@ -57,7 +57,8 @@ const handleOpenWebView = async (
     | OpenWebViewOptions
     | undefined;
 
-  return openWebView(url.toString(), options);
+  const result = await openWebView(url.toString(), options);
+  return {...result, cookie: result.cookies};
 };
 
 export const handleProviderRpc = async (

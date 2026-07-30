@@ -13,8 +13,6 @@ import {
 } from '@react-navigation/native';
 import {createBottomTabNavigator} from '@react-navigation/bottom-tabs';
 import {createNativeStackNavigator} from '@react-navigation/native-stack';
-import Ionicons from '@expo/vector-icons/Ionicons';
-import Entypo from '@expo/vector-icons/Entypo';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import 'react-native-reanimated';
 import 'react-native-gesture-handler';
@@ -26,18 +24,17 @@ import About, {checkForUpdate} from './screens/settings/About';
 import BootSplash from 'react-native-bootsplash';
 import {enableFreeze, enableScreens} from 'react-native-screens';
 import Preferences from './screens/settings/Preference';
-import useThemeStore from './lib/zustand/themeStore';
-import {AppState, Dimensions, LogBox, ViewStyle} from 'react-native';
+import Appearance from './screens/settings/Appearance';
+import {M3ThemeProvider} from './theme/M3ThemeProvider';
+import {AppState, Dimensions, LogBox} from 'react-native';
 import {EpisodeLink} from './lib/providers/types';
-import RNReactNativeHapticFeedback from 'react-native-haptic-feedback';
-import TabBarBackgound from './components/TabBarBackgound';
-import {TouchableOpacity} from 'react-native';
-import {SafeAreaProvider, SafeAreaView} from 'react-native-safe-area-context';
-import {StyleProp} from 'react-native';
-import Animated from 'react-native-reanimated';
+import {
+  SafeAreaProvider,
+  SafeAreaView,
+  useSafeAreaInsets,
+} from 'react-native-safe-area-context';
 import Downloads from './screens/downloads/Downloads';
 import DownloadedDetails from './screens/downloads/DownloadedDetails';
-import WatchHistory from './screens/WatchHistory';
 import SubtitlePreference from './screens/settings/SubtitleSettings';
 import Extensions from './screens/settings/Extensions';
 import Constants from 'expo-constants';
@@ -63,6 +60,8 @@ import {
   publishSyncManifest,
   syncFromSharedFolder,
 } from './lib/sync/syncService';
+import StreamingTabBar from './components/navigation/StreamingTabBar';
+import AppDialogHost from './components/AppDialogHost';
 // Lazy-load Firebase modules so app runs without google-services files
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const getAnalytics = (): any | null => {
@@ -128,7 +127,6 @@ export type RootStackParamList = {
     file?: string;
     providerValue?: string;
     infoUrl?: string;
-    doNotTrack?: boolean;
   };
 };
 
@@ -149,17 +147,12 @@ export type WatchListStackParamList = {
   Info: {link: string; provider?: string; poster?: string};
 };
 
-export type WatchHistoryStackParamList = {
-  WatchHistory: undefined;
-  Info: {link: string; provider?: string; poster?: string};
-};
-
 export type SettingsStackParamList = {
   Settings: undefined;
+  Appearance: undefined;
   DisableProviders: undefined;
   About: undefined;
   Preferences: undefined;
-  WatchHistoryStack: undefined;
   SubTitlesPreferences: undefined;
   Extensions: undefined;
   DownloadsStack: undefined;
@@ -208,12 +201,9 @@ const App = () => {
   const WatchListStack = createNativeStackNavigator<WatchListStackParamList>();
   const DownloadsStack = createNativeStackNavigator<DownloadsStackParamList>();
   const SettingsStack = createNativeStackNavigator<SettingsStackParamList>();
-  const WatchHistoryStack =
-    createNativeStackNavigator<WatchHistoryStackParamList>();
-  const primary = useThemeStore(state => state.primary);
   const hasFirebase = Boolean(Constants?.expoConfig?.extra?.hasFirebase);
 
-  const showTabBarLables = settingsStorage.showTabBarLabels();
+  // const showTabBarLables = settingsStorage.showTabBarLabels();
 
   SystemUI.setBackgroundColorAsync('black');
 
@@ -308,10 +298,7 @@ const App = () => {
       try {
         const analytics = getAnalytics();
         analytics &&
-          analytics().setUserProperty(
-            'theme_preference',
-            primary ? 'custom' : 'default',
-          );
+          analytics().setUserProperty('theme_preference', 'fixed-neutral');
       } catch {}
 
       // Initial Crashlytics log
@@ -397,25 +384,12 @@ const App = () => {
     );
   }
 
-  function WatchHistoryStackScreen() {
-    return (
-      <WatchHistoryStack.Navigator
-        screenOptions={{
-          headerShown: false,
-          animation: 'ios_from_right',
-          animationDuration: 200,
-          freezeOnBlur: true,
-        }}>
-        <WatchHistoryStack.Screen
-          name="WatchHistory"
-          component={WatchHistory}
-        />
-        <WatchHistoryStack.Screen name="Info" component={Info} />
-      </WatchHistoryStack.Navigator>
-    );
-  }
-
   function SettingsStackScreen() {
+    const insets = useSafeAreaInsets();
+    const subpageOptions = {
+      contentStyle: {paddingTop: insets.top},
+    };
+
     return (
       <SettingsStack.Navigator
         screenOptions={{
@@ -425,24 +399,39 @@ const App = () => {
           freezeOnBlur: true,
         }}>
         <SettingsStack.Screen name="Settings" component={Settings} />
+        <SettingsStack.Screen
+          name="Appearance"
+          component={Appearance}
+          options={subpageOptions}
+        />
         {/* <SettingsStack.Screen
           name="DisableProviders"
           component={DisableProviders}
         /> */}
-        <SettingsStack.Screen name="About" component={About} />
-        <SettingsStack.Screen name="Preferences" component={Preferences} />
-        <SettingsStack.Screen name="Extensions" component={Extensions} />
+        <SettingsStack.Screen
+          name="About"
+          component={About}
+          options={subpageOptions}
+        />
+        <SettingsStack.Screen
+          name="Preferences"
+          component={Preferences}
+          options={subpageOptions}
+        />
+        <SettingsStack.Screen
+          name="Extensions"
+          component={Extensions}
+          options={subpageOptions}
+        />
         <SettingsStack.Screen
           name="DownloadsStack"
           component={DownloadsStackScreen}
-        />
-        <SettingsStack.Screen
-          name="WatchHistoryStack"
-          component={WatchHistoryStackScreen}
+          options={subpageOptions}
         />
         <SettingsStack.Screen
           name="SubTitlesPreferences"
           component={SubtitlePreference}
+          options={subpageOptions}
         />
       </SettingsStack.Navigator>
     );
@@ -472,55 +461,14 @@ const App = () => {
     return (
       <Tab.Navigator
         detachInactiveScreens={true}
+        tabBar={props => <StreamingTabBar {...props} />}
         screenOptions={{
           animation: 'shift',
-          tabBarLabelPosition: 'below-icon',
-          tabBarVariant: isLargeScreen ? 'material' : 'uikit',
           popToTopOnBlur: false,
           tabBarPosition: isLargeScreen ? 'left' : 'bottom',
           headerShown: false,
           freezeOnBlur: true,
-          tabBarActiveTintColor: primary,
-          tabBarInactiveTintColor: '#dadde3',
-          tabBarShowLabel: showTabBarLables,
-          tabBarStyle: !isLargeScreen
-            ? {
-                position: 'absolute',
-                bottom: 0,
-                height: 55,
-                borderRadius: 0,
-                // backgroundColor: 'rgba(0, 0, 0, 0.8)',
-                overflow: 'hidden',
-                elevation: 0,
-                borderTopWidth: 0,
-                paddingHorizontal: 0,
-                paddingTop: 5,
-              }
-            : {},
-          tabBarBackground: () => <TabBarBackgound />,
           tabBarHideOnKeyboard: true,
-          tabBarButton: props => {
-            return (
-              <TouchableOpacity
-                accessibilityRole="button"
-                accessibilityState={props.accessibilityState}
-                style={props.style as StyleProp<ViewStyle>}
-                onPress={e => {
-                  props.onPress && props.onPress(e);
-                  if (
-                    !props?.accessibilityState?.selected &&
-                    settingsStorage.isHapticFeedbackEnabled()
-                  ) {
-                    RNReactNativeHapticFeedback.trigger('effectTick', {
-                      enableVibrateFallback: true,
-                      ignoreAndroidSystemSettings: false,
-                    });
-                  }
-                }}>
-                {props.children}
-              </TouchableOpacity>
-            );
-          },
         }}>
         <Tab.Screen
           name="HomeStack"
@@ -528,16 +476,11 @@ const App = () => {
           options={{
             title: 'Home',
             tabBarIcon: ({focused, color, size}) => (
-              <Animated.View
-                style={{
-                  transform: [{scale: focused ? 1.1 : 1}],
-                }}>
-                {focused ? (
-                  <Ionicons name="home" color={color} size={size} />
-                ) : (
-                  <Ionicons name="home-outline" color={color} size={size} />
-                )}
-              </Animated.View>
+              <MaterialCommunityIcons
+                name={focused ? 'home-variant' : 'home-variant-outline'}
+                color={color}
+                size={size}
+              />
             ),
           }}
         />
@@ -547,16 +490,11 @@ const App = () => {
           options={{
             title: 'Search',
             tabBarIcon: ({focused, color, size}) => (
-              <Animated.View
-                style={{
-                  transform: [{scale: focused ? 1.1 : 1}],
-                }}>
-                {focused ? (
-                  <Ionicons name="search" color={color} size={size} />
-                ) : (
-                  <Ionicons name="search-outline" color={color} size={size} />
-                )}
-              </Animated.View>
+              <MaterialCommunityIcons
+                name={focused ? 'magnify' : 'magnify'}
+                color={color}
+                size={size}
+              />
             ),
           }}
         />
@@ -566,16 +504,11 @@ const App = () => {
           options={{
             title: 'Watch List',
             tabBarIcon: ({focused, color, size}) => (
-              <Animated.View
-                style={{
-                  transform: [{scale: focused ? 1.1 : 1}],
-                }}>
-                {focused ? (
-                  <Entypo name="folder-video" color={color} size={size} />
-                ) : (
-                  <Entypo name="folder-video" color={color} size={size} />
-                )}
-              </Animated.View>
+              <MaterialCommunityIcons
+                name={focused ? 'bookmark' : 'bookmark-outline'}
+                color={color}
+                size={size}
+              />
             ),
           }}
         />
@@ -586,14 +519,11 @@ const App = () => {
             options={{
               title: 'Downloads',
               tabBarIcon: ({focused, color, size}) => (
-                <Animated.View
-                  style={{transform: [{scale: focused ? 1.1 : 1}]}}>
-                  <MaterialCommunityIcons
-                    name={focused ? 'download' : 'download-outline'}
-                    color={color}
-                    size={size}
-                  />
-                </Animated.View>
+                <MaterialCommunityIcons
+                  name={focused ? 'download' : 'download-outline'}
+                  color={color}
+                  size={size}
+                />
               ),
             }}
           />
@@ -604,16 +534,11 @@ const App = () => {
           options={{
             title: 'Settings',
             tabBarIcon: ({focused, color, size}) => (
-              <Animated.View
-                style={{
-                  transform: [{scale: focused ? 1.1 : 1}],
-                }}>
-                {focused ? (
-                  <Ionicons name="settings" color={color} size={size} />
-                ) : (
-                  <Ionicons name="settings-outline" color={color} size={size} />
-                )}
-              </Animated.View>
+              <MaterialCommunityIcons
+                name={focused ? 'cog' : 'cog-outline'}
+                color={color}
+                size={size}
+              />
             ),
           }}
         />
@@ -629,112 +554,115 @@ const App = () => {
   }, []);
 
   return (
-    <GlobalErrorBoundary>
-      <SafeAreaProvider>
-        <QueryClientProvider client={queryClient}>
-          <SafeAreaView
-            edges={{
-              right: 'off',
-              top: 'off',
-              left: 'off',
-              bottom: 'additive',
-            }}
-            className="flex-1"
-            style={{backgroundColor: 'black'}}>
-            <NavigationContainer
-              ref={navigationRef}
-              onReady={async () => {
-                if (pendingDownloadsNavigation) {
-                  openDownloadsScreen();
-                }
-                // Hide bootsplash
-                await BootSplash.hide({fade: true});
-                // Track initial screen
-                if (hasFirebase) {
-                  try {
-                    const route = navigationRef.getCurrentRoute();
-                    if (route?.name) {
-                      const analytics = getAnalytics();
-                      analytics &&
-                        (await analytics().logScreenView({
-                          screen_name: route.name,
-                          screen_class: 'Navigation',
-                        }));
-                    }
-                  } catch {}
-                }
+    <SafeAreaProvider>
+      <M3ThemeProvider>
+        <AppDialogHost />
+        <GlobalErrorBoundary>
+          <QueryClientProvider client={queryClient}>
+            <SafeAreaView
+              edges={{
+                right: 'off',
+                top: 'off',
+                left: 'off',
+                bottom: 'additive',
               }}
-              onStateChange={async () => {
-                if (hasFirebase) {
-                  try {
-                    const route = navigationRef.getCurrentRoute();
-                    if (route?.name) {
-                      const analytics = getAnalytics();
-                      analytics &&
-                        (await analytics().logScreenView({
-                          screen_name: route.name,
-                          screen_class: 'Navigation',
-                        }));
-                    }
-                  } catch {}
-                }
-              }}
-              theme={{
-                fonts: {
-                  regular: {
-                    fontFamily: 'Inter_400Regular',
-                    fontWeight: '400',
+              className="flex-1"
+              style={{backgroundColor: 'black'}}>
+              <NavigationContainer
+                ref={navigationRef}
+                onReady={async () => {
+                  if (pendingDownloadsNavigation) {
+                    openDownloadsScreen();
+                  }
+                  // Hide bootsplash
+                  await BootSplash.hide({fade: true});
+                  // Track initial screen
+                  if (hasFirebase) {
+                    try {
+                      const route = navigationRef.getCurrentRoute();
+                      if (route?.name) {
+                        const analytics = getAnalytics();
+                        analytics &&
+                          (await analytics().logScreenView({
+                            screen_name: route.name,
+                            screen_class: 'Navigation',
+                          }));
+                      }
+                    } catch {}
+                  }
+                }}
+                onStateChange={async () => {
+                  if (hasFirebase) {
+                    try {
+                      const route = navigationRef.getCurrentRoute();
+                      if (route?.name) {
+                        const analytics = getAnalytics();
+                        analytics &&
+                          (await analytics().logScreenView({
+                            screen_name: route.name,
+                            screen_class: 'Navigation',
+                          }));
+                      }
+                    } catch {}
+                  }
+                }}
+                theme={{
+                  fonts: {
+                    regular: {
+                      fontFamily: 'Inter_400Regular',
+                      fontWeight: '400',
+                    },
+                    medium: {
+                      fontFamily: 'Inter_500Medium',
+                      fontWeight: '500',
+                    },
+                    bold: {
+                      fontFamily: 'Inter_700Bold',
+                      fontWeight: '700',
+                    },
+                    heavy: {
+                      fontFamily: 'Inter_800ExtraBold',
+                      fontWeight: '800',
+                    },
                   },
-                  medium: {
-                    fontFamily: 'Inter_500Medium',
-                    fontWeight: '500',
+                  dark: true,
+                  colors: {
+                    background: 'transparent',
+                    card: 'black',
+                    primary: '#E4E4E4',
+                    text: 'white',
+                    border: 'black',
+                    notification: '#E4E4E4',
                   },
-                  bold: {
-                    fontFamily: 'Inter_700Bold',
-                    fontWeight: '700',
-                  },
-                  heavy: {
-                    fontFamily: 'Inter_800ExtraBold',
-                    fontWeight: '800',
-                  },
-                },
-                dark: true,
-                colors: {
-                  background: 'transparent',
-                  card: 'black',
-                  primary: primary,
-                  text: 'white',
-                  border: 'black',
-                  notification: primary,
-                },
-              }}>
-              <Stack.Navigator
-                screenOptions={{
-                  headerShown: false,
-                  animation: 'ios_from_right',
-                  animationDuration: 200,
-                  freezeOnBlur: true,
-                  contentStyle: {backgroundColor: 'transparent'},
                 }}>
-                <Stack.Screen name="TabStack" component={TabStack} />
-                <Stack.Screen
-                  name="Player"
-                  component={Player}
-                  options={{orientation: 'landscape'}}
-                />
-              </Stack.Navigator>
-            </NavigationContainer>
-            {/* Global WAF / captcha solving dialog, triggered by providers via
+                <Stack.Navigator
+                  screenOptions={{
+                    headerShown: false,
+                    animation: 'ios_from_right',
+                    animationDuration: 200,
+                    freezeOnBlur: true,
+                    contentStyle: {backgroundColor: 'transparent'},
+                  }}>
+                  <Stack.Screen name="TabStack" component={TabStack} />
+                  <Stack.Screen
+                    name="Player"
+                    component={Player}
+                    options={{orientation: 'landscape'}}
+                  />
+                </Stack.Navigator>
+              </NavigationContainer>
+              {/* Global WAF / captcha solving dialog, triggered by providers via
                 providerContext.openWebView */}
-            <WafWebViewDialog />
-            {/* Isolated realm that runs untrusted provider code. Must stay
+              <WafWebViewDialog />
+              {/* Isolated realm that runs untrusted provider code. Must stay
                 mounted for the app lifetime: every provider call is dispatched
                 into it. */}
-            <ProviderSandboxHost />
-          </SafeAreaView>
-        </QueryClientProvider>
-      </SafeAreaProvider>
-    </GlobalErrorBoundary>
+              <ProviderSandboxHost />
+            </SafeAreaView>
+          </QueryClientProvider>
+        </GlobalErrorBoundary>
+      </M3ThemeProvider>
+    </SafeAreaProvider>
   );
 };
 

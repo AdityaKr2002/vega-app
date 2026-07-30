@@ -1,241 +1,144 @@
-import React, {useCallback, useEffect, useState} from 'react';
-import {View, Text, FlatList, Pressable, TouchableOpacity} from 'react-native';
-import type {ListRenderItem} from 'react-native';
-import useWatchHistoryStore from '../lib/zustand/watchHistrory';
-import {mainStorage as MMKV} from '../lib/storage/StorageService';
 import {useNavigation} from '@react-navigation/native';
-import useThemeStore from '../lib/zustand/themeStore';
-import {NativeStackNavigationProp} from '@react-navigation/native-stack';
-import {TabStackParamList} from '../App';
+import type {NativeStackNavigationProp} from '@react-navigation/native-stack';
+import React, {useCallback, useMemo, useState} from 'react';
+import {FlatList, View} from 'react-native';
 import ReactNativeHapticFeedback from 'react-native-haptic-feedback';
-import {MaterialCommunityIcons} from '@expo/vector-icons';
-import ContinueWatchingCard, {
-  ContinueWatchingItemData,
-} from './ContinueWatchingCard';
+import type {HomeStackParamList} from '../App';
+import {settingsStorage} from '../lib/storage';
+import useContinueWatchingStore, {
+  type ContinueWatchingItem,
+} from '../lib/zustand/continueWatchingStore';
+import {useM3Colors} from '../theme/M3PaletteContext';
+import AppDialog from './AppDialog';
+import MediaPosterCard from './MediaPosterCard';
+import AppText from './ui/Text';
 
 const ContinueWatching = () => {
-  const primary = useThemeStore(state => state.primary);
+  const colors = useM3Colors();
   const navigation =
-    useNavigation<NativeStackNavigationProp<TabStackParamList>>();
-  const history = useWatchHistoryStore(state => state.history);
-  const removeItems = useWatchHistoryStore(state => state.removeItems);
-  const [progressData, setProgressData] = useState<Record<string, number>>({});
-  const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
-  const [selectionMode, setSelectionMode] = useState<boolean>(false);
-
-  // Filter out duplicates and get the most recent items
-  const recentItems = React.useMemo(() => {
-    const seen = new Set();
-    const items = history
-      .filter(item => item.provider !== 'local')
-      .filter(item => {
-        if (seen.has(item.link)) {
-          return false;
-        }
-        seen.add(item.link);
-        return true;
-      })
-      .slice(0, 10); // Limit to 10 items
-
-    return items;
-  }, [history]);
-
-  // Load progress data
-  useEffect(() => {
-    const loadProgressData = () => {
-      const progressMap: Record<string, number> = {};
-
-      recentItems.forEach(item => {
-        try {
-          // Try to get dedicated watch history progress
-          const historyKey = item.link;
-          const historyProgressKey = `watch_history_progress_${historyKey}`;
-          const storedProgress = MMKV.getString(historyProgressKey);
-
-          if (storedProgress) {
-            const parsed = JSON.parse(storedProgress);
-            if (parsed.percentage) {
-              progressMap[item.link] = Math.min(
-                Math.max(parsed.percentage, 0),
-                100,
-              );
-            } else if (parsed.currentTime && parsed.duration) {
-              const percentage = (parsed.currentTime / parsed.duration) * 100;
-              progressMap[item.link] = Math.min(Math.max(percentage, 0), 100);
-            }
-          } else if (item.currentTime && item.duration) {
-            const percentage = (item.currentTime / item.duration) * 100;
-            progressMap[item.link] = Math.min(Math.max(percentage, 0), 100);
-          }
-        } catch (e) {
-          console.error('Error processing progress for item:', item.title, e);
-        }
-      });
-
-      setProgressData(progressMap);
-    };
-
-    loadProgressData();
-  }, [recentItems]);
-
-  const handleNavigateToInfo = (item: any) => {
-    try {
-      // Parse the link if it's a JSON string
-      let linkData = item.link;
-      if (typeof item.link === 'string' && item.link.startsWith('{')) {
-        try {
-          linkData = JSON.parse(item.link);
-        } catch (e) {
-          console.error('Failed to parse link:', e);
-        }
-      }
-      console.log('linkData', item.poster);
-      // Navigate to Info screen
-      navigation.navigate('HomeStack', {
-        screen: 'Info',
-        params: {
-          link: linkData,
-          provider: item.provider,
-          poster: item.poster,
-        },
-      } as any);
-    } catch (error) {
-      console.error('Navigation error:', error);
-    }
-  };
-
-  const toggleItemSelection = (link: string) => {
-    setSelectedItems(prev => {
-      const newSelected = new Set(prev);
-      if (newSelected.has(link)) {
-        newSelected.delete(link);
-      } else {
-        newSelected.add(link);
-      }
-
-      // Exit selection mode if no items are selected
-      if (newSelected.size === 0) {
-        setSelectionMode(false);
-      }
-
-      return newSelected;
-    });
-  };
-
-  const handleLongPress = useCallback(
-    (link: string) => {
-      ReactNativeHapticFeedback.trigger('effectClick', {
-        enableVibrateFallback: true,
-        ignoreAndroidSystemSettings: false,
-      });
-
-      // Enter selection mode if not already in it
-      if (!selectionMode) {
-        setSelectionMode(true);
-      }
-
-      toggleItemSelection(link);
-    },
-    [selectionMode],
+    useNavigation<NativeStackNavigationProp<HomeStackParamList>>();
+  const storedItems = useContinueWatchingStore(state => state.items);
+  const removeItem = useContinueWatchingStore(state => state.removeItem);
+  const [itemToRemove, setItemToRemove] = useState<ContinueWatchingItem | null>(
+    null,
+  );
+  const items = useMemo(
+    () =>
+      storedItems
+        .filter(
+          (item): item is ContinueWatchingItem => Boolean(item.providerValue),
+        )
+        .sort((a, b) => b.updatedAt - a.updatedAt),
+    [storedItems],
   );
 
-  const handlePress = useCallback(
-    (item: any) => {
-      if (selectionMode) {
-        toggleItemSelection(item.link);
-      } else {
-        handleNavigateToInfo(item);
-      }
+  const openInfo = useCallback(
+    (item: ContinueWatchingItem) => {
+      navigation.navigate('Info', {
+        link: item.infoUrl,
+        provider: item.providerValue,
+        poster: item.poster || item.background,
+      });
     },
-    [selectionMode],
+    [navigation],
   );
 
-  const deleteSelectedItems = () => {
-    removeItems([...selectedItems]);
-    setSelectedItems(new Set());
-    setSelectionMode(false);
-  };
-
-  const exitSelectionMode = () => {
-    setSelectedItems(new Set());
-    setSelectionMode(false);
-  };
-
-  const keyExtractor = useCallback(
-    (item: ContinueWatchingItemData) => item.link,
+  const removeContinueWatchingItem = useCallback(
+    (item: ContinueWatchingItem) => {
+      if (settingsStorage.isHapticFeedbackEnabled()) {
+        ReactNativeHapticFeedback.trigger('effectHeavyClick', {
+          enableVibrateFallback: true,
+          ignoreAndroidSystemSettings: false,
+        });
+      }
+      setItemToRemove(item);
+    },
     [],
   );
 
-  const renderItem = useCallback<ListRenderItem<ContinueWatchingItemData>>(
-    ({item}) => (
-      <ContinueWatchingCard
-        item={item}
-        progress={progressData[item.link] || 0}
-        isSelected={selectedItems.has(item.link)}
-        selectionMode={selectionMode}
-        primary={primary}
-        onPress={handlePress}
-        onLongPress={handleLongPress}
-      />
-    ),
-    [
-      progressData,
-      selectedItems,
-      selectionMode,
-      primary,
-      handlePress,
-      handleLongPress,
-    ],
-  );
+  const confirmRemove = useCallback(() => {
+    if (itemToRemove) {
+      removeItem(itemToRemove.id);
+    }
+  }, [itemToRemove, removeItem]);
 
-  // Only render if we have items (MOVED AFTER ALL HOOKS)
-  if (recentItems.length === 0) {
+  if (items.length === 0) {
     return null;
   }
 
   return (
-    <Pressable
-      onPress={() => selectionMode && exitSelectionMode()}
-      className="mt-3 mb-8">
-      <View className="flex flex-row justify-between items-center px-2 mb-3">
-        <Text className="text-2xl font-semibold" style={{color: primary}}>
-          Continue Watching
-        </Text>
-
-        {selectionMode && selectedItems.size > 0 && (
-          <View className="flex flex-row items-center">
-            <Text className="text-white mr-1">
-              {selectedItems.size} selected
-            </Text>
-            <TouchableOpacity
-              onPress={event => {
-                event.stopPropagation();
-                deleteSelectedItems();
-              }}
-              className=" rounded-full mr-2">
-              <MaterialCommunityIcons
-                name="delete-outline"
-                size={25}
-                color={primary}
-              />
-            </TouchableOpacity>
-          </View>
-        )}
-      </View>
-
+    <View style={{gap: 14, marginTop: 28}}>
+      <AppText
+        role="titleLargeEmphasized"
+        style={{color: colors.onBackground, paddingHorizontal: 20}}>
+        Continue watching
+      </AppText>
       <FlatList
-        data={recentItems}
         horizontal
+        data={items}
+        keyExtractor={item => item.id}
         showsHorizontalScrollIndicator={false}
-        keyExtractor={keyExtractor}
-        removeClippedSubviews
-        initialNumToRender={6}
-        maxToRenderPerBatch={6}
-        windowSize={5}
-        contentContainerStyle={{paddingHorizontal: 12}}
-        renderItem={renderItem}
+        contentContainerStyle={{paddingHorizontal: 20}}
+        ItemSeparatorComponent={() => <View style={{width: 14}} />}
+        renderItem={({item}) => {
+          const progress =
+            item.duration > 0
+              ? Math.min(
+                  100,
+                  Math.max(0, (item.position / item.duration) * 100),
+                )
+              : 0;
+          return (
+            <View style={{width: 124}}>
+              <MediaPosterCard
+                title={item.title}
+                subtitle={item.episodeTitle}
+                poster={item.poster || item.background}
+                width={124}
+                onPress={() => openInfo(item)}
+                onLongPress={() => removeContinueWatchingItem(item)}
+              />
+              <View
+                style={{
+                  backgroundColor: colors.surfaceContainerHighest,
+                  borderRadius: 2,
+                  height: 3,
+                  marginTop: 7,
+                  overflow: 'hidden',
+                }}>
+                <View
+                  style={{
+                    backgroundColor: colors.primary,
+                    height: 3,
+                    width: `${progress}%`,
+                  }}
+                />
+              </View>
+            </View>
+          );
+        }}
       />
-    </Pressable>
+      <AppDialog
+        visible={itemToRemove !== null}
+        title="Remove"
+        message={
+          itemToRemove
+            ? `Remove ${itemToRemove.title} from Continue watching?`
+            : ''
+        }
+        primary="Remove"
+        variant="warning"
+        onDismiss={() => setItemToRemove(null)}
+        actions={[
+          {label: 'Cancel'},
+          {
+            label: 'Remove',
+            onPress: confirmRemove,
+            variant: 'destructive',
+          },
+        ]}
+      />
+    </View>
   );
 };
 

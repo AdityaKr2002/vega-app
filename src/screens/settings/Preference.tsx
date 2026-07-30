@@ -1,24 +1,16 @@
-import {
-  View,
-  Text,
-  Switch,
-  ScrollView,
-  TouchableOpacity,
-  ToastAndroid,
-  StatusBar,
-  TextInput,
-} from 'react-native';
+import {View, ScrollView, Pressable, ToastAndroid} from 'react-native';
 import React, {useState} from 'react';
 import {settingsStorage} from '../../lib/storage';
-import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import RNReactNativeHapticFeedback from 'react-native-haptic-feedback';
-import useThemeStore from '../../lib/zustand/themeStore';
-import {themes} from '../../lib/constants';
 import Constants from 'expo-constants';
 import DownloadLocationPreference from './components/DownloadLocationPreference';
-import {Dropdown} from 'react-native-element-dropdown';
 import useNavigationPreferencesStore from '../../lib/zustand/navigationPreferencesStore';
 import DownloadConcurrencyPreference from './components/DownloadConcurrencyPreference';
+import AppText from '../../components/ui/Text';
+import SettingsSection from '../../components/ui/SettingsSection';
+import SettingsSwitchRow from '../../components/ui/SettingsSwitchRow';
+import Surface from '../../components/ui/Surface';
+import {useM3Colors} from '../../theme/M3PaletteContext';
 // Lazy-load Firebase to allow running without google-services.json
 const getAnalytics = (): any | null => {
   try {
@@ -37,22 +29,16 @@ const getCrashlytics = (): any | null => {
 
 const Preferences = () => {
   const hasFirebase = Boolean(Constants?.expoConfig?.extra?.hasFirebase);
-  const {primary, setPrimary, isCustom, setCustom} = useThemeStore(
-    state => state,
-  );
-  const [showRecentlyWatched, setShowRecentlyWatched] = useState(
-    settingsStorage.getBool('showRecentlyWatched') || false,
-  );
+  const colors = useM3Colors();
+  // const [showRecentlyWatched, setShowRecentlyWatched] = useState(
+  //   settingsStorage.getBool('showRecentlyWatched') || false,
+  // );
   const [disableDrawer, setDisableDrawer] = useState(
     settingsStorage.getBool('disableDrawer') || false,
   );
 
   const [ExcludedQualities, setExcludedQualities] = useState(
     settingsStorage.getExcludedQualities(),
-  );
-
-  const [customColor, setCustomColor] = useState(
-    settingsStorage.getCustomColor(),
   );
 
   const [showMediaControls, setShowMediaControls] = useState<boolean>(
@@ -103,345 +89,218 @@ const Preferences = () => {
 
   return (
     <ScrollView
-      className="w-full h-full bg-black"
-      contentContainerStyle={{
-        paddingTop: StatusBar.currentHeight || 0,
-      }}>
-      <View className="p-5">
-        <Text className="text-2xl font-bold text-white mb-6">Preferences</Text>
+      className="h-full w-full bg-m3-background"
+      showsVerticalScrollIndicator={false}
+      contentContainerStyle={{paddingBottom: 40, paddingTop: 20}}>
+      <View className="px-5">
+        <AppText
+          role="headlineLargeEmphasized"
+          className="text-m3-on-background">
+          Preferences
+        </AppText>
+        <AppText
+          role="bodyLarge"
+          className="mb-7 mt-1 text-m3-on-surface-variant">
+          Shape how Vega looks, plays, and downloads
+        </AppText>
 
-        {/* Theme Section */}
+        <SettingsSection title="Experience">
+          <SettingsSwitchRow
+            title="Haptic feedback"
+            description="Use subtle vibration for actions and selections"
+            value={hapticFeedback}
+            onValueChange={next => {
+              settingsStorage.setHapticFeedbackEnabled(next);
+              setHapticFeedback(next);
+            }}
+          />
+          <SettingsSwitchRow
+            title="Tab bar labels"
+            description="Show destination names below navigation icons"
+            value={showTabBarLables}
+            onValueChange={next => {
+              settingsStorage.setShowTabBarLabels(next);
+              setShowTabBarLables(next);
+              ToastAndroid.show(
+                'Restart App to Apply Changes',
+                ToastAndroid.SHORT,
+              );
+            }}
+          />
+          <SettingsSwitchRow
+            title="Hide downloads tab"
+            value={hideDownloadsTab}
+            onValueChange={setHideDownloadsTab}
+          />
+          <SettingsSwitchRow
+            title="Hamburger menu"
+            value={showHamburgerMenu}
+            onValueChange={next => {
+              settingsStorage.setShowHamburgerMenu(next);
+              setShowHamburgerMenu(next);
+            }}
+          />
+          {/* <SettingsSwitchRow
+            title="Recently watched"
+            description="Keep your resume rail on Home"
+            value={showRecentlyWatched}
+            onValueChange={next => {
+              settingsStorage.setBool('showRecentlyWatched', next);
+              setShowRecentlyWatched(next);
+            }}
+          /> */}
+          <SettingsSwitchRow
+            title="Disable drawer"
+            value={disableDrawer}
+            onValueChange={next => {
+              settingsStorage.setBool('disableDrawer', next);
+              setDisableDrawer(next);
+            }}
+          />
+          <SettingsSwitchRow
+            title="External downloader"
+            description="Send every download to another app"
+            value={alwaysUseExternalDownload}
+            divider={false}
+            onValueChange={next => {
+              settingsStorage.setBool('alwaysExternalDownloader', next);
+              setAlwaysUseExternalDownload(next);
+            }}
+          />
+        </SettingsSection>
+
+        {hasFirebase ? (
+          <SettingsSection title="Privacy">
+            <SettingsSwitchRow
+              title="Usage and crash reports"
+              description="Help improve Vega with anonymous diagnostics"
+              value={telemetryOptIn}
+              divider={false}
+              onValueChange={async next => {
+                setTelemetryOptIn(next);
+                settingsStorage.setTelemetryOptIn(next);
+                try {
+                  const crashlytics = getCrashlytics();
+                  crashlytics &&
+                    (await crashlytics().setCrashlyticsCollectionEnabled(next));
+                } catch {}
+                try {
+                  const analytics = getAnalytics();
+                  analytics &&
+                    (await analytics().setAnalyticsCollectionEnabled(next));
+                  analytics &&
+                    (await analytics().setConsent({
+                      analytics_storage: next,
+                      ad_storage: next,
+                      ad_user_data: next,
+                      ad_personalization: next,
+                    }));
+                } catch {}
+              }}
+            />
+          </SettingsSection>
+        ) : null}
+
+        <SettingsSection title="Playback">
+          <SettingsSwitchRow
+            title="External player"
+            description="Open streams in your preferred video app"
+            value={OpenExternalPlayer}
+            onValueChange={next => {
+              settingsStorage.setBool('useExternalPlayer', next);
+              setOpenExternalPlayer(next);
+            }}
+          />
+          <SettingsSwitchRow
+            title="Media controls"
+            value={showMediaControls}
+            onValueChange={next => {
+              settingsStorage.setShowMediaControls(next);
+              setShowMediaControls(next);
+            }}
+          />
+          <SettingsSwitchRow
+            title="Hide seek buttons"
+            value={hideSeekButtons}
+            onValueChange={next => {
+              settingsStorage.setHideSeekButtons(next);
+              setHideSeekButtons(next);
+            }}
+          />
+          <SettingsSwitchRow
+            title="Swipe gestures"
+            description="Adjust playback with gestures over the video"
+            value={enableSwipeGesture}
+            divider={false}
+            onValueChange={next => {
+              settingsStorage.setSwipeGestureEnabled(next);
+              setEnableSwipeGesture(next);
+            }}
+          />
+        </SettingsSection>
+
+        <DownloadLocationPreference primary={colors.primary} />
+
+        <DownloadConcurrencyPreference primary={colors.primary} />
+
         <View className="mb-6">
-          <Text className="text-gray-400 text-sm mb-3">Appearance</Text>
-          <View className="bg-[#1A1A1A] rounded-xl overflow-hidden">
-            {/* Theme Selector */}
-            <View className="flex-row items-center px-4 justify-between p-4 border-b border-[#262626]">
-              <Text className="text-white text-base">Theme</Text>
-              <View className="w-36">
-                {isCustom ? (
-                  <View className="flex-row items-center gap-2">
-                    <TextInput
-                      style={{
-                        color: 'white',
-                        backgroundColor: '#262626',
-                        borderRadius: 8,
-                        paddingHorizontal: 8,
-                        paddingVertical: 4,
-                        fontSize: 14,
-                      }}
-                      placeholder="Hex Color"
-                      placeholderTextColor="gray"
-                      value={customColor}
-                      onChangeText={setCustomColor}
-                      onSubmitEditing={e => {
-                        if (e.nativeEvent.text.length < 7) {
-                          ToastAndroid.show(
-                            'Invalid Color',
-                            ToastAndroid.SHORT,
-                          );
-                          return;
-                        }
-                        settingsStorage.setCustomColor(e.nativeEvent.text);
-                        setPrimary(e.nativeEvent.text);
-                      }}
-                    />
-                    <TouchableOpacity
-                      onPress={() => {
-                        setCustom(false);
-                        setPrimary('#FF6347');
-                      }}>
-                      <MaterialCommunityIcons
-                        name="close"
-                        size={20}
-                        color="gray"
-                      />
-                    </TouchableOpacity>
-                  </View>
-                ) : (
-                  <Dropdown
-                    selectedTextStyle={{
-                      color: 'white',
-                      fontSize: 14,
-                      fontWeight: '500',
-                    }}
-                    containerStyle={{
-                      backgroundColor: '#262626',
-                      borderRadius: 8,
-                      borderWidth: 0,
-                      marginTop: 4,
-                    }}
-                    itemTextStyle={{color: 'white'}}
-                    activeColor="#3A3A3A"
-                    itemContainerStyle={{
-                      backgroundColor: '#262626',
-                      borderWidth: 0,
+          <AppText
+            role="labelLarge"
+            className="mb-3 text-m3-on-surface-variant">
+            Quality
+          </AppText>
+          <Surface level="low" className="p-4">
+            <AppText role="bodyLarge" className="text-m3-on-surface">
+              Excluded Qualities
+            </AppText>
+            <AppText
+              role="bodySmall"
+              className="mb-4 mt-1 text-m3-on-surface-variant">
+              Hide lower resolutions from stream results
+            </AppText>
+            <View className="flex-row flex-wrap gap-3">
+              {['360p', '480p', '720p'].map(quality => {
+                const selected = ExcludedQualities.includes(quality);
+                return (
+                  <Pressable
+                    key={quality}
+                    onPress={() => {
+                      if (settingsStorage.isHapticFeedbackEnabled()) {
+                        RNReactNativeHapticFeedback.trigger('effectTick');
+                      }
+                      const newExcluded = ExcludedQualities.includes(quality)
+                        ? ExcludedQualities.filter(q => q !== quality)
+                        : [...ExcludedQualities, quality];
+                      setExcludedQualities(newExcluded);
+                      settingsStorage.setExcludedQualities(newExcluded);
                     }}
                     style={{
-                      backgroundColor: '#262626',
-                      borderWidth: 0,
-                    }}
-                    iconStyle={{tintColor: 'white'}}
-                    placeholderStyle={{color: 'white'}}
-                    labelField="name"
-                    valueField="color"
-                    data={themes}
-                    value={primary}
-                    onChange={value => {
-                      if (value.name === 'Custom') {
-                        setCustom(true);
-                        setPrimary(customColor);
-                        return;
-                      }
-                      setPrimary(value.color);
-                    }}
-                  />
-                )}
-              </View>
+                      backgroundColor: selected
+                        ? colors.secondaryContainer
+                        : colors.surfaceContainerHigh,
+                      borderColor: selected
+                        ? colors.primary
+                        : colors.outlineVariant,
+                      borderRadius: 16,
+                      borderWidth: 1,
+                      paddingHorizontal: 18,
+                      paddingVertical: 10,
+                    }}>
+                    <AppText
+                      role="labelLargeEmphasized"
+                      style={{
+                        color: selected
+                          ? colors.onSecondaryContainer
+                          : colors.onSurface,
+                      }}>
+                      {quality}
+                    </AppText>
+                  </Pressable>
+                );
+              })}
             </View>
-
-            {/* Haptic Feedback */}
-            <View className="flex-row items-center justify-between p-4 border-b border-[#262626]">
-              <Text className="text-white text-base">Haptic Feedback</Text>
-              <Switch
-                thumbColor={hapticFeedback ? primary : 'gray'}
-                value={hapticFeedback}
-                onValueChange={() => {
-                  settingsStorage.setHapticFeedbackEnabled(!hapticFeedback);
-                  setHapticFeedback(!hapticFeedback);
-                }}
-              />
-            </View>
-
-            {/* Analytics & Crashlytics Opt-In */}
-            {hasFirebase && (
-              <View className="flex-row items-center justify-between p-4 border-b border-[#262626]">
-                <Text className="text-white text-base">
-                  Usage & Crash Reports
-                </Text>
-                <Switch
-                  thumbColor={telemetryOptIn ? primary : 'gray'}
-                  value={telemetryOptIn}
-                  onValueChange={async () => {
-                    const next = !telemetryOptIn;
-                    setTelemetryOptIn(next);
-                    settingsStorage.setTelemetryOptIn(next);
-                    try {
-                      const crashlytics = getCrashlytics();
-                      crashlytics &&
-                        (await crashlytics().setCrashlyticsCollectionEnabled(
-                          next,
-                        ));
-                    } catch {}
-                    try {
-                      const analytics = getAnalytics();
-                      analytics &&
-                        (await analytics().setAnalyticsCollectionEnabled(next));
-                      // Also update consent for completeness
-                      analytics &&
-                        (await analytics().setConsent({
-                          analytics_storage: next,
-                          ad_storage: next,
-                          ad_user_data: next,
-                          ad_personalization: next,
-                        }));
-                    } catch {}
-                  }}
-                />
-              </View>
-            )}
-
-            {/* Show Tab Bar Labels */}
-            <View className="flex-row items-center justify-between p-4 border-b border-[#262626]">
-              <Text className="text-white text-base">Show Tab Bar Labels</Text>
-              <Switch
-                thumbColor={showTabBarLables ? primary : 'gray'}
-                value={showTabBarLables}
-                onValueChange={() => {
-                  settingsStorage.setShowTabBarLabels(!showTabBarLables);
-                  setShowTabBarLables(!showTabBarLables);
-                  ToastAndroid.show(
-                    'Restart App to Apply Changes',
-                    ToastAndroid.SHORT,
-                  );
-                }}
-              />
-            </View>
-
-            {/* Show Hamburger Menu */}
-            <View className="flex-row items-center justify-between p-4 border-b border-[#262626]">
-              <Text className="text-white text-base">Hide Downloads Tab</Text>
-              <Switch
-                thumbColor={hideDownloadsTab ? primary : 'gray'}
-                value={hideDownloadsTab}
-                onValueChange={setHideDownloadsTab}
-              />
-            </View>
-
-            {/* Show Hamburger Menu */}
-            <View className="flex-row items-center justify-between p-4 border-b border-[#262626]">
-              <Text className="text-white text-base">Show Hamburger Menu</Text>
-              <Switch
-                thumbColor={showHamburgerMenu ? primary : 'gray'}
-                value={showHamburgerMenu}
-                onValueChange={() => {
-                  settingsStorage.setShowHamburgerMenu(!showHamburgerMenu);
-                  setShowHamburgerMenu(!showHamburgerMenu);
-                }}
-              />
-            </View>
-
-            {/* Show Recently Watched */}
-            <View className="flex-row items-center justify-between p-4 border-b border-[#262626]">
-              <Text className="text-white text-base">
-                Show Recently Watched
-              </Text>
-              <Switch
-                thumbColor={showRecentlyWatched ? primary : 'gray'}
-                value={showRecentlyWatched}
-                onValueChange={() => {
-                  settingsStorage.setBool(
-                    'showRecentlyWatched',
-                    !showRecentlyWatched,
-                  );
-                  setShowRecentlyWatched(!showRecentlyWatched);
-                }}
-              />
-            </View>
-
-            {/* Disable Drawer */}
-            <View className="flex-row items-center justify-between p-4 border-b border-[#262626]">
-              <Text className="text-white text-base">Disable Drawer</Text>
-              <Switch
-                thumbColor={disableDrawer ? primary : 'gray'}
-                value={disableDrawer}
-                onValueChange={() => {
-                  settingsStorage.setBool('disableDrawer', !disableDrawer);
-                  setDisableDrawer(!disableDrawer);
-                }}
-              />
-            </View>
-
-            {/* Always Use External Downloader */}
-            <View className="flex-row items-center justify-between p-4">
-              <Text className="text-white text-base flex-1">
-                Always Use External Downloader
-              </Text>
-              <Switch
-                thumbColor={alwaysUseExternalDownload ? primary : 'gray'}
-                value={alwaysUseExternalDownload}
-                onValueChange={() => {
-                  settingsStorage.setBool(
-                    'alwaysExternalDownloader',
-                    !alwaysUseExternalDownload,
-                  );
-                  setAlwaysUseExternalDownload(!alwaysUseExternalDownload);
-                }}
-              />
-            </View>
-          </View>
+          </Surface>
         </View>
-
-        {/* Player Settings */}
-        <View className="mb-6">
-          <Text className="text-gray-400 text-sm mb-3">Player</Text>
-          <View className="bg-[#1A1A1A] rounded-xl overflow-hidden">
-            {/* External Player */}
-            <View className="flex-row items-center justify-between p-4 border-b border-[#262626]">
-              <Text className="text-white text-base flex-1">
-                Always Use External Player
-              </Text>
-              <Switch
-                thumbColor={OpenExternalPlayer ? primary : 'gray'}
-                value={OpenExternalPlayer}
-                onValueChange={val => {
-                  settingsStorage.setBool('useExternalPlayer', val);
-                  setOpenExternalPlayer(val);
-                }}
-              />
-            </View>
-
-            {/* Media Controls */}
-            <View className="flex-row items-center justify-between p-4 border-b border-[#262626]">
-              <Text className="text-white text-base">Media Controls</Text>
-              <Switch
-                thumbColor={showMediaControls ? primary : 'gray'}
-                value={showMediaControls}
-                onValueChange={() => {
-                  settingsStorage.setShowMediaControls(!showMediaControls);
-                  setShowMediaControls(!showMediaControls);
-                }}
-              />
-            </View>
-
-            {/* Hide Seek Buttons */}
-            <View className="flex-row items-center justify-between p-4 border-b border-[#262626]">
-              <Text className="text-white text-base">Hide Seek Buttons</Text>
-              <Switch
-                thumbColor={hideSeekButtons ? primary : 'gray'}
-                value={hideSeekButtons}
-                onValueChange={() => {
-                  settingsStorage.setHideSeekButtons(!hideSeekButtons);
-                  setHideSeekButtons(!hideSeekButtons);
-                }}
-              />
-            </View>
-
-            {/* Swipe Gestures */}
-            <View className="flex-row items-center justify-between p-4">
-              <Text className="text-white text-base">
-                Enable Swipe Gestures
-              </Text>
-              <Switch
-                thumbColor={enableSwipeGesture ? primary : 'gray'}
-                value={enableSwipeGesture}
-                onValueChange={() => {
-                  settingsStorage.setSwipeGestureEnabled(!enableSwipeGesture);
-                  setEnableSwipeGesture(!enableSwipeGesture);
-                }}
-              />
-            </View>
-          </View>
-        </View>
-
-        <DownloadLocationPreference primary={primary} />
-
-        <DownloadConcurrencyPreference primary={primary} />
-
-        {/* Quality Settings */}
-        <View className="mb-6">
-          <Text className="text-gray-400 text-sm mb-3">Quality</Text>
-          <View className="bg-[#1A1A1A] rounded-xl p-4">
-            <Text className="text-white text-base mb-3">
-              Excluded Qualities
-            </Text>
-            <View className="flex-row flex-wrap gap-2">
-              {['360p', '480p', '720p'].map((quality, index) => (
-                <TouchableOpacity
-                  key={index}
-                  onPress={() => {
-                    if (settingsStorage.isHapticFeedbackEnabled()) {
-                      RNReactNativeHapticFeedback.trigger('effectTick');
-                    }
-                    const newExcluded = ExcludedQualities.includes(quality)
-                      ? ExcludedQualities.filter(q => q !== quality)
-                      : [...ExcludedQualities, quality];
-                    setExcludedQualities(newExcluded);
-                    settingsStorage.setExcludedQualities(newExcluded);
-                  }}
-                  style={{
-                    backgroundColor: ExcludedQualities.includes(quality)
-                      ? primary
-                      : '#262626',
-                  }}
-                  className="px-4 py-2 rounded-lg">
-                  <Text className="text-white text-sm">{quality}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
-        </View>
-
-        <View className="h-16" />
       </View>
     </ScrollView>
   );

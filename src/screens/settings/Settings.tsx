@@ -1,19 +1,17 @@
 import {
-  View,
-  Text,
-  TouchableOpacity,
-  TouchableNativeFeedback,
-  ScrollView,
-  Dimensions,
+  DevSettings,
   ToastAndroid,
-  TextInput,
+  View,
+  Pressable,
+  ScrollView,
 } from 'react-native';
-import React, {useCallback, useMemo, useState} from 'react';
+import React, {useCallback, useMemo} from 'react';
 import {
   settingsStorage,
-  cacheStorageService,
+  clearAllMMKVStorage,
   ProviderExtension,
 } from '../../lib/storage';
+import * as Updates from 'expo-updates';
 import ReactNativeHapticFeedback from 'react-native-haptic-feedback';
 import useContentStore from '../../lib/zustand/contentStore';
 import {
@@ -21,46 +19,32 @@ import {
   NativeStackNavigationProp,
 } from '@react-navigation/native-stack';
 import {SettingsStackParamList, TabStackParamList} from '../../App';
-import {
-  MaterialCommunityIcons,
-  Feather,
-  MaterialIcons,
-} from '@expo/vector-icons';
-import useThemeStore from '../../lib/zustand/themeStore';
-import useWatchHistoryStore from '../../lib/zustand/watchHistrory';
+import {MaterialIcons} from '@expo/vector-icons';
 import Animated, {FadeInDown, FadeInUp, Layout} from 'react-native-reanimated';
 import {useNavigation} from '@react-navigation/native';
 import RenderProviderFlagIcon from '../../components/RenderProviderFLagIcon';
-import {Dropdown} from 'react-native-element-dropdown';
-import {
-  DOH_PROVIDERS,
-  DohProviderValue,
-  syncDohSettings,
-} from '../../lib/services/dohService';
 import useNavigationPreferencesStore from '../../lib/zustand/navigationPreferencesStore';
 import GitHubStarButton from './components/GitHubStarButton';
+import DnsPreference from './components/DnsPreference';
+import IconButton from '../../components/ui/IconButton';
+import SettingsRow from '../../components/ui/SettingsRow';
+import SettingsSection from '../../components/ui/SettingsSection';
+import AppText from '../../components/ui/Text';
+import {useM3Colors} from '../../theme/M3PaletteContext';
+import {showAppDialog} from '../../lib/zustand/appDialogStore';
+import {clearAppCache} from '../../lib/clearAppCache';
 
 type Props = NativeStackScreenProps<SettingsStackParamList, 'Settings'>;
 
 const Settings = ({navigation}: Props) => {
   const tabNavigation =
     useNavigation<NativeStackNavigationProp<TabStackParamList>>();
-  const primary = useThemeStore(state => state.primary);
+  const colors = useM3Colors();
   const provider = useContentStore(state => state.provider);
   const setProvider = useContentStore(state => state.setProvider);
   const installedProviders = useContentStore(state => state.installedProviders);
-  const clearHistory = useWatchHistoryStore(state => state.clearHistory);
   const hideDownloadsTab = useNavigationPreferencesStore(
     state => state.hideDownloadsTab,
-  );
-
-  const [dohProvider, setDohProvider] = useState<DohProviderValue>(
-    settingsStorage.isDohEnabled()
-      ? (settingsStorage.getDohProvider() as DohProviderValue)
-      : 'off',
-  );
-  const [dohCustomUrl, setDohCustomUrl] = useState(
-    settingsStorage.getDohCustomUrl(),
   );
 
   const handleProviderSelect = useCallback(
@@ -81,34 +65,52 @@ const Settings = ({navigation}: Props) => {
 
   const renderProviderItem = useCallback(
     (item: ProviderExtension, isSelected: boolean) => (
-      <TouchableOpacity
+      <View
         key={item.value}
-        onPress={() => handleProviderSelect(item)}
-        className={`mr-3 rounded-lg ${
-          isSelected ? 'bg-[#333333]' : 'bg-[#262626]'
-        }`}
         style={{
-          width: Dimensions.get('window').width * 0.3, // Shows 2.5 items
-          height: 65, // Increased height
-          borderWidth: 1.5,
-          borderColor: isSelected ? primary : '#333333',
+          backgroundColor: isSelected ? colors.secondaryContainer : '#2A2A2A',
+          borderColor: isSelected ? colors.primary : '#5A5A5A',
+          borderRadius: 20,
+          borderWidth: isSelected ? 2 : 1,
+          height: 84,
+          marginRight: 12,
+          overflow: 'hidden',
+          width: 132,
         }}>
-        <View className="flex-col items-center justify-center h-full p-2">
-          <RenderProviderFlagIcon type={item.type} />
-          <Text
-            numberOfLines={1}
-            className="text-white text-xs font-medium text-center mt-2">
-            {item.display_name}
-          </Text>
-          {isSelected && (
-            <Text style={{position: 'absolute', top: 6, right: 6}}>
-              <MaterialIcons name="check-circle" size={16} color={primary} />
-            </Text>
-          )}
-        </View>
-      </TouchableOpacity>
+        <Pressable
+          onPress={() => handleProviderSelect(item)}
+          style={({pressed}) => ({
+            flex: 1,
+            opacity: pressed ? 0.72 : 1,
+          })}>
+          <View className="flex-col items-center justify-center h-full p-3">
+            <RenderProviderFlagIcon type={item.type} />
+            <AppText
+              numberOfLines={1}
+              role="labelMediumEmphasized"
+              style={{
+                color: isSelected
+                  ? colors.onSecondaryContainer
+                  : colors.onSurface,
+                marginTop: 9,
+                textAlign: 'center',
+              }}>
+              {item.display_name}
+            </AppText>
+            {isSelected && (
+              <View style={{position: 'absolute', right: 8, top: 8}}>
+                <MaterialIcons
+                  name="check-circle"
+                  size={18}
+                  color={colors.onSecondaryContainer}
+                />
+              </View>
+            )}
+          </View>
+        </Pressable>
+      </View>
     ),
-    [handleProviderSelect, primary],
+    [colors, handleProviderSelect],
   );
 
   const providersList = useMemo(
@@ -119,25 +121,42 @@ const Settings = ({navigation}: Props) => {
     [installedProviders, provider.value, renderProviderItem],
   );
 
-  const clearCacheHandler = useCallback(() => {
+  const clearCacheHandler = useCallback(async () => {
     if (settingsStorage.isHapticFeedbackEnabled()) {
       ReactNativeHapticFeedback.trigger('virtualKey', {
         enableVibrateFallback: true,
         ignoreAndroidSystemSettings: false,
       });
     }
-    cacheStorageService.clearAll();
+    await clearAppCache();
+    ToastAndroid.show('App cache cleared', ToastAndroid.SHORT);
   }, []);
 
-  const clearHistoryHandler = useCallback(() => {
-    if (settingsStorage.isHapticFeedbackEnabled()) {
-      ReactNativeHapticFeedback.trigger('virtualKey', {
-        enableVibrateFallback: true,
-        ignoreAndroidSystemSettings: false,
-      });
+  const eraseAllLocalData = useCallback(async () => {
+    clearAllMMKVStorage();
+    if (Updates.isEnabled) {
+      await Updates.reloadAsync();
+      return;
     }
-    clearHistory();
-  }, [clearHistory]);
+    DevSettings.reload('All MMKV storage erased');
+  }, []);
+
+  const confirmEraseAllLocalData = useCallback(() => {
+    showAppDialog({
+      title: 'Erase all local data?',
+      message:
+        'This permanently erases every Vega MMKV store, including settings, installed provider data, Watchlist, Continue watching, download records, and cached state. This cannot be undone. Downloaded media files on disk are not deleted.',
+      variant: 'error',
+      actions: [
+        {label: 'Cancel'},
+        {
+          label: 'Erase everything',
+          variant: 'destructive',
+          onPress: eraseAllLocalData,
+        },
+      ],
+    });
+  }, [eraseAllLocalData]);
 
   const AnimatedSection = ({
     delay,
@@ -155,7 +174,7 @@ const Settings = ({navigation}: Props) => {
 
   return (
     <Animated.ScrollView
-      className="w-full h-full bg-black"
+      className="h-full w-full bg-m3-background"
       showsVerticalScrollIndicator={false}
       bounces={true}
       overScrollMode="always"
@@ -168,299 +187,129 @@ const Settings = ({navigation}: Props) => {
       }}>
       <View className="p-5">
         <Animated.View entering={FadeInUp.springify()}>
-          <Text className="text-2xl font-bold text-white mb-6">Settings</Text>
+          <AppText
+            role="headlineLargeEmphasized"
+            className="mb-6 text-m3-on-background">
+            Settings
+          </AppText>
         </Animated.View>
 
         {/* Content provider section */}
         <AnimatedSection delay={100}>
           <View className="mb-6 flex-col gap-3">
-            <Text className="text-gray-400 text-sm mb-1">Content Provider</Text>
-            <View className="bg-[#1A1A1A] rounded-xl py-4">
+            <AppText role="labelLarge" style={{color: colors.onSurfaceVariant}}>
+              Content Provider
+            </AppText>
+            <View
+              style={{
+                backgroundColor: colors.background,
+                borderColor: colors.outlineVariant,
+                borderRadius: 24,
+                borderWidth: 1,
+                height: 116,
+                justifyContent: 'center',
+              }}>
               <ScrollView
                 horizontal
+                nestedScrollEnabled
                 showsHorizontalScrollIndicator={false}
+                style={{flexGrow: 0}}
                 contentContainerStyle={{
+                  alignItems: 'center',
                   paddingHorizontal: 10,
                 }}>
                 {providersList}
                 {installedProviders.length === 0 && (
-                  <Text className="text-gray-500 text-sm">
+                  <AppText
+                    role="bodyMedium"
+                    style={{color: colors.onSurfaceVariant}}>
                     No providers installed
-                  </Text>
+                  </AppText>
                 )}
               </ScrollView>
             </View>
-            {/* Extensions */}
-            <View className="bg-[#1A1A1A] rounded-xl overflow-hidden mb-3">
-              <TouchableNativeFeedback
+            <SettingsSection title="Provider tools">
+              <SettingsRow
+                title="Provider Manager"
+                description="Install, update, and test provider extensions"
+                icon="puzzle-outline"
+                divider={false}
                 onPress={() => navigation.navigate('Extensions')}
-                background={TouchableNativeFeedback.Ripple('#333333', false)}>
-                <View className="flex-row items-center justify-between p-4 mr-5">
-                  <View className="flex-row items-center">
-                    <MaterialCommunityIcons
-                      name="puzzle"
-                      size={22}
-                      color={primary}
-                    />
-                    <Text
-                      className="text-white ml-3 text-base flex-1"
-                      numberOfLines={1}>
-                      Provider Manager
-                    </Text>
-                  </View>
-                  <Feather name="chevron-right" size={20} color="gray" />
-                </View>
-              </TouchableNativeFeedback>
-            </View>
+              />
+            </SettingsSection>
           </View>
         </AnimatedSection>
 
         {/* Network Section */}
         <AnimatedSection delay={150}>
-          <View className="mb-6">
-            <Text className="text-gray-400 text-sm mb-3">Network</Text>
-            <View className="bg-[#1A1A1A] rounded-xl overflow-hidden">
-              <View className="p-4 border-b border-[#262626]">
-                <View className="flex-row items-center justify-between mb-1">
-                  <Text className="text-white text-base">DNS over HTTPS</Text>
-                </View>
-                <Text className="text-gray-500 text-xs mb-3">
-                  Bypass ISP DNS blocking for providers
-                </Text>
-                <Dropdown
-                  data={DOH_PROVIDERS as any}
-                  labelField="label"
-                  valueField="value"
-                  value={dohProvider}
-                  onChange={async (item: {
-                    label: string;
-                    value: DohProviderValue;
-                  }) => {
-                    setDohProvider(item.value);
-                    if (item.value === 'off') {
-                      settingsStorage.setDohEnabled(false);
-                    } else {
-                      settingsStorage.setDohEnabled(true);
-                      settingsStorage.setDohProvider(item.value);
-                    }
-                    await syncDohSettings();
-                  }}
-                  style={{
-                    backgroundColor: '#262626',
-                    borderRadius: 8,
-                    paddingHorizontal: 12,
-                    paddingVertical: 8,
-                  }}
-                  containerStyle={{
-                    backgroundColor: '#1A1A1A',
-                    borderColor: '#333',
-                    borderRadius: 8,
-                  }}
-                  activeColor="#333"
-                  selectedTextStyle={{color: 'white', fontSize: 14}}
-                  placeholderStyle={{color: 'gray', fontSize: 14}}
-                  itemTextStyle={{color: 'white', fontSize: 14}}
-                  placeholder="Select DNS Provider"
-                />
-              </View>
-              {dohProvider === 'custom' && (
-                <View className="p-4">
-                  <Text className="text-gray-400 text-xs mb-2">
-                    Custom DoH URL
-                  </Text>
-                  <TextInput
-                    style={{
-                      color: 'white',
-                      backgroundColor: '#262626',
-                      borderRadius: 8,
-                      paddingHorizontal: 12,
-                      paddingVertical: 8,
-                      fontSize: 14,
-                    }}
-                    placeholder="https://dns.example.com/dns-query"
-                    placeholderTextColor="gray"
-                    value={dohCustomUrl}
-                    onChangeText={setDohCustomUrl}
-                    onSubmitEditing={async () => {
-                      settingsStorage.setDohCustomUrl(dohCustomUrl);
-                      await syncDohSettings();
-                      ToastAndroid.show(
-                        'Custom DNS applied',
-                        ToastAndroid.SHORT,
-                      );
-                    }}
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                  />
-                </View>
-              )}
-            </View>
-          </View>
+          <SettingsSection title="Network">
+            <DnsPreference />
+          </SettingsSection>
         </AnimatedSection>
 
         {/* Main options section */}
         <AnimatedSection delay={200}>
-          <View className="mb-6">
-            <Text className="text-gray-400 text-sm mb-3">Options</Text>
-            <View className="bg-[#1A1A1A] rounded-xl overflow-hidden">
-              {/* Subtitle Style */}
-              <TouchableNativeFeedback
-                onPress={async () => {
-                  navigation.navigate('SubTitlesPreferences');
-                }}
-                background={TouchableNativeFeedback.Ripple('#333333', false)}>
-                <View className="flex-row items-center justify-between p-4 border-b border-[#262626]">
-                  <View className="flex-row items-center">
-                    <MaterialCommunityIcons
-                      name="subtitles"
-                      size={22}
-                      color={primary}
-                    />
-                    <Text className="text-white ml-3 text-base">
-                      Subtitle Style
-                    </Text>
-                  </View>
-                  <Feather name="chevron-right" size={20} color="gray" />
-                </View>
-              </TouchableNativeFeedback>
-
-              {/* Disable Providers */}
-              {/* <TouchableNativeFeedback
-                onPress={() => navigation.navigate('DisableProviders')}
-                background={TouchableNativeFeedback.Ripple('#333333', false)}>
-                <View className="flex-row items-center justify-between p-4 border-b border-[#262626]">
-                  <View className="flex-row items-center">
-                    <MaterialIcons name="block" size={22} color={primary} />
-                    <Text className="text-white ml-3 text-base">
-                      Disable Providers in Search
-                    </Text>
-                  </View>
-                  <Feather name="chevron-right" size={20} color="gray" />
-                </View>
-              </TouchableNativeFeedback> */}
-
-              {hideDownloadsTab && (
-                <TouchableNativeFeedback
-                  onPress={() => navigation.navigate('DownloadsStack')}
-                  background={TouchableNativeFeedback.Ripple('#333333', false)}>
-                  <View className="flex-row items-center justify-between p-4 border-b border-[#262626]">
-                    <View className="flex-row items-center">
-                      <MaterialCommunityIcons
-                        name="download-outline"
-                        size={22}
-                        color={primary}
-                      />
-                      <Text className="text-white ml-3 text-base">
-                        Downloads
-                      </Text>
-                    </View>
-                    <Feather name="chevron-right" size={20} color="gray" />
-                  </View>
-                </TouchableNativeFeedback>
-              )}
-
-              {/* Watch History */}
-              <TouchableNativeFeedback
-                onPress={() => navigation.navigate('WatchHistoryStack')}
-                background={TouchableNativeFeedback.Ripple('#333333', false)}>
-                <View className="flex-row items-center justify-between p-4 border-b border-[#262626]">
-                  <View className="flex-row items-center">
-                    <MaterialCommunityIcons
-                      name="history"
-                      size={22}
-                      color={primary}
-                    />
-                    <Text
-                      className="text-white ml-3 text-base"
-                      numberOfLines={1}>
-                      Watch History
-                    </Text>
-                  </View>
-                  <Feather name="chevron-right" size={20} color="gray" />
-                </View>
-              </TouchableNativeFeedback>
-
-              {/* Preferences */}
-              <TouchableNativeFeedback
-                onPress={() => navigation.navigate('Preferences')}
-                background={TouchableNativeFeedback.Ripple('#333333', false)}>
-                <View className="flex-row items-center justify-between p-4">
-                  <View className="flex-row items-center">
-                    <MaterialIcons
-                      name="room-preferences"
-                      size={22}
-                      color={primary}
-                    />
-                    <Text className="text-white ml-3 text-base">
-                      Preferences
-                    </Text>
-                  </View>
-                  <Feather name="chevron-right" size={20} color="gray" />
-                </View>
-              </TouchableNativeFeedback>
-            </View>
-          </View>
+          <SettingsSection title="Options">
+            <SettingsRow
+              title="Appearance"
+              // description="Accent colors and launcher icon"
+              icon="palette-outline"
+              onPress={() => navigation.navigate('Appearance')}
+            />
+            <SettingsRow
+              title="Subtitle Style"
+              icon="subtitles-outline"
+              onPress={() => navigation.navigate('SubTitlesPreferences')}
+            />
+            {hideDownloadsTab && (
+              <SettingsRow
+                title="Downloads"
+                icon="download-circle-outline"
+                onPress={() => navigation.navigate('DownloadsStack')}
+              />
+            )}
+            <SettingsRow
+              title="Preferences"
+              icon="tune-variant"
+              divider={false}
+              onPress={() => navigation.navigate('Preferences')}
+            />
+          </SettingsSection>
         </AnimatedSection>
 
         {/* Data Management section */}
         <AnimatedSection delay={300}>
-          <View className="mb-6">
-            <Text className="text-gray-400 text-sm mb-3">Data Management</Text>
-            <View className="bg-[#1A1A1A] rounded-xl overflow-hidden">
-              {/* Clear Cache */}
-              <View className="flex-row items-center justify-between p-4 border-b border-[#262626]">
-                <Text className="text-white text-base">Clear Cache</Text>
-                <TouchableOpacity
-                  className="bg-[#262626] px-4 py-2 rounded-lg"
-                  onPress={clearCacheHandler}>
-                  <MaterialCommunityIcons
-                    name="delete-outline"
-                    size={20}
-                    color={primary}
-                  />
-                </TouchableOpacity>
-              </View>
-
-              {/* Clear Watch History */}
-              <View className="flex-row items-center justify-between p-4">
-                <Text className="text-white text-base flex-1" numberOfLines={1}>
-                  Clear Watch History
-                </Text>
-                <TouchableOpacity
-                  className="bg-[#262626] px-4 py-2 rounded-lg"
-                  onPress={clearHistoryHandler}>
-                  <MaterialCommunityIcons
-                    name="delete-outline"
-                    size={20}
-                    color={primary}
-                  />
-                </TouchableOpacity>
-              </View>
-            </View>
-          </View>
+          <SettingsSection title="Data Management">
+            <SettingsRow
+              title="Clear Cache"
+              trailing={
+                <IconButton
+                  icon="delete-outline"
+                  label="Clear cache"
+                  onPress={clearCacheHandler}
+                />
+              }
+            />
+            <SettingsRow
+              title="Erase all local data"
+              description="Erase all local data"
+              icon="delete-alert-outline"
+              divider={false}
+              onPress={confirmEraseAllLocalData}
+            />
+          </SettingsSection>
         </AnimatedSection>
 
         {/* About & GitHub section */}
         <AnimatedSection delay={400}>
-          <View className="mb-6">
-            <Text className="text-gray-400 text-sm mb-3">About</Text>
-            <View className="bg-[#1A1A1A] rounded-xl overflow-hidden">
-              {/* About */}
-              <TouchableNativeFeedback
-                onPress={() => navigation.navigate('About')}
-                background={TouchableNativeFeedback.Ripple('#333333', false)}>
-                <View className="flex-row items-center justify-between p-4 border-b border-[#262626]">
-                  <View className="flex-row items-center">
-                    <Feather name="info" size={22} color={primary} />
-                    <Text className="text-white ml-3 text-base">About</Text>
-                  </View>
-                  <Feather name="chevron-right" size={20} color="gray" />
-                </View>
-              </TouchableNativeFeedback>
-
-              <GitHubStarButton primary={primary} />
-            </View>
-          </View>
+          <SettingsSection title="About">
+            <SettingsRow
+              title="About Vega"
+              icon="information-outline"
+              onPress={() => navigation.navigate('About')}
+            />
+            <GitHubStarButton primary={colors.primary} />
+          </SettingsSection>
         </AnimatedSection>
       </View>
     </Animated.ScrollView>

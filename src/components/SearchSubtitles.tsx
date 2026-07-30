@@ -1,19 +1,19 @@
 import {
   View,
-  Text,
   TouchableOpacity,
   Modal,
   TextInput,
   ActivityIndicator,
   ToastAndroid,
+  ScrollView,
 } from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import React, {useState} from 'react';
-import useThemeStore from '../lib/zustand/themeStore';
-import {ScrollView} from 'react-native';
-import {Dropdown} from 'react-native-element-dropdown';
 import {TextTracks, TextTrackType} from 'react-native-video';
+import DropdownField from './ui/DropdownField';
+import AppText from './ui/Text';
+import {useM3Colors} from '../theme/M3PaletteContext';
 
 const SearchSubtitles = ({
   searchQuery,
@@ -24,7 +24,7 @@ const SearchSubtitles = ({
   setSearchQuery: (text: string) => void;
   setExternalSubs: React.Dispatch<React.SetStateAction<TextTracks>>;
 }) => {
-  const primary = useThemeStore(state => state.primary);
+  const primary = useM3Colors().primary;
   const [searchModalVisible, setSearchModalVisible] = useState(false);
   const [season, setSeason] = useState('');
   const [episode, setEpisode] = useState('');
@@ -109,9 +109,9 @@ const SearchSubtitles = ({
         className="flex-row gap-3 items-center rounded-md my-1 overflow-hidden ml-2"
         onPress={() => setSearchModalVisible(true)}>
         <MaterialIcons name="add" size={20} color="white" />
-        <Text className="text-base font-semibold text-white">
+        <AppText className="text-base font-semibold text-white">
           search subtitles online
-        </Text>
+        </AppText>
       </TouchableOpacity>
       <Modal
         animationType="slide"
@@ -129,9 +129,9 @@ const SearchSubtitles = ({
               color="white"
               onPress={() => setSearchModalVisible(false)}
             />
-            <Text className="text-white text-xl font-semibold">
+            <AppText className="text-white text-xl font-semibold">
               Search Subtitles
-            </Text>
+            </AppText>
           </View>
           <View className="flex-row justify-between items-center px-4 py-2">
             <TextInput
@@ -140,36 +140,13 @@ const SearchSubtitles = ({
               onChangeText={text => setSearchQuery(text)}
               value={searchQuery}
             />
-            <View className="bg-quaternary w-[10%] h-11 rounded-md p-2">
-              <Dropdown
-                selectedTextStyle={{
-                  color: 'white',
-                  overflow: 'hidden',
-                  fontWeight: 'bold',
-                }}
-                containerStyle={{
-                  borderColor: '#363636',
-                  width: 115,
-                  paddingLeft: 5,
-                  borderRadius: 5,
-                  overflow: 'hidden',
-                  padding: 2,
-                  backgroundColor: 'black',
-                  maxHeight: 450,
-                }}
-                labelField={'id'}
-                valueField={'id'}
-                placeholder="Select"
-                value={subId}
-                data={subLanguageIds}
-                onChange={async item => {
-                  setSubId(item.id);
-                }}
-                renderItem={({name}) => (
-                  <Text className={'text-lg p-1 text-white/60 bg-black'}>
-                    {name}
-                  </Text>
-                )}
+            <View className="w-[18%]">
+              <DropdownField
+                options={subLanguageIds}
+                value={subLanguageIds.find(option => option.id === subId)}
+                getKey={option => option.id}
+                getLabel={option => option.name}
+                onChange={option => setSubId(option.id)}
               />
             </View>
             <TextInput
@@ -220,34 +197,34 @@ const SearchSubtitles = ({
                       ...prev,
                     ]);
                   }}>
-                  <Text className="text-white text-lg font-semibold capitalize">
+                  <AppText className="text-white text-lg font-semibold capitalize">
                     {result?.SubLanguageID}
-                  </Text>
-                  <Text className="text-white text-base">
+                  </AppText>
+                  <AppText className="text-white text-base">
                     {result?.MovieName?.trim()}
-                  </Text>
-                  <Text className="text-white text-lg">
+                  </AppText>
+                  <AppText className="text-white text-lg">
                     {Number(result?.SeriesSeason) > 0
                       ? `S${result?.SeriesSeason}`
                       : ''}
-                  </Text>
-                  <Text className="text-white text-lg">
+                  </AppText>
+                  <AppText className="text-white text-lg">
                     {Number(result?.SeriesEpisode) > 0
                       ? `E${result?.SeriesEpisode}`
                       : ''}
-                  </Text>
-                  <Text className="text-white text-xs italic">
+                  </AppText>
+                  <AppText className="text-white text-xs italic">
                     {result?.InfoReleaseGroup + ' '}
                     {result?.UserNickName}
-                  </Text>
+                  </AppText>
                 </TouchableOpacity>
               ))
             )}
             {searchResults.length === 0 && !loading && (
               <View className="w-full h-full justify-center items-center">
-                <Text className="text-red-700 text-lg font-semibold">
+                <AppText className="text-red-700 text-lg font-semibold">
                   {error}
-                </Text>
+                </AppText>
               </View>
             )}
           </ScrollView>

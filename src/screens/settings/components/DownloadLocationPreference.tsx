@@ -1,18 +1,20 @@
 import React, {useState} from 'react';
-import {Text, ToastAndroid, TouchableOpacity, View} from 'react-native';
-import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
+import {ToastAndroid, View} from 'react-native';
 import {
   getDownloadLocationDisplayValue,
   selectDownloadLocation,
 } from '../../../lib/downloadLocation';
 import {settingsStorage} from '../../../lib/storage';
+import IconButton from '../../../components/ui/IconButton';
+import SettingsRow from '../../../components/ui/SettingsRow';
+import SettingsSection from '../../../components/ui/SettingsSection';
 
 type DownloadLocationPreferenceProps = {
   primary: string;
 };
 
 const DownloadLocationPreference = ({
-  primary,
+  primary: _primary,
 }: DownloadLocationPreferenceProps) => {
   const [downloadLocation, setDownloadLocation] = useState(
     settingsStorage.getDownloadLocation(),
@@ -53,40 +55,40 @@ const DownloadLocationPreference = ({
 
   return (
     <View className="mb-6">
-      <Text className="text-gray-400 text-sm mb-3">Downloads</Text>
-      <View className="bg-[#1A1A1A] rounded-xl overflow-hidden">
-        <View className="p-4 border-b border-[#262626]">
-          <Text className="text-white text-base mb-3">Download Location</Text>
-          <View className="flex-row items-center justify-between gap-3">
-            <Text className="text-gray-300 text-sm flex-1" numberOfLines={2}>
-              {downloadLocation}
-            </Text>
-            <TouchableOpacity
-              onPress={pickDownloadLocation}
+      <SettingsSection title="Downloads">
+        <SettingsRow
+          title="Download location"
+          description={downloadLocation}
+          divider
+          trailing={
+            <IconButton
+              icon="folder-open-outline"
+              label="Choose download location"
               disabled={isPickingFolder}
-              className="p-2 rounded-lg bg-[#262626]">
-              <MaterialCommunityIcons
-                name="folder-open-outline"
-                size={22}
-                color={primary}
-              />
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        <TouchableOpacity
-          onPress={() => {
-            settingsStorage.resetDownloadLocation();
-            setDownloadLocation('Select a download folder');
-            ToastAndroid.show('Download location cleared', ToastAndroid.SHORT);
-          }}
-          className="flex-row items-center justify-between p-4">
-          <Text className="text-white text-base flex-1">
-            Reset Download Location
-          </Text>
-          <MaterialCommunityIcons name="restore" size={24} color={primary} />
-        </TouchableOpacity>
-      </View>
+              onPress={pickDownloadLocation}
+            />
+          }
+        />
+        <SettingsRow
+          title="Reset download location"
+          description="Choose a folder again on the next download"
+          divider={false}
+          trailing={
+            <IconButton
+              icon="restore"
+              label="Reset download location"
+              onPress={() => {
+                settingsStorage.resetDownloadLocation();
+                setDownloadLocation('Select a download folder');
+                ToastAndroid.show(
+                  'Download location cleared',
+                  ToastAndroid.SHORT,
+                );
+              }}
+            />
+          }
+        />
+      </SettingsSection>
     </View>
   );
 };

@@ -1,15 +1,16 @@
 import React from 'react';
-import {Text, View} from 'react-native';
+import {View} from 'react-native';
+import AppText from './ui/Text';
 
 interface SingleOptionFieldProps {
   label: string;
 }
 
 const SingleOptionField = ({label}: SingleOptionFieldProps) => (
-  <View className="h-10 justify-center rounded-md border border-white/20 bg-black px-3">
-    <Text className="text-sm font-semibold text-white" numberOfLines={1}>
+  <View className="h-10 justify-center rounded-full border border-m3-outline bg-m3-surface-container-high px-4">
+    <AppText role="labelLarge" className="text-m3-on-surface" numberOfLines={1}>
       {label}
-    </Text>
+    </AppText>
   </View>
 );
 

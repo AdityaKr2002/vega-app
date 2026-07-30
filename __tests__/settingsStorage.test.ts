@@ -50,6 +50,7 @@ describe('settings defaults', () => {
     expect(settingsStorage.isAutoDownloadEnabled()).toBe(false);
     expect(settingsStorage.hideSeekButtons()).toBe(false);
     expect(settingsStorage.isEnable2xGestureEnabled()).toBe(false);
+    expect(settingsStorage.usePureBlackBackground()).toBe(false);
   });
 
   it('defaults download concurrency to two and clamps saved values', () => {
@@ -67,6 +68,15 @@ describe('settings defaults', () => {
 
     expect(settingsStorage.hideDownloadsTab()).toBe(true);
     expect(mockBooleanValues.get(SettingsKeys.HIDE_DOWNLOADS_TAB)).toBe(true);
+  });
+
+  it('persists the pure black background preference', () => {
+    settingsStorage.setUsePureBlackBackground(true);
+
+    expect(settingsStorage.usePureBlackBackground()).toBe(true);
+    expect(mockBooleanValues.get(SettingsKeys.PURE_BLACK_BACKGROUND)).toBe(
+      true,
+    );
   });
 
   it('preserves explicit user opt-outs', () => {

@@ -47,7 +47,7 @@ describe('providerRpc openWebView', () => {
         url: result.url,
         options: {waitForCookie: 'cf_clearance'},
       }),
-    ).resolves.toEqual(result);
+    ).resolves.toEqual({...result, cookie: result.cookies});
     expect(mockOpenWebView).toHaveBeenCalledWith(`${result.url}/`, {
       waitForCookie: 'cf_clearance',
     });

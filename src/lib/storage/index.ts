@@ -3,20 +3,13 @@ export {
   StorageService,
   mainStorage,
   cacheStorage,
+  clearAllMMKVStorage,
   createZustandStorage,
 } from './StorageService';
 
 // Export SettingsStorage
 export {SettingsStorage, settingsStorage} from './SettingsStorage';
 export type {SettingsKeys} from './SettingsStorage';
-
-// Export WatchHistoryStorage
-export {WatchHistoryStorage, watchHistoryStorage} from './WatchHistoryStorage';
-export type {
-  WatchHistoryKeys,
-  WatchHistoryItem,
-  SeriesEpisode,
-} from './WatchHistoryStorage';
 
 // Export WatchListStorage
 export {WatchListStorage, watchListStorage} from './WatchListStorage';

@@ -3,15 +3,16 @@ import {useFocusEffect, useNavigation} from '@react-navigation/native';
 import type {NativeStackNavigationProp} from '@react-navigation/native-stack';
 import {StatusBar} from 'expo-status-bar';
 import React, {useCallback, useMemo} from 'react';
-import {Dimensions, FlatList, Platform, Text, View} from 'react-native';
+import {Dimensions, FlatList, Platform, View} from 'react-native';
 import type {DownloadsStackParamList} from '../../App';
 import MediaPosterCard from '../../components/MediaPosterCard';
+import AppText from '../../components/ui/Text';
 import {reconcileCompletedDownloadOutputs} from '../../lib/downloadReconciliation';
 import {groupCompletedDownloads} from '../../lib/downloadLibrary';
 import useDownloadsStore, {
   selectCompletedDownloads,
 } from '../../lib/zustand/downloadsStore';
-import useThemeStore from '../../lib/zustand/themeStore';
+import {useM3Colors} from '../../theme/M3PaletteContext';
 import CurrentDownloadsSection from '../settings/components/CurrentDownloadsSection';
 import MissingDownloadsSection from '../settings/components/MissingDownloadsSection';
 
@@ -20,7 +21,7 @@ const GRID_GAP = 10;
 const MIN_CARD_WIDTH = 100;
 
 const Downloads = () => {
-  const primary = useThemeStore(state => state.primary);
+  const colors = useM3Colors();
   const navigation =
     useNavigation<NativeStackNavigationProp<DownloadsStackParamList>>();
   const completed = useDownloadsStore(selectCompletedDownloads);
@@ -41,7 +42,7 @@ const Downloads = () => {
   );
 
   return (
-    <View className="flex-1 bg-black">
+    <View className="flex-1 bg-m3-background">
       <StatusBar />
       <FlatList
         data={groups}
@@ -56,17 +57,19 @@ const Downloads = () => {
         }}
         ListHeaderComponent={
           <View>
-            <Text
-              className="mb-6 mt-2 text-center text-2xl font-bold"
-              style={{color: primary}}>
+            <AppText
+              role="headlineLargeEmphasized"
+              className="mb-6 mt-2 text-center text-m3-on-background">
               Downloads
-            </Text>
-            <CurrentDownloadsSection primary={primary} />
-            <MissingDownloadsSection primary={primary} />
+            </AppText>
+            <CurrentDownloadsSection primary={colors.primary} />
+            <MissingDownloadsSection primary={colors.primary} />
             {groups.length > 0 ? (
-              <Text className="mb-4 text-lg font-semibold text-white">
+              <AppText
+                role="titleLargeEmphasized"
+                className="mb-4 text-m3-on-background">
                 Downloaded
-              </Text>
+              </AppText>
             ) : null}
           </View>
         }
@@ -86,11 +89,13 @@ const Downloads = () => {
             <MaterialCommunityIcons
               name="download-off-outline"
               size={72}
-              color={primary}
+              color={colors.onSurfaceVariant}
             />
-            <Text className="mt-4 text-center text-base text-white/70">
+            <AppText
+              role="bodyLarge"
+              className="mt-4 text-center text-m3-on-surface-variant">
               Your downloaded library is empty
-            </Text>
+            </AppText>
           </View>
         }
         showsVerticalScrollIndicator={false}

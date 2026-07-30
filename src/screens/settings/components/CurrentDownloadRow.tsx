@@ -9,6 +9,7 @@ import type {
   DownloadItem,
   DownloadStatus,
 } from '../../../lib/zustand/downloadsStore';
+import {useM3Colors} from '../../../theme/M3PaletteContext';
 import DownloadProgressBar from './DownloadProgressBar';
 
 const statusLabels: Record<DownloadStatus, string> = {
@@ -52,15 +53,28 @@ const CurrentDownloadRow = ({
   onRetry: () => void;
   onStartNow: () => void;
 }) => {
+  const colors = useM3Colors();
   const progress =
     item.totalBytes > 0 ? item.downloadedBytes / item.totalBytes : 0;
   const failed = item.status === 'error' || item.status === 'interrupted';
   const canCancel = item.status !== 'canceling';
 
   return (
-    <View className="mb-3 rounded-xl bg-[#161616] p-3">
+    <View
+      className="mb-3 p-3"
+      style={{
+        backgroundColor: colors.surfaceContainerHigh,
+        borderColor: colors.outlineVariant,
+        borderRadius: 20,
+        borderWidth: 1,
+      }}>
       <View className="flex-row">
-        <View className="h-24 w-16 overflow-hidden rounded-lg bg-quaternary">
+        <View
+          className="h-24 w-16 overflow-hidden"
+          style={{
+            backgroundColor: colors.surfaceContainerHighest,
+            borderRadius: 16,
+          }}>
           {item.poster ? (
             <Image
               source={{uri: item.poster}}
@@ -81,20 +95,21 @@ const CurrentDownloadRow = ({
           <View className="flex-row items-start justify-between gap-2">
             <View className="flex-1">
               <Text
-                className="text-base font-semibold text-white"
+                className="text-base font-semibold"
+                style={{color: colors.onSurface}}
                 numberOfLines={2}>
                 {item.title}
               </Text>
-              <Text className="mt-1 text-xs text-gray-400" numberOfLines={1}>
+              <Text
+                className="mt-1 text-xs"
+                style={{color: colors.onSurfaceVariant}}
+                numberOfLines={1}>
                 {getSubtitle(item)}
               </Text>
             </View>
             <Text
-              className={
-                failed
-                  ? 'text-xs font-medium text-red-400'
-                  : 'text-xs font-medium text-gray-300'
-              }>
+              className="text-xs font-medium"
+              style={{color: failed ? colors.error : colors.onSurfaceVariant}}>
               {statusLabels[item.status]}
             </Text>
           </View>
@@ -102,17 +117,21 @@ const CurrentDownloadRow = ({
           <View className="mt-3">
             <DownloadProgressBar
               progress={progress}
-              color={failed ? '#f87171' : primary}
+              color={failed ? colors.error : primary}
             />
             <View className="mt-2 flex-row justify-between">
-              <Text className="text-xs text-gray-400">
+              <Text
+                className="text-xs"
+                style={{color: colors.onSurfaceVariant}}>
                 {formatDownloadBytes(item.downloadedBytes)}
                 {item.totalBytes > 0
                   ? ` / ${formatDownloadBytes(item.totalBytes)}`
                   : ''}
               </Text>
               {item.speed > 0 && (
-                <Text className="text-xs text-gray-400">
+                <Text
+                  className="text-xs"
+                  style={{color: colors.onSurfaceVariant}}>
                   {formatDownloadSpeed(item.speed)}
                 </Text>
               )}
@@ -122,7 +141,9 @@ const CurrentDownloadRow = ({
       </View>
 
       {failed && item.errorMessage && (
-        <Text className="mt-3 text-sm text-red-400">{item.errorMessage}</Text>
+        <Text className="mt-3 text-sm" style={{color: colors.error}}>
+          {item.errorMessage}
+        </Text>
       )}
 
       <View className="mt-3 flex-row justify-end gap-2">
@@ -131,14 +152,19 @@ const CurrentDownloadRow = ({
             testID={`start-now-download-${item.id}`}
             accessibilityLabel={`Start ${item.title} now`}
             onPress={onStartNow}
-            className="flex-row items-center rounded-lg px-3 py-2"
-            style={{backgroundColor: `${primary}22`}}>
+            className="flex-row items-center px-3 py-2"
+            style={{
+              backgroundColor: colors.secondaryContainer,
+              borderRadius: 14,
+            }}>
             <MaterialCommunityIcons
               name="play-circle-outline"
               size={18}
-              color={primary}
+              color={colors.onSecondaryContainer}
             />
-            <Text className="ml-1 text-sm font-medium" style={{color: primary}}>
+            <Text
+              className="ml-1 text-sm font-bold"
+              style={{color: colors.onSecondaryContainer}}>
               Start now
             </Text>
           </TouchableOpacity>
@@ -147,34 +173,68 @@ const CurrentDownloadRow = ({
           <TouchableOpacity
             testID={`pause-download-${item.id}`}
             onPress={onPause}
-            className="flex-row items-center rounded-lg bg-white/10 px-3 py-2">
+            className="flex-row items-center px-3 py-2"
+            style={{
+              backgroundColor: colors.surfaceContainerHighest,
+              borderRadius: 14,
+            }}>
             <MaterialCommunityIcons name="pause" size={18} color={primary} />
-            <Text className="ml-1 text-sm font-medium text-white">Pause</Text>
+            <Text
+              className="ml-1 text-sm font-medium"
+              style={{color: colors.onSurface}}>
+              Pause
+            </Text>
           </TouchableOpacity>
         )}
         {item.canResume && item.status === 'paused' && (
           <TouchableOpacity
             testID={`resume-download-${item.id}`}
             onPress={onResume}
-            className="flex-row items-center rounded-lg bg-white/10 px-3 py-2">
+            className="flex-row items-center px-3 py-2"
+            style={{
+              backgroundColor: colors.surfaceContainerHighest,
+              borderRadius: 14,
+            }}>
             <MaterialCommunityIcons name="play" size={18} color={primary} />
-            <Text className="ml-1 text-sm font-medium text-white">Resume</Text>
+            <Text
+              className="ml-1 text-sm font-medium"
+              style={{color: colors.onSurface}}>
+              Resume
+            </Text>
           </TouchableOpacity>
         )}
         {failed && item.retryable && (
           <TouchableOpacity
             onPress={onRetry}
-            className="flex-row items-center rounded-lg bg-white/10 px-3 py-2">
+            className="flex-row items-center px-3 py-2"
+            style={{
+              backgroundColor: colors.surfaceContainerHighest,
+              borderRadius: 14,
+            }}>
             <MaterialCommunityIcons name="refresh" size={18} color={primary} />
-            <Text className="ml-1 text-sm font-medium text-white">Retry</Text>
+            <Text
+              className="ml-1 text-sm font-medium"
+              style={{color: colors.onSurface}}>
+              Retry
+            </Text>
           </TouchableOpacity>
         )}
         {canCancel && (
           <TouchableOpacity
             onPress={onCancel}
-            className="flex-row items-center rounded-lg bg-red-500/15 px-3 py-2">
-            <MaterialCommunityIcons name="close" size={18} color="#f87171" />
-            <Text className="ml-1 text-sm font-medium text-red-400">
+            className="flex-row items-center px-3 py-2"
+            style={{
+              backgroundColor: colors.errorContainer,
+              borderRadius: 14,
+            }}>
+            <MaterialCommunityIcons
+              name="close"
+              size={18}
+              color={colors.onErrorContainer}
+            />
+            <Text
+              className="ml-1 text-sm font-medium"
+              style={{color: colors.onErrorContainer}}>
               Cancel
             </Text>
           </TouchableOpacity>

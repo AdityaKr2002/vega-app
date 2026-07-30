@@ -1,13 +1,10 @@
 import React, {useState, useMemo, useCallback, useEffect} from 'react';
 import {
   View,
-  Text,
   TouchableOpacity,
   ToastAndroid,
-  Modal,
   FlatList,
   ActivityIndicator,
-  Pressable,
   ScrollView,
   TextInput,
 } from 'react-native';
@@ -16,7 +13,6 @@ import {useNavigation} from '@react-navigation/native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import Feather from '@expo/vector-icons/Feather';
-import {Dropdown} from 'react-native-element-dropdown';
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
@@ -32,16 +28,23 @@ import Downloader from './Downloader';
 import {cacheStorage, mainStorage, settingsStorage} from '../lib/storage';
 import {ifExists} from '../lib/file/ifExists';
 import {useEpisodes, useStreamData} from '../lib/hooks/useEpisodes';
-import useWatchHistoryStore from '../lib/zustand/watchHistrory';
-import useThemeStore from '../lib/zustand/themeStore';
 import SkeletonLoader from './Skeleton';
-import SingleOptionField from './SingleOptionField';
+import DropdownField from './ui/DropdownField';
 import {
   createDesktopCompatibleFileName,
   createDirectDownloadId,
   createSeriesDownloadId,
 } from '../lib/downloadId';
 import useDownloadsStore from '../lib/zustand/downloadsStore';
+import {useM3Colors} from '../theme/M3PaletteContext';
+import MaterialDialogSurface from './ui/MaterialDialogSurface';
+import {LEGACY_TERTIARY_BACKGROUND} from '../theme/seeds';
+import Text from './ui/Text';
+import EpisodeRowContent from './EpisodeRowContent';
+
+const CONTROL_TEXT = '#F5F0EF';
+const CONTROL_TEXT_MUTED = '#D4CBC9';
+// const CONTROL_OUTLINE = '#494240';
 
 interface SeasonListProps {
   LinkList: Link[];
@@ -68,7 +71,6 @@ interface PlayHandlerProps {
   linkIndex: number;
   type: string;
   primaryTitle: string;
-  secondaryTitle?: string;
   seasonTitle: string;
   episodeData: EpisodeLink[] | Link['directLinks'];
 }
@@ -100,10 +102,10 @@ const SeasonList: React.FC<SeasonListProps> = ({
   synopsis,
   refreshVersion,
 }) => {
-  const primary = useThemeStore(state => state.primary);
+  const colors = useM3Colors();
+  const primary = colors.primary;
   const navigation =
     useNavigation<NativeStackNavigationProp<RootStackParamList>>();
-  const addItem = useWatchHistoryStore(state => state.addItem);
   const {fetchStreams} = useStreamData();
 
   // Early return if no LinkList provided
@@ -252,17 +254,6 @@ const SeasonList: React.FC<SeasonListProps> = ({
     return links;
   }, [activeSeason?.directLinks, searchText, sortOrder]);
 
-  // Memoized title alignment
-  const titleAlignment = useMemo(() => {
-    const hasLongTitles =
-      filteredAndSortedEpisodes.some(ep => ep?.title && ep.title.length > 27) ||
-      filteredAndSortedDirectLinks.some(
-        link => link?.title && link.title.length > 27,
-      );
-
-    return hasLongTitles ? 'justify-start' : 'justify-center';
-  }, [filteredAndSortedEpisodes, filteredAndSortedDirectLinks]);
-
   // Memoized completion checker
   const isCompleted = useCallback((link: string) => {
     const watchProgress = JSON.parse(cacheStorage.getString(link) || '{}');
@@ -292,12 +283,12 @@ const SeasonList: React.FC<SeasonListProps> = ({
 
   // Memoized external player handler
   const handleExternalPlayer = useCallback(
-    async (link: string, type: string) => {
+    async (link: string, streamType: string) => {
       setVlcLoading(true);
       setIsLoadingStreams(true);
 
       try {
-        const streams = await fetchStreams(link, type, providerValue);
+        const streams = await fetchStreams(link, streamType, providerValue);
 
         if (!streams || streams.length === 0) {
           ToastAndroid.show(
@@ -351,25 +342,11 @@ const SeasonList: React.FC<SeasonListProps> = ({
   const playHandler = useCallback(
     async ({
       linkIndex,
-      type,
+      type: playbackType,
       primaryTitle,
-      secondaryTitle,
       seasonTitle,
       episodeData,
     }: PlayHandlerProps) => {
-      addItem({
-        id: routeParams.link,
-        link: routeParams.link,
-        title: primaryTitle,
-        poster: poster?.poster,
-        provider: providerValue,
-        lastPlayed: Date.now(),
-        episodeTitle: secondaryTitle,
-        playbackRate: 1,
-        currentTime: 0,
-        duration: 1,
-      });
-
       if (!episodeData || episodeData.length === 0) {
         return;
       }
@@ -395,14 +372,14 @@ const SeasonList: React.FC<SeasonListProps> = ({
           );
           return;
         }
-        handleExternalPlayer(link, type);
+        handleExternalPlayer(link, playbackType);
         return;
       }
 
       navigation.navigate('Player', {
         linkIndex,
         episodeList: episodeData,
-        type: type,
+        type: playbackType,
         primaryTitle: primaryTitle,
         secondaryTitle: seasonTitle,
         poster: poster,
@@ -411,7 +388,6 @@ const SeasonList: React.FC<SeasonListProps> = ({
       });
     },
     [
-      addItem,
       routeParams.link,
       poster,
       providerValue,
@@ -423,14 +399,14 @@ const SeasonList: React.FC<SeasonListProps> = ({
 
   // Memoized long press handler
   const onLongPressHandler = useCallback(
-    (active: boolean, link: string, type?: string) => {
+    (active: boolean, link: string, streamType?: string) => {
       if (settingsStorage.isHapticFeedbackEnabled()) {
         RNReactNativeHapticFeedback.trigger('effectTick', {
           enableVibrateFallback: true,
           ignoreAndroidSystemSettings: false,
         });
       }
-      setStickyMenu({active: active, link: link, type: type});
+      setStickyMenu({active: active, link: link, type: streamType});
     },
     [],
   );
@@ -479,30 +455,32 @@ const SeasonList: React.FC<SeasonListProps> = ({
         return null; // Skip rendering if item is invalid
       }
 
-      const downloadIndex = getOriginalLinkIndex(
-        activeSeason.episodes,
-        item.link,
-        index,
-      );
+      const downloadIndex = getOriginalLinkIndex(episodeList, item.link, index);
       const downloadId = createSeriesDownloadId(
         metaTitle,
         activeSeason.title,
         downloadIndex,
       );
-
       return (
         <View
           key={item.link + index}
-          className={`w-full my-2 justify-center items-center gap-2 flex-row
+          className={`w-full my-1.5
           ${
             isCompleted(item.link) || stickyMenu.link === item.link
               ? 'opacity-60'
               : ''
           }
         `}>
-          <View className="flex-row w-full justify-between gap-2 items-center">
+          <View
+            className="min-h-[76px] flex-row w-full items-center px-3 py-2"
+            style={{
+              backgroundColor: LEGACY_TERTIARY_BACKGROUND,
+              // borderColor: CONTROL_OUTLINE,
+              borderRadius: 14,
+              borderWidth: 1,
+            }}>
             <TouchableOpacity
-              className={`rounded-md bg-white/30 w-[80%] h-12 items-center p-1 flex-row gap-x-2 relative ${titleAlignment}`}
+              className="min-w-0 flex-1 items-center flex-row gap-x-3"
               onPress={() => {
                 const localDownload =
                   useDownloadsStore.getState().downloads[downloadId];
@@ -524,7 +502,6 @@ const SeasonList: React.FC<SeasonListProps> = ({
                     poster,
                     providerValue,
                     infoUrl: localDownload.infoUrl || routeParams.link,
-                    doNotTrack: !(localDownload.infoUrl || routeParams.link),
                   });
                   return;
                 }
@@ -532,18 +509,19 @@ const SeasonList: React.FC<SeasonListProps> = ({
                   linkIndex: index,
                   type: type,
                   primaryTitle: metaTitle,
-                  secondaryTitle: item.title,
                   seasonTitle: activeSeason?.title || '',
                   episodeData: filteredAndSortedEpisodes,
                 });
               }}
               onLongPress={() => onLongPressHandler(true, item.link, 'series')}>
-              <Ionicons name="play-circle" size={28} color={primary} />
-              <Text className="text-white">
-                {item.title.length > 30
-                  ? item.title.slice(0, 30) + '...'
-                  : item.title}
-              </Text>
+              <EpisodeRowContent
+                title={item.title}
+                description={item.description}
+                image={item.image}
+                accentColor={primary}
+                textColor={CONTROL_TEXT}
+                mutedTextColor={CONTROL_TEXT_MUTED}
+              />
             </TouchableOpacity>
             <Downloader
               downloadId={downloadId}
@@ -573,11 +551,10 @@ const SeasonList: React.FC<SeasonListProps> = ({
     [
       isCompleted,
       stickyMenu.link,
-      titleAlignment,
       playHandler,
       metaTitle,
       activeSeason?.title,
-      activeSeason?.episodes,
+      episodeList,
       filteredAndSortedEpisodes,
       onLongPressHandler,
       primary,
@@ -602,20 +579,31 @@ const SeasonList: React.FC<SeasonListProps> = ({
         index,
       );
       const downloadId = createDirectDownloadId(metaTitle, downloadIndex);
+      const displayTitle =
+        activeSeason?.directLinks?.length && activeSeason.directLinks.length > 1
+          ? item.title
+          : 'Play';
 
       return (
         <View
           key={item.link + index}
-          className={`w-full my-2 justify-center items-center gap-2 flex-row
+          className={`w-full my-1.5
           ${
             isCompleted(item.link) || stickyMenu.link === item.link
               ? 'opacity-60'
               : ''
           }
         `}>
-          <View className="flex-row w-full justify-between gap-2 items-center">
+          <View
+            className="min-h-[76px] flex-row w-full items-center px-3 py-2"
+            style={{
+              backgroundColor: LEGACY_TERTIARY_BACKGROUND,
+              // borderColor: CONTROL_OUTLINE,
+              borderRadius: 14,
+              borderWidth: 1,
+            }}>
             <TouchableOpacity
-              className={`rounded-md bg-white/30 w-[80%] h-12 items-center p-2 flex-row gap-x-2 relative ${titleAlignment}`}
+              className="min-w-0 flex-1 items-center flex-row gap-x-3"
               onPress={() => {
                 const localDownload =
                   useDownloadsStore.getState().downloads[downloadId];
@@ -637,7 +625,6 @@ const SeasonList: React.FC<SeasonListProps> = ({
                     poster,
                     providerValue,
                     infoUrl: localDownload.infoUrl || routeParams.link,
-                    doNotTrack: !(localDownload.infoUrl || routeParams.link),
                   });
                   return;
                 }
@@ -645,7 +632,6 @@ const SeasonList: React.FC<SeasonListProps> = ({
                   linkIndex: index,
                   type: type,
                   primaryTitle: metaTitle,
-                  secondaryTitle: item.title,
                   seasonTitle: activeSeason?.title || '',
                   episodeData: filteredAndSortedDirectLinks,
                 });
@@ -653,15 +639,14 @@ const SeasonList: React.FC<SeasonListProps> = ({
               onLongPress={() =>
                 onLongPressHandler(true, item.link, item?.type || 'series')
               }>
-              <Ionicons name="play-circle" size={28} color={primary} />
-              <Text className="text-white">
-                {activeSeason?.directLinks?.length &&
-                activeSeason?.directLinks?.length > 1
-                  ? item.title?.length > 27
-                    ? item.title.slice(0, 27) + '...'
-                    : item.title
-                  : 'Play'}
-              </Text>
+              <EpisodeRowContent
+                title={displayTitle}
+                description={item.description}
+                image={item.image}
+                accentColor={primary}
+                textColor={CONTROL_TEXT}
+                mutedTextColor={CONTROL_TEXT_MUTED}
+              />
             </TouchableOpacity>
             <Downloader
               downloadId={downloadId}
@@ -691,7 +676,6 @@ const SeasonList: React.FC<SeasonListProps> = ({
     [
       isCompleted,
       stickyMenu.link,
-      titleAlignment,
       playHandler,
       metaTitle,
       activeSeason?.title,
@@ -711,21 +695,28 @@ const SeasonList: React.FC<SeasonListProps> = ({
     (item: any, index: number) => (
       <TouchableOpacity
         key={`server-${index}-${item.server}`}
-        className="bg-black/30 p-3 rounded-lg mb-2 flex-row justify-between items-center"
-        style={{borderColor: primary, borderWidth: 1}}
+        className="mb-2 flex-row items-center justify-between p-3"
+        style={{
+          backgroundColor: LEGACY_TERTIARY_BACKGROUND,
+          // borderColor: CONTROL_OUTLINE,
+          borderRadius: 14,
+          borderWidth: 1,
+        }}
         onPress={() => openExternalPlayer(item.link)}>
         <View>
-          <Text className="text-white text-lg capitalize font-bold">
+          <Text
+            className="text-lg capitalize font-bold"
+            style={{color: CONTROL_TEXT}}>
             {item.server || `Server ${index + 1}`}
           </Text>
-          <Text className="text-white text-xs opacity-80">
+          <Text className="text-xs" style={{color: CONTROL_TEXT_MUTED}}>
             {item.type ? `Format: ${item.type.toUpperCase()}` : ''}
           </Text>
         </View>
         <MaterialCommunityIcons name="vlc" size={24} color={primary} />
       </TouchableOpacity>
     ),
-    [primary, openExternalPlayer],
+    [colors, primary, openExternalPlayer],
   );
 
   // Show loading skeleton while episodes are loading
@@ -733,43 +724,14 @@ const SeasonList: React.FC<SeasonListProps> = ({
     return (
       <View>
         {LinkList.length > 1 && (
-          <Dropdown
-            selectedTextStyle={{
-              color: primary,
-              overflow: 'hidden',
-              height: 20,
-              fontWeight: 'bold',
-            }}
-            labelField={'title'}
-            valueField={
-              LinkList[0]?.episodesLink ? 'episodesLink' : 'directLinks'
-            }
-            onChange={handleSeasonChange}
+          <DropdownField
+            options={LinkList}
             value={activeSeason}
-            data={LinkList}
-            style={{
-              overflow: 'hidden',
-              borderWidth: 1,
-              borderColor: '#2f302f',
-              paddingHorizontal: 12,
-              borderRadius: 8,
-              backgroundColor: 'black',
-            }}
-            containerStyle={{
-              overflow: 'hidden',
-              borderWidth: 1,
-              borderColor: 'gray',
-              borderRadius: 8,
-              backgroundColor: 'black',
-            }}
-            renderItem={item => (
-              <View
-                className={`px-3 py-2 bg-black text-white flex-row justify-start items-center border-b border-gray-500 text-center ${
-                  activeSeason === item ? 'bg-quaternary' : ''
-                }`}>
-                <Text className="text-white">{item?.title || 'Unknown'}</Text>
-              </View>
-            )}
+            getKey={item =>
+              item.episodesLink || item.directLinks?.[0]?.link || item.title
+            }
+            getLabel={item => item.title || 'Unknown'}
+            onChange={handleSeasonChange}
           />
         )}
 
@@ -807,75 +769,86 @@ const SeasonList: React.FC<SeasonListProps> = ({
   return (
     <View>
       {/* Season Selector */}
-      {LinkList.length > 1 ? (
-        <Dropdown
-          selectedTextStyle={{
-            color: primary,
-            overflow: 'hidden',
-            height: 20,
-            fontWeight: 'bold',
-          }}
-          labelField={'title'}
-          valueField={
-            LinkList[0]?.episodesLink ? 'episodesLink' : 'directLinks'
-          }
-          onChange={handleSeasonChange}
-          value={activeSeason}
-          data={LinkList}
-          style={{
-            overflow: 'hidden',
-            borderWidth: 1,
-            borderColor: '#2f302f',
-            paddingHorizontal: 12,
-            borderRadius: 8,
-            backgroundColor: 'black',
-            paddingVertical: 8,
-          }}
-          containerStyle={{
-            overflow: 'hidden',
-            borderWidth: 1,
-            borderColor: 'gray',
-            borderRadius: 8,
-            backgroundColor: 'black',
-          }}
-          renderItem={item => (
-            <View
-              className={`px-3 py-2 bg-black text-white flex-row justify-start items-center border-b border-gray-500 text-center ${
-                activeSeason === item ? 'bg-quaternary' : ''
-              }`}>
-              <Text className="text-white">{item?.title || 'Unknown'}</Text>
-            </View>
-          )}
-        />
-      ) : (
-        <SingleOptionField label={LinkList[0]?.title || 'Unknown Season'} />
-      )}
+      <DropdownField
+        options={LinkList}
+        value={activeSeason}
+        getKey={item =>
+          item.episodesLink || item.directLinks?.[0]?.link || item.title
+        }
+        getLabel={item => item.title || 'Unknown'}
+        onChange={handleSeasonChange}
+        style={{marginBottom: 8}}
+      />
 
       {/* Search and Sort Controls */}
       {(episodeList.length > 8 ||
         (activeSeason?.directLinks && activeSeason.directLinks?.length > 8) ||
         searchText) && (
-        <View className="flex-row justify-between items-center mt-2">
-          <TextInput
-            placeholder="Search..."
-            className="bg-black/30 text-white rounded-md p-2 h-10 w-[80%] border-collapse border border-white/10"
-            value={searchText}
-            onChangeText={setSearchText}
-          />
+        <View className="flex-row items-center mt-2">
+          <View
+            style={{
+              backgroundColor: colors.surfaceContainerHigh,
+              borderColor: colors.outlineVariant,
+              borderRadius: 18,
+              borderWidth: 1,
+              flex: 1,
+              flexDirection: 'row',
+              height: 48,
+              marginRight: 10,
+              overflow: 'hidden',
+            }}>
+            <View
+              style={{
+                alignItems: 'center',
+                justifyContent: 'center',
+                paddingLeft: 14,
+              }}>
+              <MaterialCommunityIcons
+                name="magnify"
+                size={22}
+                color={colors.primary}
+              />
+            </View>
+            <TextInput
+              accessibilityLabel="Find episode"
+              placeholder="Find episode"
+              placeholderTextColor={colors.onSurfaceVariant}
+              selectionColor={colors.primary}
+              returnKeyType="search"
+              style={{
+                color: colors.onSurface,
+                flex: 1,
+                fontSize: 16,
+                paddingHorizontal: 10,
+                paddingVertical: 0,
+              }}
+              value={searchText}
+              onChangeText={setSearchText}
+            />
+          </View>
           <TouchableOpacity
-            className="bg-black/30 rounded-md p-2 h-10 w-[15%] flex-row justify-center items-center"
+            accessibilityLabel={
+              sortOrder === 'asc'
+                ? 'Sort episodes descending'
+                : 'Sort episodes ascending'
+            }
+            className="h-12 w-12 flex-row items-center justify-center"
+            style={{
+              backgroundColor: colors.secondaryContainer,
+              borderRadius: 18,
+            }}
             onPress={toggleSortOrder}>
             <MaterialCommunityIcons
               name={sortOrder === 'asc' ? 'sort-ascending' : 'sort-descending'}
               size={24}
-              color={primary}
+              color={colors.onSecondaryContainer}
             />
           </TouchableOpacity>
         </View>
       )}
 
       {/* Episode/Direct Links List */}
-      <View className="flex-row flex-wrap justify-center gap-x-2 gap-y-2 mt-5">
+      <View className="w-full mt-3">
         {/* Episodes List */}
         {filteredAndSortedEpisodes.length > 0 && (
           <FlatList
@@ -885,17 +858,12 @@ const SeasonList: React.FC<SeasonListProps> = ({
             maxToRenderPerBatch={10}
             windowSize={10}
             removeClippedSubviews={true}
-            getItemLayout={(data, index) => ({
-              length: 60,
-              offset: 60 * index,
-              index,
-            })}
           />
         )}
 
         {/* Direct Links List */}
         {filteredAndSortedDirectLinks.length > 0 && (
-          <View className="w-full justify-center items-center gap-y-2 mt-5 p-2">
+          <View className="w-full mt-2">
             <FlatList
               data={filteredAndSortedDirectLinks}
               keyExtractor={(item, index) => `direct-${item.link}-${index}`}
@@ -903,11 +871,6 @@ const SeasonList: React.FC<SeasonListProps> = ({
               maxToRenderPerBatch={10}
               windowSize={10}
               removeClippedSubviews={true}
-              getItemLayout={(data, index) => ({
-                length: 68,
-                offset: 68 * index,
-                index,
-              })}
             />
           </View>
         )}
@@ -916,7 +879,9 @@ const SeasonList: React.FC<SeasonListProps> = ({
         {filteredAndSortedEpisodes.length === 0 &&
           filteredAndSortedDirectLinks.length === 0 &&
           LinkList?.length === 0 && (
-            <Text className="text-white text-lg font-semibold min-h-20">
+            <Text
+              className="min-h-20 text-lg font-semibold"
+              style={{color: colors.onSurfaceVariant}}>
               No stream found
             </Text>
           )}
@@ -928,93 +893,106 @@ const SeasonList: React.FC<SeasonListProps> = ({
           <Animated.View style={[vlcLoadingAnimatedStyle]}>
             <MaterialCommunityIcons name="vlc" size={70} color={primary} />
           </Animated.View>
-          <Text className="text-white text-lg font-semibold mt-2">
+          <Text
+            className="mt-2 text-lg font-semibold"
+            style={{color: colors.onSurface}}>
             Loading available servers...
           </Text>
         </View>
       )}
 
-      {/* Server Selection Modal */}
-      <Modal
-        animationType="slide"
-        transparent={true}
+      <MaterialDialogSurface
         visible={showServerModal}
-        onRequestClose={() => setShowServerModal(false)}>
-        <Pressable
-          onPress={() => setShowServerModal(false)}
-          className="flex-1 justify-center items-center bg-black/80">
-          <View className="bg-tertiary rounded-xl p-4 w-[90%] max-w-[350px]">
-            <Text className="text-white text-xl font-bold mb-2 text-center">
-              Select External Player Server
-            </Text>
-            <Text className="text-white text-sm mb-4 text-center opacity-70">
-              {externalPlayerStreams.length} servers available
-            </Text>
+        onDismiss={() => setShowServerModal(false)}>
+        <Text
+          className="mb-2 text-center text-xl font-bold"
+          style={{color: colors.onSurface}}>
+          Select External Player Server
+        </Text>
+        <Text
+          className="mb-4 text-center text-sm"
+          style={{color: colors.onSurfaceVariant}}>
+          {externalPlayerStreams.length} servers available
+        </Text>
 
-            {isLoadingStreams ? (
-              <ActivityIndicator size="large" color={primary} />
-            ) : (
-              <>
-                <ScrollView style={{maxHeight: 300}}>
-                  {externalPlayerStreams.map((item, index) =>
-                    renderServerItem(item, index),
-                  )}
-                  {externalPlayerStreams.length === 0 && (
-                    <Text className="text-white text-center p-4">
-                      No servers available
-                    </Text>
-                  )}
-                </ScrollView>
+        {isLoadingStreams ? (
+          <ActivityIndicator size="large" color={primary} />
+        ) : (
+          <>
+            <ScrollView style={{maxHeight: 300}}>
+              {externalPlayerStreams.map((item, index) =>
+                renderServerItem(item, index),
+              )}
+              {externalPlayerStreams.length === 0 && (
+                <Text
+                  className="p-4 text-center"
+                  style={{color: colors.onSurfaceVariant}}>
+                  No servers available
+                </Text>
+              )}
+            </ScrollView>
 
-                <TouchableOpacity
-                  className="mt-4 bg-black/30 py-2 rounded-md"
-                  onPress={() => setShowServerModal(false)}>
-                  <Text className="text-white text-center font-bold">
-                    Cancel
-                  </Text>
-                </TouchableOpacity>
-              </>
-            )}
-          </View>
-        </Pressable>
-      </Modal>
-
-      {/* Sticky Menu Modal */}
-      <Modal
-        animationType="fade"
-        visible={stickyMenu.active}
-        transparent={true}
-        onRequestClose={() => setStickyMenu({active: false})}>
-        <Pressable
-          className="flex-1 justify-end items-center"
-          onPress={() => setStickyMenu({active: false})}>
-          <View className="w-full h-14 bg-quaternary flex-row justify-evenly items-center pt-2">
-            {isCompleted(stickyMenu.link || '') ? (
-              <TouchableOpacity
-                className="flex-row justify-center items-center gap-2 p-2"
-                onPress={markAsUnwatched}>
-                <Text className="text-white">Marked as Unwatched</Text>
-                <Ionicons name="checkmark-done" size={30} color={primary} />
-              </TouchableOpacity>
-            ) : (
-              <TouchableOpacity
-                className="flex-row justify-center items-center gap-2 pt-0 pb-2 px-2 bg-tertiary rounded-md"
-                onPress={markAsWatched}>
-                <Text className="text-white">Mark as Watched</Text>
-                <Ionicons name="checkmark" size={25} color={primary} />
-              </TouchableOpacity>
-            )}
             <TouchableOpacity
-              className="flex-row justify-center bg-tertiary rounded-md items-center pt-0 pb-2 px-2 gap-2"
-              onPress={handleStickyMenuExternalPlayer}>
-              <Text className="text-white font-bold text-base">
-                External Player
+              className="mt-4 py-3"
+              style={{
+                backgroundColor: colors.secondaryContainer,
+                borderRadius: 18,
+              }}
+              onPress={() => setShowServerModal(false)}>
+              <Text
+                className="text-center font-bold"
+                style={{color: colors.onSecondaryContainer}}>
+                Cancel
               </Text>
-              <Feather name="external-link" size={20} color={primary} />
             </TouchableOpacity>
-          </View>
-        </Pressable>
-      </Modal>
+          </>
+        )}
+      </MaterialDialogSurface>
+
+      <MaterialDialogSurface
+        visible={stickyMenu.active}
+        onDismiss={() => setStickyMenu({active: false})}>
+        <Text
+          className="mb-4 text-xl font-bold"
+          style={{color: colors.onSurface}}>
+          Episode actions
+        </Text>
+        <View style={{gap: 10}}>
+          {isCompleted(stickyMenu.link || '') ? (
+            <TouchableOpacity
+              className="h-12 flex-row items-center gap-3 px-4"
+              style={{
+                backgroundColor: colors.surfaceContainerHighest,
+                borderRadius: 18,
+              }}
+              onPress={markAsUnwatched}>
+              <Ionicons name="checkmark-done" size={30} color={primary} />
+              <Text style={{color: colors.onSurface}}>Mark as unwatched</Text>
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity
+              className="h-12 flex-row items-center gap-3 px-4"
+              style={{
+                backgroundColor: colors.surfaceContainerHighest,
+                borderRadius: 18,
+              }}
+              onPress={markAsWatched}>
+              <Ionicons name="checkmark" size={25} color={primary} />
+              <Text style={{color: colors.onSurface}}>Mark as watched</Text>
+            </TouchableOpacity>
+          )}
+          <TouchableOpacity
+            className="h-12 flex-row items-center gap-3 px-4"
+            style={{
+              backgroundColor: colors.surfaceContainerHighest,
+              borderRadius: 18,
+            }}
+            onPress={handleStickyMenuExternalPlayer}>
+            <Feather name="external-link" size={20} color={primary} />
+            <Text style={{color: colors.onSurface}}>External player</Text>
+          </TouchableOpacity>
+        </View>
+      </MaterialDialogSurface>
     </View>
   );
 };

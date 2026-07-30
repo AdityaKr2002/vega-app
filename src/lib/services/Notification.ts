@@ -23,6 +23,7 @@ export interface NotificationOptions {
   id: string;
   title: string;
   body: string;
+  color?: string;
   data?: NotificationData;
   progress?: {
     max: number;
@@ -159,7 +160,10 @@ class NotificationService {
     channelId?: string,
   ): Promise<void> {
     await this.ensureInitialized();
-    const primary = settingsStorage.getPrimaryColor();
+    const isDownloadNotification = channelId === this._downloadChannelId;
+    const notificationColor = isDownloadNotification
+      ? options.color || settingsStorage.getPrimaryColor()
+      : options.color || '#FFFFFF';
 
     await notifee.displayNotification({
       id: options.id,
@@ -167,9 +171,11 @@ class NotificationService {
       body: options.body,
       data: options.data,
       android: {
-        smallIcon: 'ic_notification',
+        smallIcon: isDownloadNotification
+          ? 'ic_download_notification'
+          : 'ic_notification',
         channelId: channelId || this._defaultChannelId,
-        color: primary,
+        color: notificationColor,
         pressAction: {
           id: 'default',
         },
@@ -286,11 +292,13 @@ class NotificationService {
     title: string,
     downloadId: string,
     sourceType: DownloadSourceType,
+    color?: string,
   ): Promise<void> {
     await this.displayDownloadNotification({
       id: downloadId,
       title: title,
       body: 'Starting download',
+      color,
       data: this.getDownloadData(downloadId, sourceType),
       groupId: 'vega-downloads',
       sortKey: downloadId,
@@ -306,11 +314,13 @@ class NotificationService {
     title: string,
     downloadId: string,
     sourceType: DownloadSourceType,
+    color?: string,
   ): Promise<void> {
     await this.displayDownloadNotification({
       id: downloadId,
       title,
       body: 'Queued',
+      color,
       data: this.getDownloadData(downloadId, sourceType),
       groupId: 'vega-downloads',
       sortKey: downloadId,
@@ -338,6 +348,7 @@ class NotificationService {
     progressText: string,
     sourceType: DownloadSourceType,
     action: 'pause' | 'resume' | 'none' = 'none',
+    color?: string,
   ): Promise<void> {
     const actions: NotificationOptions['actions'] = [];
     if (action === 'pause') {
@@ -351,6 +362,7 @@ class NotificationService {
       id: downloadId,
       title: title,
       body: progressText,
+      color,
       data: this.getDownloadData(downloadId, sourceType),
       groupId: 'vega-downloads',
       sortKey: downloadId,
@@ -371,12 +383,14 @@ class NotificationService {
     title: string,
     downloadId: string,
     sourceType: DownloadSourceType,
+    color?: string,
   ): Promise<void> {
     await this.cancelNotification(downloadId);
     await this.displayDownloadNotification({
       id: `downloadComplete${downloadId}`,
       title: 'Download complete',
       body: title,
+      color,
       data: this.getDownloadData(downloadId, sourceType),
     });
   }
@@ -388,12 +402,14 @@ class NotificationService {
     title: string,
     downloadId: string,
     sourceType: DownloadSourceType,
+    color?: string,
   ): Promise<void> {
     await this.cancelNotification(downloadId);
     await this.displayDownloadNotification({
       id: `downloadFailed${downloadId}`,
       title: 'Download failed',
       body: title,
+      color,
       data: this.getDownloadData(downloadId, sourceType),
     });
   }

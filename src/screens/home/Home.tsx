@@ -1,10 +1,4 @@
-import {
-  SafeAreaView,
-  ScrollView,
-  RefreshControl,
-  View,
-  Text,
-} from 'react-native';
+import {SafeAreaView, ScrollView, RefreshControl, View} from 'react-native';
 import Slider from '../../components/Slider';
 import React, {useCallback, useEffect, useMemo, useState} from 'react';
 import HeroOptimized from '../../components/Hero';
@@ -16,24 +10,26 @@ import {
   getRandomHeroPost,
   clearHeroCache,
 } from '../../lib/hooks/useHomePageData';
-import useThemeStore from '../../lib/zustand/themeStore';
 import ProviderDrawer from '../../components/ProviderDrawer';
 import {NativeStackScreenProps} from '@react-navigation/native-stack';
 import {HomeStackParamList} from '../../App';
 import {Drawer} from 'react-native-drawer-layout';
 import {GestureHandlerRootView} from 'react-native-gesture-handler';
-import ContinueWatching from '../../components/ContinueWatching';
 import {providerManager} from '../../lib/services/ProviderManager';
 import {Catalog} from '../../lib/providers/types';
 import Tutorial from '../../components/Touturial';
 import {QueryErrorBoundary} from '../../components/ErrorBoundary';
 import {StatusBar} from 'expo-status-bar';
+import AppText from '../../components/ui/Text';
+import {useM3Colors} from '../../theme/M3PaletteContext';
+import ContinueWatching from '../../components/ContinueWatching';
+import StatusBarScrim from '../../components/ui/StatusBarScrim';
 
 type Props = NativeStackScreenProps<HomeStackParamList, 'Home'>;
 
 const Home = ({}: Props) => {
-  const primary = useThemeStore(state => state.primary);
-  const [_, setBackgroundColor] = useState('transparent');
+  const colors = useM3Colors();
+  const [statusBarScrimVisible, setStatusBarScrimVisible] = useState(false);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
 
   // Memoize static values
@@ -61,9 +57,7 @@ const Home = ({}: Props) => {
 
   // Memoized scroll handler
   const handleScroll = useCallback((event: any) => {
-    const newBackgroundColor =
-      event.nativeEvent.contentOffset.y > 0 ? 'black' : 'transparent';
-    setBackgroundColor(newBackgroundColor);
+    setStatusBarScrimVisible(event.nativeEvent.contentOffset.y > 12);
   }, []);
 
   // Stable hero post calculation - uses provider value for caching
@@ -155,13 +149,17 @@ const Home = ({}: Props) => {
     }
 
     return (
-      <View className="p-4 m-4 bg-red-500/20 rounded-lg min-h-64 flex-1 justify-center items-center">
-        <Text className="text-red-400 text-center font-medium">
+      <View className="m-4 min-h-64 flex-1 items-center justify-center rounded-3xl bg-m3-error-container p-4">
+        <AppText
+          role="titleMediumEmphasized"
+          className="text-center text-m3-on-error-container">
           {error?.message || 'Failed to load content'}
-        </Text>
-        <Text className="text-gray-400 text-center text-sm mt-1">
+        </AppText>
+        <AppText
+          role="bodyMedium"
+          className="mt-1 text-center text-m3-on-error-container">
           Pull to refresh and try again
-        </Text>
+        </AppText>
       </View>
     );
   }, [error, isLoading, homeData.length]);
@@ -178,7 +176,8 @@ const Home = ({}: Props) => {
   return (
     <QueryErrorBoundary>
       <GestureHandlerRootView style={{flex: 1}}>
-        <SafeAreaView className="bg-black flex-1">
+        <StatusBarScrim visible={statusBarScrimVisible} />
+        <SafeAreaView className="flex-1 bg-m3-background">
           <Drawer
             open={isDrawerOpen}
             onOpen={() => setIsDrawerOpen(true)}
@@ -193,18 +192,18 @@ const Home = ({}: Props) => {
                 <ProviderDrawer onClose={() => setIsDrawerOpen(false)} />
               ) : null
             }>
-            <StatusBar style="auto" animated={true} />
+            <StatusBar style="light" />
 
             <ScrollView
               onScroll={handleScroll}
               scrollEventThrottle={16} // Optimize scroll performance
               showsVerticalScrollIndicator={false}
-              className="bg-black"
+              className="bg-m3-background"
               refreshControl={
                 <RefreshControl
-                  colors={[primary]}
-                  tintColor={primary}
-                  progressBackgroundColor="black"
+                  colors={[colors.primary]}
+                  tintColor={colors.primary}
+                  progressBackgroundColor={colors.surfaceContainer}
                   refreshing={isRefetching}
                   onRefresh={handleRefresh}
                 />
@@ -216,12 +215,12 @@ const Home = ({}: Props) => {
 
               <ContinueWatching />
 
-              <View className="-mt-6 relative z-20">
+              <View className="relative z-20 pb-8">
                 {isLoading ? loadingSliders : contentSliders}
                 {errorComponent}
               </View>
 
-              <View className="h-16" />
+              <View className="h-8" />
             </ScrollView>
           </Drawer>
         </SafeAreaView>

@@ -1,8 +1,9 @@
-import { useEffect } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { providerManager } from '../services/ProviderManager';
-import { cacheStorage } from '../storage';
+import {useEffect} from 'react';
+import {useQuery} from '@tanstack/react-query';
+import {providerManager} from '../services/ProviderManager';
+import {cacheStorage} from '../storage';
 import axios from 'axios';
+import {shouldShowSynopsisSkeleton} from '../synopsisLoading';
 
 const getContentInfoCacheKey = (link: string, providerValue: string) =>
   `contentInfo:${providerValue}:${link}`;
@@ -33,7 +34,8 @@ export const useContentInfo = (link: string, providerValue: string) => {
     gcTime: 60 * 60 * 1000, // 1 hour
     retry: 2,
     initialData: () => {
-      const cached = cacheStorage.getString(cacheKey) || cacheStorage.getString(link);
+      const cached =
+        cacheStorage.getString(cacheKey) || cacheStorage.getString(link);
       if (cached) {
         try {
           return JSON.parse(cached);
@@ -66,16 +68,16 @@ export const useEnhancedMetadata = (imdbId: string, type: string) => {
       try {
         // Validate imdbId and type
         if (!imdbId || !type) {
-          return undefined;
+          return null;
         }
         const response = await axios.get(
           `https://v3-cinemeta.strem.io/meta/${type}/${imdbId}.json`,
-          { timeout: 10000 },
+          {timeout: 10000},
         );
-        return response.data?.meta;
+        return response.data?.meta ?? null;
       } catch (error) {
         console.log('Error fetching enhanced metadata:', error);
-        return undefined; // Fallback to undefined instead of throwing
+        return null;
       }
     },
     enabled: !!imdbId && !!type,
@@ -117,23 +119,36 @@ export const useContentDetails = (link: string, providerValue: string) => {
     refetch: refetchInfo,
   } = useContentInfo(link, providerValue);
 
+  const imdbId = info?.imdbId || '';
+  const contentType = info?.type || '';
+
   // Then, get enhanced metadata if imdbId is available
   const {
     data: meta,
     isLoading: metaLoading,
     isFetching: metaFetching,
-    error: metaError,
     refetch: refetchMeta,
-  } = useEnhancedMetadata(info?.imdbId || '', info?.type || '');
+  } = useEnhancedMetadata(imdbId, contentType);
 
   return {
     info,
     meta,
     isLoading: infoLoading || metaLoading,
     isRefetching: infoFetching || metaFetching,
+    isSynopsisLoading: shouldShowSynopsisSkeleton({
+      enhancedSynopsis: meta?.description,
+      providerSynopsis: info?.synopsis,
+      infoLoading,
+      infoFetching,
+      metaLoading,
+      metaFetching,
+    }),
     error: infoError,
     refetch: async () => {
-      await Promise.all([refetchInfo(), refetchMeta()]);
+      await refetchInfo();
+      if (imdbId && contentType) {
+        await refetchMeta();
+      }
     },
   };
 };

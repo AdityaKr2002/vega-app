@@ -1,13 +1,19 @@
-import {MaterialCommunityIcons} from '@expo/vector-icons';
 import React, {useState} from 'react';
-import {Text, TouchableOpacity, View} from 'react-native';
+import {View} from 'react-native';
+import IconButton from '../../../components/ui/IconButton';
+import Surface from '../../../components/ui/Surface';
+import AppText from '../../../components/ui/Text';
 import {updateDownloadConcurrency} from '../../../lib/downloadManager';
 import {settingsStorage} from '../../../lib/storage';
 
 const MIN_CONCURRENCY = 1;
 const MAX_CONCURRENCY = 5;
 
-const DownloadConcurrencyPreference = ({primary}: {primary: string}) => {
+const DownloadConcurrencyPreference = ({
+  primary: _primary,
+}: {
+  primary: string;
+}) => {
   const [concurrency, setConcurrency] = useState(
     settingsStorage.getDownloadConcurrency(),
   );
@@ -19,48 +25,45 @@ const DownloadConcurrencyPreference = ({primary}: {primary: string}) => {
 
   return (
     <View className="mb-6">
-      <Text className="text-gray-400 text-sm mb-3">Downloads</Text>
-      <View className="bg-[#1A1A1A] rounded-xl overflow-hidden">
+      <AppText role="labelLarge" className="mb-3 text-m3-on-surface-variant">
+        Downloads
+      </AppText>
+      <Surface level="low" className="overflow-hidden">
         <View className="flex-row items-center justify-between p-4">
           <View className="mr-4 flex-1">
-            <Text className="text-white text-base">Concurrent Downloads</Text>
-            <Text className="mt-1 text-xs text-gray-400">
+            <AppText role="bodyLarge" className="text-m3-on-surface">
+              Concurrent Downloads
+            </AppText>
+            <AppText
+              role="bodySmall"
+              className="mt-1 text-m3-on-surface-variant">
               Extra downloads wait in the queue
-            </Text>
+            </AppText>
           </View>
-          <View className="flex-row items-center gap-4">
-            <TouchableOpacity
+          <View className="flex-row items-center gap-2">
+            <IconButton
               testID="decrease-download-concurrency"
+              icon="minus"
+              label="Decrease concurrent downloads"
               disabled={concurrency <= MIN_CONCURRENCY}
-              onPress={() =>
-                update(Math.max(concurrency - 1, MIN_CONCURRENCY))
-              }>
-              <MaterialCommunityIcons
-                name="minus"
-                size={23}
-                color={concurrency <= MIN_CONCURRENCY ? '#4B5563' : primary}
-              />
-            </TouchableOpacity>
-            <Text
+              onPress={() => update(Math.max(concurrency - 1, MIN_CONCURRENCY))}
+            />
+            <AppText
               testID="download-concurrency-value"
-              className="w-12 rounded-md bg-[#262626] px-3 py-1 text-center text-base text-white">
+              role="titleMediumEmphasized"
+              className="w-10 text-center text-m3-on-surface">
               {concurrency}
-            </Text>
-            <TouchableOpacity
+            </AppText>
+            <IconButton
               testID="increase-download-concurrency"
+              icon="plus"
+              label="Increase concurrent downloads"
               disabled={concurrency >= MAX_CONCURRENCY}
-              onPress={() =>
-                update(Math.min(concurrency + 1, MAX_CONCURRENCY))
-              }>
-              <MaterialCommunityIcons
-                name="plus"
-                size={23}
-                color={concurrency >= MAX_CONCURRENCY ? '#4B5563' : primary}
-              />
-            </TouchableOpacity>
+              onPress={() => update(Math.min(concurrency + 1, MAX_CONCURRENCY))}
+            />
           </View>
         </View>
-      </View>
+      </Surface>
     </View>
   );
 };

@@ -1,7 +1,7 @@
 export const VEGA_SYNC_SCHEMA_VERSION = 1;
 export const VEGA_SYNC_DIRECTORY = '.vega-sync';
 
-export type SyncRecordKind = 'download' | 'history' | 'watchlist';
+export type SyncRecordKind = 'download' | 'watchlist';
 
 export interface SyncedDownload {
   id: string;
@@ -21,23 +21,6 @@ export interface SyncedDownload {
   relativePath: string;
   totalBytes: number;
   completedAt: number;
-  updatedAt: number;
-}
-
-export interface SyncedHistory {
-  id: string;
-  title: string;
-  poster?: string;
-  provider?: string;
-  link: string;
-  duration?: number;
-  progress?: number;
-  isSeries?: boolean;
-  lastPlayed?: number;
-  currentTime?: number;
-  playbackRate?: number;
-  episodeTitle?: string;
-  cachedInfoData?: unknown;
   updatedAt: number;
 }
 
@@ -62,14 +45,13 @@ export interface VegaSyncManifest {
   revision: number;
   generatedAt: number;
   downloads: Record<string, SyncedDownload>;
-  history: Record<string, SyncedHistory>;
+  history?: Record<string, never>;
   watchlist?: Record<string, SyncedWatchListItem>;
   tombstones: Record<string, SyncTombstone>;
 }
 
 export interface MergedSyncState {
   downloads: Record<string, SyncedDownload>;
-  history: Record<string, SyncedHistory>;
   watchlist: Record<string, SyncedWatchListItem>;
   tombstones: Record<string, SyncTombstone>;
 }
@@ -126,7 +108,6 @@ const isManifest = (value: unknown): value is VegaSyncManifest => {
     typeof manifest.deviceId === 'string' &&
     typeof manifest.revision === 'number' &&
     Boolean(manifest.downloads) &&
-    Boolean(manifest.history) &&
     Boolean(manifest.tombstones)
   );
 };
@@ -178,7 +159,6 @@ export const mergeSyncManifests = (
   manifests: VegaSyncManifest[],
 ): MergedSyncState => {
   const downloads: Record<string, SyncedDownload> = {};
-  const history: Record<string, SyncedHistory> = {};
   const watchlist: Record<string, SyncedWatchListItem> = {};
   const tombstones: Record<string, SyncTombstone> = {};
 
@@ -191,19 +171,6 @@ export const mergeSyncManifests = (
         normalizedItem.updatedAt > downloads[mediaKey].updatedAt
       ) {
         downloads[mediaKey] = normalizedItem;
-      }
-    }
-    for (const [id, item] of Object.entries(manifest.history)) {
-      const existing = history[id];
-      if (!existing) {
-        history[id] = item;
-      } else if (item.updatedAt > existing.updatedAt) {
-        history[id] = {
-          ...item,
-          progress: item.progress ?? existing.progress,
-          duration: item.duration ?? existing.duration,
-          currentTime: item.currentTime ?? existing.currentTime,
-        };
       }
     }
     for (const [link, item] of Object.entries(manifest.watchlist || {})) {
@@ -230,11 +197,6 @@ export const mergeSyncManifests = (
       if (item && tombstone.deletedAt >= item.updatedAt) {
         delete downloads[itemKey!];
       }
-    } else if (tombstone.kind === 'history') {
-      const item = history[tombstone.id];
-      if (item && tombstone.deletedAt >= item.updatedAt) {
-        delete history[tombstone.id];
-      }
     } else {
       const item = watchlist[tombstone.id];
       if (item && tombstone.deletedAt >= item.updatedAt) {
@@ -243,5 +205,5 @@ export const mergeSyncManifests = (
     }
   }
 
-  return {downloads, history, watchlist, tombstones};
+  return {downloads, watchlist, tombstones};
 };

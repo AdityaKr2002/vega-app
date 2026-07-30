@@ -10,9 +10,11 @@ import {
 import useDownloadsStore, {
   selectCurrentDownloads,
 } from '../../../lib/zustand/downloadsStore';
+import {useM3Colors} from '../../../theme/M3PaletteContext';
 import CurrentDownloadRow from './CurrentDownloadRow';
 
 const CurrentDownloadsSection = ({primary}: {primary: string}) => {
+  const colors = useM3Colors();
   const downloads = useDownloadsStore(selectCurrentDownloads);
 
   if (downloads.length === 0) {
@@ -22,10 +24,23 @@ const CurrentDownloadsSection = ({primary}: {primary: string}) => {
   return (
     <View className="mb-5">
       <View className="mb-3 flex-row items-center justify-between">
-        <Text className="text-lg font-semibold text-white">
+        <Text
+          className="text-xl font-bold"
+          style={{color: colors.onBackground}}>
           Current Downloads
         </Text>
-        <Text className="text-sm text-gray-400">{downloads.length}</Text>
+        <View
+          className="min-w-8 items-center px-2 py-1"
+          style={{
+            backgroundColor: colors.secondaryContainer,
+            borderRadius: 12,
+          }}>
+          <Text
+            className="text-xs font-bold"
+            style={{color: colors.onSecondaryContainer}}>
+            {downloads.length}
+          </Text>
+        </View>
       </View>
       {downloads.map(item => (
         <CurrentDownloadRow

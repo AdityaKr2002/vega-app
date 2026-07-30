@@ -1,521 +1,319 @@
-import {
-  Image,
-  Text,
-  View,
-  StatusBar,
-  RefreshControl,
-  FlatList,
-  Linking,
-  TouchableOpacity,
-  Modal,
-  Pressable,
-} from 'react-native';
-import React, {useCallback, useMemo, useRef, useState} from 'react';
+import {useNavigation} from '@react-navigation/native';
 import {
   NativeStackNavigationProp,
   NativeStackScreenProps,
 } from '@react-navigation/native-stack';
-import {HomeStackParamList, TabStackParamList} from '../../App';
-import LinearGradient from 'react-native-linear-gradient';
-import SeasonList from '../../components/SeasonList';
-import Ionicons from '@expo/vector-icons/Ionicons';
-import {settingsStorage, watchListStorage} from '../../lib/storage';
+import {StatusBar} from 'expo-status-bar';
+import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
+import {FlatList, RefreshControl, View} from 'react-native';
 import ReactNativeHapticFeedback from 'react-native-haptic-feedback';
-import useContentStore from '../../lib/zustand/contentStore';
-import {MaterialCommunityIcons} from '@expo/vector-icons';
-import useThemeStore from '../../lib/zustand/themeStore';
-import {useNavigation} from '@react-navigation/native';
-import useWatchListStore from '../../lib/zustand/watchListStore';
-import {useContentDetails} from '../../lib/hooks/useContentInfo';
+import {HomeStackParamList, TabStackParamList} from '../../App';
+import Button from '../../components/ui/Button';
+import AppText from '../../components/ui/Text';
 import {QueryErrorBoundary} from '../../components/ErrorBoundary';
+import SeasonList from '../../components/SeasonList';
 import SkeletonLoader from '../../components/Skeleton';
-// import {BlurView} from 'expo-blur';
+import {useContentDetails} from '../../lib/hooks/useContentInfo';
+import {extractImageAccent} from '../../lib/imageAccent';
+import type {Link} from '../../lib/providers/types';
+import {settingsStorage, watchListStorage} from '../../lib/storage';
+import useContentStore from '../../lib/zustand/contentStore';
+import useWatchListStore from '../../lib/zustand/watchListStore';
+import {M3PaletteContext, useM3Colors} from '../../theme/M3PaletteContext';
+import type {MaterialColors} from '../../theme/colors';
+import {mixHex} from '../../theme/seeds';
+import ContentOverview from './components/ContentOverview';
+import InfoSkeleton from './components/InfoSkeleton';
+import StatusBarScrim from '../../components/ui/StatusBarScrim';
 
 type Props = NativeStackScreenProps<HomeStackParamList, 'Info'>;
+
 export default function Info({route, navigation}: Props): React.JSX.Element {
+  const colors = useM3Colors();
   const searchNavigation =
     useNavigation<NativeStackNavigationProp<TabStackParamList>>();
-  const primary = useThemeStore(state => state.primary);
+  const provider = useContentStore(state => state.provider);
+  const installedProviders = useContentStore(state => state.installedProviders);
   const addItem = useWatchListStore(state => state.addItem);
   const removeItem = useWatchListStore(state => state.removeItem);
-  const provider = useContentStore(state => state.provider);
-
-  // React Query for optimized data fetching
+  const providerValue = route.params.provider || provider.value;
   const {
     info,
     meta,
-    isLoading: infoLoading,
+    isLoading,
     isRefetching,
+    isSynopsisLoading,
     error,
     refetch,
-  } = useContentDetails(
-    route.params.link,
-    route.params.provider || provider.value,
-  );
-
-  // UI state
-  const [threeDotsMenuOpen, setThreeDotsMenuOpen] = useState(false);
-  const [readMore, setReadMore] = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
-  const [refreshVersion, setRefreshVersion] = useState(0);
-  const [menuPosition, setMenuPosition] = useState({top: -1000, right: 0});
-  const [backgroundColor, setBackgroundColor] = useState('transparent');
-  const [logoError, setLogoError] = useState(false);
-
-  const threeDotsRef = useRef<any | null>(null);
-
-  // Memoized values
+  } = useContentDetails(route.params.link, providerValue);
   const [inLibrary, setInLibrary] = useState(() =>
     watchListStorage.isInWatchList(route.params.link),
   );
+  const [readMore, setReadMore] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [refreshVersion, setRefreshVersion] = useState(0);
+  const [imageAccent, setImageAccent] = useState<string>();
+  const [accentReady, setAccentReady] = useState(
+    () => !settingsStorage.isDynamicInfoAccentEnabled(),
+  );
+  const accentSource = useRef(route.params.poster);
+  const imageAccentRequest = useRef(0);
+  const [statusBarScrimVisible, setStatusBarScrimVisible] = useState(false);
+  const dynamicInfoAccentEnabled = settingsStorage.isDynamicInfoAccentEnabled();
+  const contentProviderName = useMemo(
+    () =>
+      installedProviders.find(item => item.value === providerValue)
+        ?.display_name || providerValue,
+    [installedProviders, providerValue],
+  );
 
-  // Memoized handlers
-  const openThreeDotsMenu = useCallback(() => {
-    if (threeDotsRef.current) {
-      threeDotsRef.current.measure(
-        (
-          x: number,
-          y: number,
-          width: number,
-          height: number,
-          pageX: number,
-          pageY: number,
-        ) => {
-          setMenuPosition({top: pageY - 35, right: 35});
-          setThreeDotsMenuOpen(true);
-        },
-      );
+  const displayTitle = meta?.name || info?.title;
+  const displayLogo = meta?.logo || info?.logo;
+  const synopsis =
+    meta?.description || info?.synopsis || 'No synopsis available';
+  const posterImage =
+    meta?.poster ||
+    route.params.poster ||
+    info?.image ||
+    'https://placehold.jp/24/363636/ffffff/500x750.png?text=Vega';
+  const accentPoster = route.params.poster || meta?.poster || info?.image;
+  const backgroundImage =
+    meta?.background ||
+    info?.image ||
+    'https://placehold.jp/24/363636/ffffff/900x1200.png?text=Vega';
+  useEffect(() => {
+    if (!dynamicInfoAccentEnabled) {
+      imageAccentRequest.current += 1;
+      setImageAccent(undefined);
+      setAccentReady(true);
+      return;
     }
-  }, []);
+    const poster = accentSource.current || accentPoster;
+    if (!poster) {
+      return;
+    }
+    accentSource.current = poster;
+    setAccentReady(false);
+    const request = ++imageAccentRequest.current;
+    extractImageAccent(poster, `detail-poster-accent-v1:${poster}`).then(
+      extractedColor => {
+        if (request !== imageAccentRequest.current) {
+          return;
+        }
+        setImageAccent(extractedColor);
+        setAccentReady(true);
+      },
+    );
+  }, [accentPoster, dynamicInfoAccentEnabled]);
+  const detailColors = useMemo<MaterialColors>(() => {
+    if (!imageAccent) {
+      return colors;
+    }
+    const paleAccent = mixHex(imageAccent, '#FFFFFF', 0.72);
+    const darkContent = '#171717' as const;
+    const tintedSurface = (base: string, amount: number) =>
+      mixHex(base, imageAccent, amount);
+    return {
+      ...colors,
+      primary: paleAccent,
+      onPrimary: darkContent,
+      primaryContainer: paleAccent,
+      onPrimaryContainer: darkContent,
+      secondary: mixHex(imageAccent, '#FFFFFF', 0.66),
+      onSecondary: darkContent,
+      secondaryContainer: mixHex(imageAccent, '#FFFFFF', 0.78),
+      onSecondaryContainer: darkContent,
+      tertiary: mixHex(imageAccent, '#FFFFFF', 0.62),
+      onTertiary: darkContent,
+      tertiaryContainer: mixHex(imageAccent, '#FFFFFF', 0.8),
+      onTertiaryContainer: darkContent,
+      surfaceTint: paleAccent,
+      background: mixHex(imageAccent, '#000000', 0.96),
+      surface: tintedSurface('#171717', 0.08),
+      surfaceDim: tintedSurface('#141414', 0.06),
+      surfaceContainerLowest: tintedSurface('#101010', 0.05),
+      surfaceContainerLow: tintedSurface('#1B1B1B', 0.1),
+      surfaceContainer: tintedSurface('#222222', 0.12),
+      surfaceContainerHigh: tintedSurface('#2A2A2A', 0.14),
+      surfaceContainerHighest: tintedSurface('#343434', 0.16),
+      surfaceBright: tintedSurface('#3D3D3D', 0.18),
+      surfaceVariant: tintedSurface('#303030', 0.14),
+      outline: mixHex(imageAccent, '#FFFFFF', 0.48),
+      outlineVariant: tintedSurface('#5A5A5A', 0.18),
+    };
+  }, [colors, imageAccent]);
+  const trailerUrl = meta?.trailers?.[0]?.source
+    ? `https://www.youtube.com/watch?v=${meta.trailers[0].source}`
+    : undefined;
+  const webUrl = info?.webUrl?.trim();
+  const cast = useMemo(
+    () => Array.from(new Set([...(meta?.cast ?? []), ...(info?.cast ?? [])])),
+    [info?.cast, meta?.cast],
+  );
+  const filteredLinkList = useMemo(() => {
+    if (!info?.linkList) {
+      return [];
+    }
+    const excludedQualities = settingsStorage.getExcludedQualities();
+    const filtered = info.linkList.filter(
+      (item: Link) =>
+        !item.quality || !excludedQualities.includes(item.quality),
+    );
+    return filtered.length > 0 ? filtered : info.linkList;
+  }, [info?.linkList]);
+
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+    setRefreshVersion(version => version + 1);
+    try {
+      await refetch();
+    } finally {
+      setRefreshing(false);
+    }
+  }, [refetch]);
 
   const handleScroll = useCallback((event: any) => {
-    setBackgroundColor(
-      event.nativeEvent.contentOffset.y > 150 ? 'black' : 'transparent',
-    );
+    setStatusBarScrimVisible(event.nativeEvent.contentOffset.y > 12);
   }, []);
-  // Optimized library management
-  const addLibrary = useCallback(() => {
-    ReactNativeHapticFeedback.trigger('effectClick', {
-      enableVibrateFallback: true,
-      ignoreAndroidSystemSettings: false,
-    });
-    addItem({
-      title: meta?.name || info?.title,
-      poster: meta?.poster || route.params.poster || info?.image,
-      link: route.params.link,
-      provider: route.params.provider || provider.value,
-    });
-    setInLibrary(true);
-  }, [meta, info, route.params, provider.value, addItem]);
 
-  const removeLibrary = useCallback(() => {
+  const toggleLibrary = useCallback(() => {
     if (settingsStorage.isHapticFeedbackEnabled()) {
       ReactNativeHapticFeedback.trigger('effectClick', {
         enableVibrateFallback: true,
         ignoreAndroidSystemSettings: false,
       });
     }
-    removeItem(route.params.link);
-    setInLibrary(false);
-  }, [route.params.link, removeItem]);
-
-  // Memoized computed values
-  const synopsis = useMemo(() => {
-    return meta?.description || info?.synopsis || 'No synopsis available';
-  }, [meta?.description, info?.synopsis]);
-
-  const displayTitle = useMemo(() => {
-    return meta?.name || info?.title;
-  }, [meta?.name, info?.title]);
-
-  const webUrl = useMemo(() => info?.webUrl?.trim(), [info?.webUrl]);
-
-  const posterImage = useMemo(() => {
-    return (
-      meta?.poster ||
-      route.params.poster ||
-      info?.image ||
-      'https://placehold.jp/24/363636/ffffff/500x500.png?text=Vega'
-    );
-  }, [meta?.poster, route.params.poster, info?.image]);
-
-  const backgroundImage = useMemo(() => {
-    return (
-      meta?.background ||
-      info?.image ||
-      'https://placehold.jp/24/363636/ffffff/500x500.png?text=Vega'
-    );
-  }, [meta?.background, info?.image]);
-  const filteredLinkList = useMemo(() => {
-    if (!info?.linkList) {
-      return [];
+    if (inLibrary) {
+      removeItem(route.params.link);
+      setInLibrary(false);
+      return;
     }
+    addItem({
+      title: displayTitle,
+      poster: posterImage,
+      link: route.params.link,
+      provider: providerValue,
+    });
+    setInLibrary(true);
+  }, [
+    addItem,
+    displayTitle,
+    inLibrary,
+    posterImage,
+    providerValue,
+    removeItem,
+    route.params.link,
+  ]);
 
-    const excludedQualities = settingsStorage.getExcludedQualities();
-    const filtered = info.linkList.filter(
-      (item: any) =>
-        !item.quality || !excludedQualities.includes(item.quality as string),
-    );
-
-    return filtered.length > 0 ? filtered : info.linkList;
-  }, [info?.linkList]);
-
-  // Optimized refresh handler
-  const handleRefresh = useCallback(async () => {
-    setRefreshing(true);
-    setRefreshVersion(version => version + 1);
-    try {
-      await refetch();
-    } catch (refreshError) {
-      console.error('Error refreshing content:', refreshError);
-      // Could show a toast or alert here if needed
-    } finally {
-      setRefreshing(false);
+  const searchTitle = useCallback(() => {
+    if (!displayTitle) {
+      return;
     }
-  }, [refetch]);
+    searchNavigation.navigate('SearchStack', {
+      screen: 'SearchResults',
+      params: {filter: displayTitle},
+    } as never);
+  }, [displayTitle, searchNavigation]);
 
-  // Error handling - show error UI instead of throwing
   if (error) {
     return (
-      <View className="h-full w-full bg-black justify-center items-center p-4">
-        <StatusBar
-          showHideTransition={'slide'}
-          animated={true}
-          translucent={true}
-          backgroundColor="black"
-        />
-        <Text className="text-red-400 text-lg font-bold mb-4 text-center">
+      <View
+        style={{
+          alignItems: 'center',
+          backgroundColor: colors.background,
+          flex: 1,
+          justifyContent: 'center',
+          padding: 24,
+        }}>
+        <StatusBar style="light" />
+        <AppText
+          role="headlineSmallEmphasized"
+          style={{color: colors.error, textAlign: 'center'}}>
           Failed to load content
-        </Text>
-        <Text className="text-gray-400 text-sm mb-6 text-center">
-          {error.message ||
-            'An unexpected error occurred while loading the content'}
-        </Text>
-        <TouchableOpacity
-          onPress={handleRefresh}
-          className="bg-red-600 px-6 py-3 rounded-lg mb-4">
-          <Text className="text-white font-semibold">Try Again</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          onPress={() => navigation.goBack()}
-          className="bg-gray-600 px-6 py-3 rounded-lg">
-          <Text className="text-white font-semibold">Go Back</Text>
-        </TouchableOpacity>
+        </AppText>
+        <AppText
+          role="bodyMedium"
+          style={{
+            color: colors.onSurfaceVariant,
+            marginTop: 8,
+            textAlign: 'center',
+          }}>
+          {error.message || 'An unexpected error occurred'}
+        </AppText>
+        <View style={{flexDirection: 'row', gap: 10, marginTop: 22}}>
+          <Button variant="destructive" onPress={handleRefresh}>
+            Try again
+          </Button>
+          <Button variant="tonal" onPress={navigation.goBack}>
+            Go back
+          </Button>
+        </View>
+      </View>
+    );
+  }
+
+  if (!accentReady) {
+    return (
+      <View style={{backgroundColor: '#000000', flex: 1}}>
+        <StatusBar style="light" />
+        <InfoSkeleton onBack={navigation.goBack} />
       </View>
     );
   }
 
   return (
     <QueryErrorBoundary>
-      <View className="h-full w-full">
-        <StatusBar
-          showHideTransition={'slide'}
-          animated={true}
-          translucent={true}
-          backgroundColor={backgroundColor}
-        />
-        <View>
-          <View className="absolute w-full h-[256px]">
-            <SkeletonLoader show={infoLoading} height={256} width={'100%'}>
-              <Image
-                source={{uri: backgroundImage}}
-                className=" h-[256] w-full"
-                onError={e => {
-                  console.warn('Background image failed to load:', e);
-                }}
-              />
-            </SkeletonLoader>
-          </View>
-
-          {
-            // manifest[route.params.provider || provider.value].blurImage && (
-            //   <BlurView
-            //     intensity={4}
-            //     blurReductionFactor={1}
-            //     experimentalBlurMethod="dimezisBlurView"
-            //     tint="default"
-            //     style={{
-            //       position: 'absolute',
-            //       top: 0,
-            //       left: 0,
-            //       right: 0,
-            //       bottom: 0,
-            //       height: 256,
-            //       width: '100%',
-            //     }}
-            //   />
-            // )
-          }
+      <M3PaletteContext.Provider value={detailColors}>
+        <View style={{backgroundColor: detailColors.background, flex: 1}}>
+          <StatusBarScrim visible={statusBarScrimVisible} />
+          <StatusBar style="light" />
           <FlatList
             data={[]}
-            keyExtractor={(_, i) => i.toString()}
-            renderItem={() => <View />}
+            keyExtractor={(_, index) => String(index)}
+            renderItem={() => null}
             ListHeaderComponent={
               <>
-                <View className="relative w-full h-[256px]">
-                  <LinearGradient
-                    colors={['transparent', 'black']}
-                    className="absolute h-full w-full"
-                  />
-                  <View className="absolute bottom-0 right-0 w-screen flex-row justify-between items-baseline px-2">
-                    {(meta?.logo && !logoError) || infoLoading ? (
-                      <Image
-                        onError={() => setLogoError(true)}
-                        source={{uri: meta?.logo}}
-                        style={{width: 200, height: 100, resizeMode: 'contain'}}
-                      />
-                    ) : (
-                      <Text className="text-white text-2xl mt-3 capitalize font-semibold w-3/4 truncate">
-                        {displayTitle}
-                      </Text>
-                    )}
-                    {/* rating */}
-                    {(meta?.imdbRating || info?.rating) && (
-                      <Text className="text-white text-2xl font-semibold">
-                        {meta?.imdbRating || info?.rating}
-                        <Text className="text-white text-lg">/10</Text>
-                      </Text>
-                    )}
-                  </View>
-                </View>
-                <View className="p-4 bg-black">
-                  <View className="flex-row gap-x-3 gap-y-1 flex-wrap items-center mb-4">
-                    {/* badges */}
-                    {meta?.year && (
-                      <Text className="text-white text-lg bg-tertiary px-2 rounded-md">
-                        {meta?.year}
-                      </Text>
-                    )}
-                    {meta?.runtime && (
-                      <Text className="text-white text-lg bg-tertiary px-2 rounded-md">
-                        {meta?.runtime}
-                      </Text>
-                    )}
-                    {meta?.genres?.slice(0, 2).map((genre: string) => (
-                      <Text
-                        key={genre}
-                        className="text-white text-lg bg-tertiary px-2 rounded-md">
-                        {genre}
-                      </Text>
-                    ))}
-                    {info?.tags?.slice(0, 3)?.map((tag: string) => (
-                      <Text
-                        key={tag}
-                        className="text-white text-lg bg-tertiary px-2 rounded-md">
-                        {tag}
-                      </Text>
-                    ))}
-                  </View>
-                  {/* Awards */}
-                  {meta?.awards && (
-                    <View className="mb-2 w-full flex-row items-baseline gap-2">
-                      <Text className="text-white text- font-semibold">
-                        Awards:
-                      </Text>
-                      <Text className="text-white text-xs px-1 bg-tertiary rounded-sm">
-                        {meta?.awards?.length > 50
-                          ? meta?.awards.slice(0, 50) + '...'
-                          : meta?.awards}
-                      </Text>
-                    </View>
-                  )}
-                  {/* cast  */}
-                  {(meta?.cast?.length! > 0 || info?.cast?.length! > 0) && (
-                    <View className="mb-2 w-full flex-row items-start gap-2">
-                      <Text className="text-white text-lg font-semibold pt-[0.9px]">
-                        Cast
-                      </Text>
-                      <View className="flex-row gap-1 flex-wrap">
-                        {meta?.cast
-                          ?.slice(0, 3)
-                          .map((actor: string, index: number) => (
-                            <Text
-                              key={actor}
-                              numberOfLines={1}
-                              className={`text-xs bg-tertiary p-1 px-2 rounded-md ${
-                                index % 3 === 0
-                                  ? 'text-red-500'
-                                  : index % 3 === 1
-                                    ? 'text-blue-500'
-                                    : 'text-green-500'
-                              }`}>
-                              {actor}
-                            </Text>
-                          ))}
-                        {info?.cast
-                          ?.slice(0, 3)
-                          .map((actor: string, index: number) => (
-                            <Text
-                              key={actor}
-                              className={`text-xs bg-tertiary p-1 px-2 rounded-md ${
-                                index % 3 === 0
-                                  ? 'text-red-500'
-                                  : index % 3 === 1
-                                    ? 'text-blue-500'
-                                    : 'text-green-500'
-                              }`}>
-                              {actor}
-                            </Text>
-                          ))}
-                      </View>
-                    </View>
-                  )}
-                  {/* synopsis */}
-                  <View className="mb-2 w-full flex-row items-center justify-between">
-                    <SkeletonLoader show={infoLoading} height={25} width={180}>
-                      <View className="flex-row items-center gap-2">
-                        <Text className="text-white text-lg font-semibold">
-                          Synopsis
-                        </Text>
-                        <Text className="text-white text-xs bg-tertiary p-1 px-2 rounded-md">
-                          {route.params.provider || provider.value}
-                        </Text>
-                      </View>
-                    </SkeletonLoader>
-                    <View className="flex-row items-center gap-4 mb-1">
-                      {meta?.trailers && meta?.trailers.length > 0 && (
-                        <MaterialCommunityIcons
-                          name="movie-open"
-                          size={25}
-                          color="rgb(156 163 175)"
-                          onPress={() =>
-                            Linking.openURL(
-                              'https://www.youtube.com/watch?v=' +
-                                meta?.trailers?.[0]?.source,
-                            )
-                          }
-                        />
-                      )}
-                      {inLibrary ? (
-                        <Ionicons
-                          name="bookmark"
-                          size={30}
-                          color={primary}
-                          onPress={() => removeLibrary()}
-                        />
-                      ) : (
-                        <Ionicons
-                          name="bookmark-outline"
-                          size={30}
-                          color={primary}
-                          onPress={() => addLibrary()}
-                        />
-                      )}
-                      <TouchableOpacity
-                        onPress={() => openThreeDotsMenu()}
-                        ref={threeDotsRef}>
-                        <MaterialCommunityIcons
-                          name="dots-vertical"
-                          size={25}
-                          color="rgb(156 163 175)"
-                        />
-                      </TouchableOpacity>
-                      {
-                        <Modal
-                          animationType="none"
-                          transparent={true}
-                          visible={threeDotsMenuOpen}
-                          onRequestClose={() => {
-                            setThreeDotsMenuOpen(false);
-                          }}>
-                          <Pressable
-                            onPress={() => setThreeDotsMenuOpen(false)}
-                            className="flex-1 bg-opacity-50">
-                            <View
-                              className="rounded-md p-2 w-48 bg-quaternary absolute right-10 top-[330px]"
-                              style={{
-                                top: menuPosition.top,
-                                right: menuPosition.right,
-                              }}>
-                              {webUrl ? (
-                                <TouchableOpacity
-                                  className="flex-row items-center gap-2"
-                                  onPress={() => {
-                                    setThreeDotsMenuOpen(false);
-                                    navigation.navigate('Webview', {
-                                      link: webUrl,
-                                    });
-                                  }}>
-                                  <MaterialCommunityIcons
-                                    name="web"
-                                    size={21}
-                                    color="rgb(156 163 175)"
-                                  />
-                                  <Text className="text-white text-base">
-                                    Open in Web
-                                  </Text>
-                                </TouchableOpacity>
-                              ) : null}
-                              {/* search */}
-                              <TouchableOpacity
-                                className={`flex-row items-center gap-2 ${
-                                  webUrl ? 'mt-1' : ''
-                                }`}
-                                onPress={async () => {
-                                  setThreeDotsMenuOpen(false);
-                                  //@ts-ignore
-                                  searchNavigation.navigate('SearchStack', {
-                                    screen: 'SearchResults',
-                                    params: {
-                                      filter: displayTitle,
-                                    },
-                                  });
-                                }}>
-                                <Ionicons
-                                  name="search"
-                                  size={21}
-                                  color="rgb(156 163 175)"
-                                />
-                                <Text className="text-white text-base">
-                                  Search Title
-                                </Text>
-                              </TouchableOpacity>
-                            </View>
-                          </Pressable>
-                        </Modal>
-                      }
-                    </View>
-                  </View>
-                  <SkeletonLoader show={infoLoading} height={85} width={'100%'}>
-                    <Text className="text-gray-200 text-sm px-2 py-1 bg-tertiary rounded-md">
-                      {synopsis.length > 180 && !readMore
-                        ? synopsis.slice(0, 180) + '... '
-                        : synopsis}
-                      {synopsis.length > 180 && !readMore && (
-                        <Text
-                          onPress={() => setReadMore(!readMore)}
-                          className="text-white font-extrabold text-xs px-2 bg-tertiary rounded-md">
-                          read more
-                        </Text>
-                      )}
-                    </Text>
-                  </SkeletonLoader>
-                  {/* cast */}
-                </View>
-                <View className="p-4 bg-black">
-                  {infoLoading ? (
-                    <View className="gap-y-3 items-start mb-4 p-3">
-                      <SkeletonLoader show={true} height={30} width={80} />
-                      {[...Array(1)].map((_, i) => (
-                        <View
-                          className="bg-tertiary p-1 rounded-md gap-3 mt-3"
-                          key={i}>
-                          <SkeletonLoader
-                            show={true}
-                            height={20}
-                            width={'100%'}
-                          />
-                        </View>
-                      ))}
+                <ContentOverview
+                  backgroundImage={backgroundImage}
+                  cast={cast}
+                  genres={meta?.genres}
+                  inLibrary={inLibrary}
+                  isLoading={isLoading}
+                  logo={displayLogo}
+                  onBack={navigation.goBack}
+                  onOpenWeb={
+                    webUrl
+                      ? () => navigation.navigate('Webview', {link: webUrl})
+                      : undefined
+                  }
+                  onSearchTitle={searchTitle}
+                  onToggleLibrary={toggleLibrary}
+                  onToggleSynopsis={() => setReadMore(value => !value)}
+                  providerName={contentProviderName}
+                  rating={meta?.imdbRating || info?.rating}
+                  readMore={readMore}
+                  runtime={meta?.runtime}
+                  synopsis={synopsis}
+                  synopsisLoading={isSynopsisLoading}
+                  tags={info?.tags}
+                  title={displayTitle}
+                  trailerUrl={trailerUrl}
+                  year={meta?.year}
+                />
+                <View style={{paddingHorizontal: 18, paddingTop: 24}}>
+                  {isLoading ? (
+                    <View style={{gap: 12}}>
+                      <SkeletonLoader show height={28} width={120} />
+                      <SkeletonLoader show height={72} width="100%" />
                     </View>
                   ) : (
                     <SeasonList
                       refreshing={refreshing}
                       refreshVersion={refreshVersion}
-                      providerValue={route.params.provider || provider.value}
+                      providerValue={providerValue}
                       LinkList={filteredLinkList}
                       poster={{
-                        logo: meta?.logo,
+                        logo: displayLogo,
                         poster: posterImage,
                         background: backgroundImage,
                       }}
@@ -529,23 +327,21 @@ export default function Info({route, navigation}: Props): React.JSX.Element {
                 </View>
               </>
             }
-            ListFooterComponent={<View className="h-16" />}
-            showsHorizontalScrollIndicator={false}
-            showsVerticalScrollIndicator={false}
+            ListFooterComponent={<View style={{height: 110}} />}
             onScroll={handleScroll}
-            scrollEventThrottle={16} // Optimize scroll performance
+            scrollEventThrottle={16}
+            showsVerticalScrollIndicator={false}
             refreshControl={
               <RefreshControl
-                colors={[primary]}
-                tintColor={primary}
-                progressBackgroundColor={'black'}
+                colors={[detailColors.primary]}
+                progressBackgroundColor={detailColors.surfaceContainer}
                 refreshing={refreshing || isRefetching}
                 onRefresh={handleRefresh}
               />
             }
           />
         </View>
-      </View>
+      </M3PaletteContext.Provider>
     </QueryErrorBoundary>
   );
 }

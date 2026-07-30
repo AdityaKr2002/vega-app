@@ -1,17 +1,13 @@
-import {
-  SafeAreaView,
-  ScrollView,
-  ActivityIndicator,
-  Text,
-  View,
-} from 'react-native';
+import {SafeAreaView, ScrollView, View} from 'react-native';
 import Slider from '../components/Slider';
 import React, {useEffect, useState, useRef, useCallback, useMemo} from 'react';
 import {NativeStackScreenProps} from '@react-navigation/native-stack';
 import {SearchStackParamList} from '../App';
-import useThemeStore from '../lib/zustand/themeStore';
 import {providerManager} from '../lib/services/ProviderManager';
 import useContentStore from '../lib/zustand/contentStore';
+import AppText from '../components/ui/Text';
+import LoadingIndicator from '../components/ui/LoadingIndicator';
+import {useM3Colors} from '../theme/M3PaletteContext';
 
 type Props = NativeStackScreenProps<SearchStackParamList, 'SearchResults'>;
 
@@ -25,7 +21,7 @@ interface SearchPageData {
 }
 
 const SearchResults = ({route}: Props): React.ReactElement => {
-  const primary = useThemeStore(state => state.primary);
+  const colors = useM3Colors();
   const installedProviders = useContentStore(state => state.installedProviders);
   const [searchData, setSearchData] = useState<SearchPageData[]>([]);
   const [emptyResults, setEmptyResults] = useState<SearchPageData[]>([]);
@@ -192,20 +188,22 @@ const SearchResults = ({route}: Props): React.ReactElement => {
   );
 
   return (
-    <SafeAreaView className="bg-black h-full w-full">
+    <SafeAreaView className="h-full w-full bg-m3-background">
       <ScrollView showsVerticalScrollIndicator={false}>
         <View className="mt-14 px-4 flex flex-row justify-between items-center gap-x-3">
-          <Text className="text-white text-2xl font-semibold ">
+          <AppText
+            role="headlineMediumEmphasized"
+            className="flex-1 text-m3-on-background">
             {isAllLoaded ? 'Searched for' : 'Searching for'}{' '}
-            <Text style={{color: primary}}>"{route?.params?.filter}"</Text>
-          </Text>
+            <AppText
+              role="headlineMediumEmphasized"
+              style={{color: colors.primary}}>
+              "{route?.params?.filter}"
+            </AppText>
+          </AppText>
           {!isAllLoaded && (
             <View className="flex justify-center items-center h-20">
-              <ActivityIndicator
-                size="small"
-                color={primary}
-                animating={true}
-              />
+              <LoadingIndicator size={32} />
             </View>
           )}
         </View>

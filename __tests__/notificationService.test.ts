@@ -105,6 +105,24 @@ describe('notification service download lifecycle', () => {
     );
   });
 
+  it('uses the show artwork accent for download notification tint', async () => {
+    await notificationService.showDownloadProgress(
+      'Episode 1',
+      'show_s1_e1',
+      0.25,
+      '25 / 100 MB',
+      'http',
+      'pause',
+      '#C98A54',
+    );
+
+    expect(mockDisplayNotification).toHaveBeenCalledWith(
+      expect.objectContaining({
+        android: expect.objectContaining({color: '#C98A54'}),
+      }),
+    );
+  });
+
   it('shows queued downloads with Start now and Cancel actions', async () => {
     await notificationService.showDownloadQueued(
       'Movie',

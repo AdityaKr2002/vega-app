@@ -1,19 +1,15 @@
-import {
-  View,
-  Text,
-  ScrollView,
-  StatusBar,
-  Switch,
-  TouchableOpacity,
-} from 'react-native';
+import {View, ScrollView, Pressable} from 'react-native';
 import React, {useState} from 'react';
-import {providersStorage} from '../../lib/storage';
-import {providersList} from '../../lib/constants';
-import useThemeStore from '../../lib/zustand/themeStore';
+import {extensionStorage, providersStorage} from '../../lib/storage';
 import {SvgUri} from 'react-native-svg';
+import AppText from '../../components/ui/Text';
+import SettingsSwitchRow from '../../components/ui/SettingsSwitchRow';
+import Surface from '../../components/ui/Surface';
+import {useM3Colors} from '../../theme/M3PaletteContext';
 
 const DisableProviders = () => {
-  const primary = useThemeStore(state => state.primary);
+  const colors = useM3Colors();
+  const providersList = extensionStorage.getInstalledProviders();
   const [disabledProviders, setDisabledProviders] = useState<string[]>(
     providersStorage.getDisabledProviders(),
   );
@@ -30,60 +26,72 @@ const DisableProviders = () => {
 
   return (
     <ScrollView
-      className="w-full h-full bg-black"
-      contentContainerStyle={{
-        paddingTop: StatusBar.currentHeight || 0,
-      }}>
-      <View className="p-5">
-        <View className="flex-row items-center justify-between mb-6">
-          <Text className="text-2xl font-bold text-white">
+      className="h-full w-full bg-m3-background"
+      showsVerticalScrollIndicator={false}
+      contentContainerStyle={{paddingBottom: 40, paddingTop: 20}}>
+      <View className="px-5">
+        <View className="mb-2 flex-row items-center justify-between">
+          <AppText
+            role="headlineLargeEmphasized"
+            className="text-m3-on-background">
             Disable Providers
-          </Text>
-          <TouchableOpacity
+          </AppText>
+          <Pressable
             onPress={enableAll}
-            className="bg-[#262626] px-4 py-2 rounded-lg">
-            <Text className="text-white text-xs">Enable All</Text>
-          </TouchableOpacity>
+            style={({pressed}) => ({
+              backgroundColor: pressed
+                ? colors.secondaryContainer
+                : colors.surfaceContainerHigh,
+              borderRadius: 16,
+              paddingHorizontal: 16,
+              paddingVertical: 10,
+            })}>
+            <AppText
+              role="labelLargeEmphasized"
+              style={{color: colors.onSurface}}>
+              Enable all
+            </AppText>
+          </Pressable>
         </View>
 
-        <Text className="text-gray-400 text-sm mb-3">
-          Disabled providers won't appear in search results
-        </Text>
+        <AppText role="bodyLarge" className="mb-6 text-m3-on-surface-variant">
+          Choose which built-in sources can appear in discovery results
+        </AppText>
 
-        <View className="bg-[#1A1A1A] rounded-xl overflow-hidden">
+        <Surface level="low" className="overflow-hidden">
           {providersList.map((provider, index) => (
             <View
               key={provider.value}
-              className={`flex-row items-center justify-between p-4 ${
-                index !== providersList.length - 1
-                  ? 'border-b border-[#262626]'
-                  : ''
-              }`}>
-              <View className="flex-row items-center">
-                <View className="bg-[#262626] p-2 rounded-lg mr-3">
-                  <SvgUri width={24} height={24} uri={provider.flag} />
-                </View>
-                <View>
-                  <Text className="text-white text-base">{provider.name}</Text>
-                  <Text className="text-gray-400 text-xs">
-                    {provider.type || 'Content Provider'}
-                  </Text>
+              className="flex-row items-center"
+              style={{
+                borderBottomColor: colors.outlineVariant,
+                borderBottomWidth: index !== providersList.length - 1 ? 1 : 0,
+              }}>
+              <View className="ml-4 flex-row items-center">
+                <View
+                  className="mr-1 h-11 w-11 items-center justify-center rounded-2xl"
+                  style={{backgroundColor: colors.secondaryContainer}}>
+                  <SvgUri width={24} height={24} uri={provider.icon} />
                 </View>
               </View>
-              <Switch
-                thumbColor={
-                  !disabledProviders.includes(provider.value) ? primary : 'gray'
-                }
-                value={!disabledProviders.includes(provider.value)}
-                onValueChange={() => toggleProvider(provider.value)}
-              />
+              <View className="flex-1">
+                <SettingsSwitchRow
+                  title={provider.display_name}
+                  description={provider.type || 'Content provider'}
+                  value={!disabledProviders.includes(provider.value)}
+                  onValueChange={() => toggleProvider(provider.value)}
+                  divider={false}
+                />
+              </View>
             </View>
           ))}
-        </View>
+        </Surface>
 
-        <Text className="text-gray-400 text-xs text-center mt-4">
+        <AppText
+          role="bodySmall"
+          className="mt-4 text-center text-m3-on-surface-variant">
           Changes will apply to new searches
-        </Text>
+        </AppText>
       </View>
     </ScrollView>
   );

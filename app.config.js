@@ -44,6 +44,7 @@ module.exports = () => {
         },
       },
     ],
+    './plugins/with-dynamic-launcher-splash.js',
     [
       'react-native-bootsplash',
       {

@@ -16,6 +16,9 @@ export enum SettingsKeys {
   SHOW_TAB_BAR_LABELS = 'showTabBarLabels',
   HIDE_DOWNLOADS_TAB = 'hideDownloadsTab',
   CUSTOM_COLOR = 'customColor',
+  ACCENT_SOURCE = 'accentSource',
+  LAUNCHER_ICON = 'launcherIcon',
+  DYNAMIC_INFO_ACCENT = 'dynamicInfoAccent',
   // Feedback settings
   HAPTIC_FEEDBACK = 'hapticFeedback',
   NOTIFICATIONS_ENABLED = 'notificationsEnabled',
@@ -60,7 +63,7 @@ export enum SettingsKeys {
 export class SettingsStorage {
   // Theme settings
   getPrimaryColor(): string {
-    return mainStorage.getString(SettingsKeys.PRIMARY_COLOR) || '#FF6347';
+    return mainStorage.getString(SettingsKeys.PRIMARY_COLOR) || '#FFFFFF';
   }
 
   setPrimaryColor(color: string): void {
@@ -76,11 +79,49 @@ export class SettingsStorage {
   }
 
   getCustomColor(): string {
-    return mainStorage.getString(SettingsKeys.CUSTOM_COLOR) || '#FF6347';
+    return mainStorage.getString(SettingsKeys.CUSTOM_COLOR) || '#FFFFFF';
   }
 
   setCustomColor(color: string): void {
     mainStorage.setString(SettingsKeys.CUSTOM_COLOR, color);
+  }
+
+  /**
+   * Accent source for the Material 3 palette. `wallpaper` follows Material You
+   * (Android 12+), `custom` derives the palette from the stored seed color.
+   */
+  getAccentSource(): 'wallpaper' | 'custom' {
+    return mainStorage.getString(SettingsKeys.ACCENT_SOURCE) === 'wallpaper'
+      ? 'wallpaper'
+      : 'custom';
+  }
+
+  setAccentSource(source: 'wallpaper' | 'custom'): void {
+    mainStorage.setString(SettingsKeys.ACCENT_SOURCE, source);
+  }
+
+  isDynamicInfoAccentEnabled(): boolean {
+    return mainStorage.getBool(SettingsKeys.DYNAMIC_INFO_ACCENT, true);
+  }
+
+  setDynamicInfoAccentEnabled(enabled: boolean): void {
+    mainStorage.setBool(SettingsKeys.DYNAMIC_INFO_ACCENT, enabled);
+  }
+
+  getLauncherIcon(): 'white' | 'tomato' | 'gray' | 'blue' | 'lavender' {
+    const icon = mainStorage.getString(SettingsKeys.LAUNCHER_ICON);
+    return icon === 'white' ||
+      icon === 'gray' ||
+      icon === 'blue' ||
+      icon === 'lavender'
+      ? icon
+      : 'white';
+  }
+
+  setLauncherIcon(
+    icon: 'white' | 'tomato' | 'gray' | 'blue' | 'lavender',
+  ): void {
+    mainStorage.setString(SettingsKeys.LAUNCHER_ICON, icon);
   }
 
   // UI preferences

@@ -116,6 +116,11 @@ export class StorageService implements IStorageService {
 export const mainStorage: IStorageService = new StorageService();
 export const cacheStorage: IStorageService = new StorageService('cache');
 
+export const clearAllMMKVStorage = (): void => {
+  cacheStorage.clearAll();
+  mainStorage.clearAll();
+};
+
 export const createZustandStorage = (
   storage: IStorageService = mainStorage,
 ): StateStorage => ({

@@ -1,4 +1,4 @@
-import {View, Text, TouchableOpacity, useWindowDimensions} from 'react-native';
+import {View, TouchableOpacity, useWindowDimensions} from 'react-native';
 import React, {useEffect, useState, useRef} from 'react';
 import {NativeStackScreenProps} from '@react-navigation/native-stack';
 import {HomeStackParamList, SearchStackParamList} from '../App';
@@ -7,12 +7,12 @@ import {Image} from 'react-native';
 import {useNavigation} from '@react-navigation/native';
 import {NativeStackNavigationProp} from '@react-navigation/native-stack';
 import useContentStore from '../lib/zustand/contentStore';
-import {MaterialIcons} from '@expo/vector-icons';
 import {settingsStorage} from '../lib/storage';
 import {FlashList} from '@shopify/flash-list';
 import SkeletonLoader from '../components/Skeleton';
-import useThemeStore from '../lib/zustand/themeStore';
 import {providerManager} from '../lib/services/ProviderManager';
+import IconButton from '../components/ui/IconButton';
+import AppText from '../components/ui/Text';
 
 type Props = NativeStackScreenProps<HomeStackParamList, 'ScrollList'>;
 
@@ -28,7 +28,6 @@ const GRID_ITEM_MARGIN = 12;
 const GRID_POSTER_ASPECT_RATIO = GRID_POSTER_HEIGHT / GRID_POSTER_WIDTH;
 
 const ScrollList = ({route}: Props): React.ReactElement => {
-  const primary = useThemeStore(state => state.primary);
   const {width: windowWidth} = useWindowDimensions();
   const navigation =
     useNavigation<NativeStackNavigationProp<SearchStackParamList>>();
@@ -48,9 +47,7 @@ const ScrollList = ({route}: Props): React.ReactElement => {
   const gridAvailableWidth = windowWidth - GRID_SCREEN_PADDING * 2;
   const gridColumns = Math.max(
     3,
-    Math.floor(
-      gridAvailableWidth / (GRID_POSTER_WIDTH + GRID_ITEM_MARGIN * 2),
-    ),
+    Math.floor(gridAvailableWidth / (GRID_POSTER_WIDTH + GRID_ITEM_MARGIN * 2)),
   );
   const gridPosterWidth =
     gridAvailableWidth / gridColumns - GRID_ITEM_MARGIN * 2;
@@ -190,23 +187,22 @@ const ScrollList = ({route}: Props): React.ReactElement => {
   );
 
   return (
-    <View className="h-full w-full bg-black p-4">
+    <View className="h-full w-full bg-m3-background p-4">
       <View className="w-full px-4 font-semibold my-6 flex-row justify-between items-center">
-        <Text className="text-2xl font-bold" style={{color: primary}}>
+        <AppText
+          role="headlineLargeEmphasized"
+          className="flex-1 text-m3-on-background">
           {route.params.title}
-        </Text>
-        <TouchableOpacity
+        </AppText>
+        <IconButton
+          icon={viewType === 1 ? 'view-grid-outline' : 'view-list-outline'}
+          label={viewType === 1 ? 'Switch to list view' : 'Switch to grid view'}
           onPress={() => {
             const newViewType = viewType === 1 ? 2 : 1;
             setViewType(newViewType);
             settingsStorage.setListViewType(newViewType);
-          }}>
-          <MaterialIcons
-            name={viewType === 1 ? 'view-module' : 'view-list'}
-            size={27}
-            color="white"
-          />
-        </TouchableOpacity>
+          }}
+        />
       </View>
       <View className="flex-1 w-full">
         <FlashList
@@ -257,18 +253,17 @@ const ScrollList = ({route}: Props): React.ReactElement => {
                       : {width: LIST_POSTER_WIDTH, height: LIST_POSTER_HEIGHT}
                   }
                 />
-                <Text
+                <AppText
+                  role={viewType === 1 ? 'bodySmall' : 'bodyLargeEmphasized'}
                   numberOfLines={2}
-                  style={
-                    viewType === 1 ? {width: gridPosterWidth} : undefined
-                  }
+                  style={viewType === 1 ? {width: gridPosterWidth} : undefined}
                   className={
                     viewType === 1
-                      ? 'text-white text-center text-xs'
-                      : 'text-white ml-3 truncate w-72 font-semibold text-base'
+                      ? 'text-m3-on-surface text-center'
+                      : 'ml-3 w-72 text-m3-on-surface'
                   }>
                   {item.title}
-                </Text>
+                </AppText>
               </TouchableOpacity>
             );
           }}
@@ -277,9 +272,11 @@ const ScrollList = ({route}: Props): React.ReactElement => {
         />
         {!isLoading && posts.length === 0 ? (
           <View className="w-full h-full flex items-center justify-center">
-            <Text className="text-white text-center font-semibold text-lg">
+            <AppText
+              role="titleLargeEmphasized"
+              className="text-center text-m3-on-surface-variant">
               No Content Found
-            </Text>
+            </AppText>
           </View>
         ) : null}
       </View>

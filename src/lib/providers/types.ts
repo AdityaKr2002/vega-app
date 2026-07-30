@@ -44,6 +44,7 @@ export interface Stream {
 export interface Info {
   title: string;
   image: string;
+  logo?: string;
   synopsis: string;
   imdbId: string;
   type: string;
@@ -59,6 +60,8 @@ export interface EpisodeLink {
   title: string;
   link: string;
   sourceLink?: string;
+  description?: string;
+  image?: string;
 }
 
 export interface Link {
@@ -69,6 +72,8 @@ export interface Link {
     title: string;
     link: string;
     type?: 'movie' | 'series';
+    description?: string;
+    image?: string;
   }[];
 }
 
@@ -163,6 +168,8 @@ export interface OpenWebViewResult {
   data: string;
   // Cookie header value, e.g. "cf_clearance=abc; other=def".
   cookies: string;
+  // Backward-compatible alias used by older provider modules.
+  cookie?: string;
   // Cookies as a name -> value map.
   cookieMap: Record<string, string>;
   // The User-Agent used by the WebView.

@@ -1,268 +1,299 @@
-import Animated, {FadeIn} from 'react-native-reanimated';
-import React, {memo, useState, useCallback} from 'react';
-import {
-  Keyboard,
-  Pressable,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-  Image,
-} from 'react-native';
-import LinearGradient from 'react-native-linear-gradient';
-import FontAwesome6 from '@expo/vector-icons/FontAwesome';
+import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import {useNavigation} from '@react-navigation/native';
 import {NativeStackNavigationProp} from '@react-navigation/native-stack';
+import React, {memo, useCallback, useEffect, useMemo, useState} from 'react';
+import {Image, Pressable, View} from 'react-native';
+import {getColors} from 'react-native-image-colors';
+import LinearGradient from 'react-native-linear-gradient';
+import Animated, {FadeIn, FadeInDown} from 'react-native-reanimated';
+import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import {HomeStackParamList, SearchStackParamList} from '../App';
+import {useHeroMetadata} from '../lib/hooks/useHomePageData';
 import useContentStore from '../lib/zustand/contentStore';
 import useHeroStore from '../lib/zustand/herostore';
-import {settingsStorage} from '../lib/storage';
-import {Feather} from '@expo/vector-icons';
-import Ionicons from '@expo/vector-icons/Ionicons';
-import {useHeroMetadata} from '../lib/hooks/useHomePageData';
+import {useM3Colors} from '../theme/M3PaletteContext';
+import {mixHex} from '../theme/seeds';
+import Button from './ui/Button';
+import AppText from './ui/Text';
 
 interface HeroProps {
   isDrawerOpen: boolean;
   onOpenDrawer: () => void;
 }
 
+const IMAGE_COLOR_FALLBACK = '#FFFFFF';
+
+const getReadableContentColor = (backgroundColor: string) => {
+  const hex = backgroundColor.replace('#', '').slice(0, 6);
+  if (hex.length !== 6) {
+    return '#211F1E';
+  }
+  const red = parseInt(hex.slice(0, 2), 16);
+  const green = parseInt(hex.slice(2, 4), 16);
+  const blue = parseInt(hex.slice(4, 6), 16);
+  return (red * 299 + green * 587 + blue * 114) / 1000 > 145
+    ? '#211F1E'
+    : '#FFFFFF';
+};
+
+const HeroTopButton = ({
+  disabled = false,
+  icon,
+  iconColor,
+  label,
+  onPress,
+}: {
+  disabled?: boolean;
+  icon: React.ComponentProps<typeof MaterialCommunityIcons>['name'];
+  iconColor: string;
+  label: string;
+  onPress: () => void;
+}) => (
+  <Pressable
+    accessibilityLabel={label}
+    accessibilityRole="button"
+    disabled={disabled}
+    onPress={onPress}
+    style={({pressed}) => ({
+      alignItems: 'center',
+      height: 48,
+      justifyContent: 'center',
+      opacity: disabled ? 0 : pressed ? 0.62 : 1,
+      width: 48,
+    })}>
+    <MaterialCommunityIcons name={icon} size={30} color={iconColor} />
+  </Pressable>
+);
+
 const Hero = memo(({isDrawerOpen, onOpenDrawer}: HeroProps) => {
-  const [searchActive, setSearchActive] = useState(false);
+  const colors = useM3Colors();
+  const insets = useSafeAreaInsets();
+  const [logoFailed, setLogoFailed] = useState(false);
+  const [searchButtonColor, setSearchButtonColor] = useState('#FFFFFF');
   const provider = useContentStore(state => state.provider);
   const hero = useHeroStore(state => state.hero);
-
-  // Memoize settings to prevent re-renders
-  const [showHamburgerMenu] = useState(() =>
-    settingsStorage.showHamburgerMenu(),
-  );
-  const [isDrawerDisabled] = useState(
-    () => settingsStorage.getBool('disableDrawer') || false,
-  );
-
   const navigation =
     useNavigation<NativeStackNavigationProp<HomeStackParamList>>();
   const searchNavigation =
     useNavigation<NativeStackNavigationProp<SearchStackParamList>>();
-
-  // Use React Query for hero metadata
-  const {
-    data: heroData,
-    isLoading,
-    error,
-  } = useHeroMetadata(hero?.link || '', provider.value);
-
-  // Memoized keyboard handler
-  const handleKeyboardHide = useCallback(() => {
-    setSearchActive(false);
-  }, []);
-
-  // Set up keyboard listener once
-  React.useEffect(() => {
-    const subscription = Keyboard.addListener(
-      'keyboardDidHide',
-      handleKeyboardHide,
-    );
-    return () => subscription?.remove();
-  }, [handleKeyboardHide]);
-
-  // Memoized handlers
-  const handleSearchSubmit = useCallback(
-    (text: string) => {
-      if (text.startsWith('https://')) {
-        navigation.navigate('Info', {link: text});
-      } else {
-        searchNavigation.navigate('ScrollList', {
-          providerValue: provider.value,
-          filter: text,
-          title: provider.display_name,
-          isSearch: true,
-        });
-      }
-    },
-    [navigation, searchNavigation, provider.value, provider.display_name],
+  const {data: heroData, error} = useHeroMetadata(
+    hero?.link || '',
+    provider.value,
   );
 
-  const handlePlayPress = useCallback(() => {
-    if (hero?.link) {
-      navigation.navigate('Info', {
-        link: hero.link,
-        provider: provider.value,
-        poster: heroData?.image || heroData?.poster || heroData?.background,
-      });
-    }
-  }, [navigation, hero?.link, provider.value, heroData]);
-
-  const handleImageError = useCallback(() => {
-    // Handle image error silently - React Query will manage retries
-    console.warn('Hero image failed to load');
-  }, []);
-
-  // Memoized image source
-  const imageSource = React.useMemo(() => {
-    const fallbackImage =
-      'https://placehold.jp/24/363636/ffffff/500x500.png?text=Vega';
-    if (!heroData) {
-      return {uri: fallbackImage};
-    }
-
-    return {
+  const imageSource = useMemo(
+    () => ({
       uri:
-        heroData.background ||
-        heroData.image ||
-        heroData.poster ||
-        fallbackImage,
-    };
-  }, [heroData]);
+        heroData?.background ||
+        heroData?.image ||
+        heroData?.poster ||
+        hero?.image ||
+        '',
+    }),
+    [hero?.image, heroData],
+  );
+  const imageUri = imageSource.uri;
 
-  // Memoized genres
-  const displayGenres = React.useMemo(() => {
-    if (!heroData) {
-      return [];
+  useEffect(() => {
+    setSearchButtonColor(IMAGE_COLOR_FALLBACK);
+  }, [hero?.link]);
+
+  useEffect(() => {
+    setLogoFailed(false);
+  }, [heroData?.logo]);
+
+  const updateSearchButtonColor = useCallback(async () => {
+    if (!imageUri) {
+      return;
     }
-    return (heroData.genre || heroData.tags || []).slice(0, 3);
-  }, [heroData]);
-
-  if (error) {
-    console.error('Hero metadata error:', error);
-  }
+    try {
+      const imageColors = await getColors(imageUri, {
+        cache: true,
+        fallback: IMAGE_COLOR_FALLBACK,
+        key: `hero-accent-v2:${imageUri}`,
+        pixelSpacing: 8,
+      });
+      const candidates =
+        imageColors.platform === 'android'
+          ? [
+              imageColors.lightVibrant,
+              imageColors.vibrant,
+              imageColors.dominant,
+              imageColors.average,
+              imageColors.darkVibrant,
+            ]
+          : imageColors.platform === 'ios'
+            ? [imageColors.primary, imageColors.secondary]
+            : [imageColors.vibrant, imageColors.dominant];
+      const extractedColor = candidates.find(
+        candidate =>
+          candidate.toUpperCase() !== IMAGE_COLOR_FALLBACK.toUpperCase(),
+      );
+      if (extractedColor) {
+        setSearchButtonColor(mixHex(extractedColor, '#FFFFFF', 0.72));
+      }
+    } catch {}
+  }, [imageUri]);
+  const genres = useMemo(
+    () => (heroData?.genre || heroData?.tags || []).slice(0, 3),
+    [heroData],
+  );
+  const openDetails = useCallback(() => {
+    if (!hero?.link) {
+      return;
+    }
+    navigation.navigate('Info', {
+      link: hero.link,
+      provider: provider.value,
+      poster: heroData?.poster || heroData?.image || heroData?.background,
+    });
+  }, [hero, heroData, navigation, provider.value]);
 
   return (
-    <View className="relative h-[55vh]">
-      {/* Header Controls */}
-      <View className="absolute pt-3 w-full top-6 px-3 mt-2 z-30 flex-row justify-between items-center">
-        {!searchActive && (
-          <View
-            className={`${
-              showHamburgerMenu && !isDrawerDisabled
-                ? 'opacity-100'
-                : 'opacity-0'
-            }`}>
-            <Pressable
-              className={`${isDrawerOpen ? 'opacity-0' : 'opacity-100'}`}
-              onPress={onOpenDrawer}>
-              <Ionicons name="menu-sharp" size={27} color="white" />
-            </Pressable>
-          </View>
-        )}
-
-        {searchActive && (
-          <Animated.View
-            entering={FadeIn.duration(300)}
-            className="w-full items-center justify-center">
-            <TextInput
-              onBlur={() => setSearchActive(false)}
-              autoFocus={true}
-              onSubmitEditing={e => handleSearchSubmit(e.nativeEvent.text)}
-              placeholder={`Search in ${provider.display_name}`}
-              className="w-[95%] px-4 h-10 rounded-full border-white border"
-              placeholderTextColor="#999"
-              style={{textAlignVertical: 'center', paddingVertical: 0}}
-            />
-          </Animated.View>
-        )}
-
-        {!searchActive && (
-          <Pressable onPress={() => setSearchActive(true)}>
-            <Feather name="search" size={24} color="white" />
-          </Pressable>
-        )}
-      </View>
-
-      {/* Hero Image */}
-      {isLoading ? (
-        <View className="h-full w-full bg-gray-800" />
+    <View
+      style={{
+        backgroundColor: colors.surfaceContainerLow,
+        borderBottomLeftRadius: 28,
+        borderBottomRightRadius: 28,
+        height: 410,
+        overflow: 'hidden',
+      }}>
+      {!imageUri ? (
+        <View
+          style={{flex: 1, backgroundColor: colors.surfaceContainerHighest}}
+        />
       ) : (
-        <Image
+        <Animated.Image
+          entering={FadeIn.duration(450)}
           source={imageSource}
-          onError={handleImageError}
-          className="h-full w-full"
-          style={{resizeMode: 'cover'}}
+          onLoad={updateSearchButtonColor}
+          resizeMode="cover"
+          style={{height: '100%', width: '100%'}}
         />
       )}
 
-      {/* Hero Content */}
-      <View className="absolute bottom-12 w-full z-20 px-6">
-        {!isLoading && heroData && (
-          <View className="gap-4 items-center">
-            {/* Title/Logo */}
-            {heroData.logo ? (
-              <Image
-                source={{uri: heroData.logo}}
-                style={{
-                  width: 200,
-                  height: 100,
-                  resizeMode: 'contain',
-                }}
-                onError={() => console.warn('Logo failed to load')}
-              />
-            ) : (
-              <Text className="text-white text-center text-2xl font-bold">
-                {heroData.name || heroData.title}
-              </Text>
-            )}
-
-            {/* Genres */}
-            {displayGenres.length > 0 && (
-              <View className="flex-row items-center justify-center space-x-2">
-                {displayGenres.map((genre: string, index: number) => (
-                  <Text
-                    key={index}
-                    className="text-white text-sm font-semibold">
-                    • {genre}
-                  </Text>
-                ))}
-              </View>
-            )}
-
-            {/* Play Button */}
-            <View className="flex-1 items-center justify-center">
-              {hero?.link && (
-                <TouchableOpacity
-                  className="bg-white px-10 py-2 rounded-lg flex-row items-center space-x-2"
-                  onPress={handlePlayPress}
-                  activeOpacity={0.8}>
-                  <FontAwesome6 name="play" size={20} color="black" />
-                  <Text className="text-black font-bold text-lg">Play</Text>
-                </TouchableOpacity>
-              )}
-            </View>
-          </View>
-        )}
-
-        {/* Loading state */}
-        {isLoading && (
-          <View className="items-center">
-            <View className="h-[45px] w-[140px] bg-gray-700 rounded" />
-          </View>
-        )}
-
-        {/* Error state */}
-        {error && !isLoading && (
-          <View className="items-center">
-            <Text className="text-white text-center text-xl font-bold">
-              {hero?.title || 'Content Unavailable'}
-            </Text>
-            <Text className="text-gray-400 text-sm mt-2">
-              Unable to load details
-            </Text>
-          </View>
-        )}
-      </View>
-
-      {/* Gradients */}
       <LinearGradient
-        colors={['transparent', 'rgba(0,0,0,0.8)', 'black']}
-        locations={[0, 0.7, 1]}
-        className="absolute h-full w-full"
+        colors={[
+          'rgba(0,0,0,0.2)',
+          'rgba(0,0,0,0.08)',
+          'rgba(0,0,0,0.72)',
+          colors.background,
+        ]}
+        locations={[0, 0.28, 0.7, 1]}
+        style={{position: 'absolute', inset: 0}}
       />
 
-      {searchActive && (
-        <LinearGradient
-          colors={['black', 'transparent']}
-          locations={[0, 0.3]}
-          className="absolute h-[30%] w-full"
+      <View
+        style={{
+          alignItems: 'center',
+          flexDirection: 'row',
+          justifyContent: 'space-between',
+          left: 16,
+          position: 'absolute',
+          right: 16,
+          top: insets.top + 6,
+        }}>
+        <HeroTopButton
+          icon="menu"
+          iconColor={searchButtonColor}
+          label="Open provider drawer"
+          disabled={isDrawerOpen}
+          onPress={onOpenDrawer}
         />
-      )}
+        <HeroTopButton
+          icon="magnify"
+          iconColor={searchButtonColor}
+          label="Search"
+          onPress={() => searchNavigation.navigate('Search')}
+        />
+      </View>
+
+      <Animated.View
+        entering={FadeInDown.delay(100).springify().damping(18).stiffness(180)}
+        style={{
+          alignItems: 'center',
+          bottom: 22,
+          left: 20,
+          position: 'absolute',
+          right: 20,
+        }}>
+        {heroData?.logo && !logoFailed ? (
+          <Image
+            source={{uri: heroData.logo}}
+            onError={() => setLogoFailed(true)}
+            resizeMode="contain"
+            style={{height: 94, width: 280}}
+          />
+        ) : heroData?.title || hero?.title ? (
+          <AppText
+            numberOfLines={2}
+            role="headlineLarge"
+            style={{
+              color: '#FFFFFF',
+              maxWidth: 300,
+              textAlign: 'center',
+            }}>
+            {heroData?.title || hero?.title}
+          </AppText>
+        ) : null}
+
+        {genres.length > 0 ? (
+          <View
+            style={{
+              flexDirection: 'row',
+              flexWrap: 'wrap',
+              gap: 8,
+              justifyContent: 'center',
+              marginTop: 10,
+            }}>
+            {genres.map((genre: string) => (
+              <View
+                key={genre}
+                style={{
+                  backgroundColor: 'rgba(32, 28, 28, 0.82)',
+                  borderColor: 'rgba(255,255,255,0.24)',
+                  borderRadius: 12,
+                  borderWidth: 1,
+                  paddingHorizontal: 10,
+                  paddingVertical: 6,
+                }}>
+                <AppText
+                  role="labelMediumEmphasized"
+                  style={{color: '#FFFFFF'}}>
+                  {genre}
+                </AppText>
+              </View>
+            ))}
+          </View>
+        ) : null}
+
+        <View
+          style={{
+            flexDirection: 'row',
+            justifyContent: 'center',
+            marginTop: 14,
+            width: '100%',
+          }}>
+          <Button
+            variant="filled"
+            containerColor={searchButtonColor}
+            contentColor={getReadableContentColor(searchButtonColor)}
+            onPress={openDetails}>
+            Watch now
+          </Button>
+        </View>
+        {error ? (
+          <AppText
+            role="bodySmall"
+            style={{
+              color: colors.onSurfaceVariant,
+              marginTop: 10,
+              textAlign: 'center',
+            }}>
+            Some featured details are unavailable
+          </AppText>
+        ) : null}
+      </Animated.View>
     </View>
   );
 });

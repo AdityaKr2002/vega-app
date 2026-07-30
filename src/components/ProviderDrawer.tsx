@@ -1,14 +1,14 @@
 import {View, Text, ScrollView, TouchableOpacity} from 'react-native';
 import React from 'react';
 import useContentStore from '../lib/zustand/contentStore';
-import useThemeStore from '../lib/zustand/themeStore';
 import {MaterialIcons} from '@expo/vector-icons';
+import {useM3Colors} from '../theme/M3PaletteContext';
 
 const ProviderDrawer = ({onClose}: {onClose: () => void}) => {
   const {provider, setProvider, installedProviders} = useContentStore(
     state => state,
   );
-  const primary = useThemeStore(state => state.primary);
+  const primary = useM3Colors().primary;
 
   return (
     <View className="flex-1" style={{backgroundColor: 'rgba(0,0,0,0.8)'}}>

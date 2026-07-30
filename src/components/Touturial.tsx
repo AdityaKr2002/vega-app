@@ -2,7 +2,6 @@ import {View, Text, StatusBar, TouchableOpacity} from 'react-native';
 import React from 'react';
 import {useState} from 'react';
 import useContentStore from '../lib/zustand/contentStore';
-import useThemeStore from '../lib/zustand/themeStore';
 import Animated, {FadeInRight} from 'react-native-reanimated';
 import {
   NavigationProp,
@@ -13,10 +12,12 @@ import {MaterialCommunityIcons} from '@expo/vector-icons';
 import {settingsStorage} from '../lib/storage';
 import ReactNativeHapticFeedback from 'react-native-haptic-feedback';
 import {RootStackParamList} from '../App';
+import {useM3Colors} from '../theme/M3PaletteContext';
+import * as DocumentPicker from 'expo-document-picker';
 
 const Tutorial = () => {
   const navigation = useNavigation<NavigationProp<RootStackParamList>>();
-  const primary = useThemeStore(state => state.primary);
+  const colors = useM3Colors();
   const {provider: currentProvider, installedProviders} = useContentStore(
     state => state,
   );
@@ -66,31 +67,108 @@ const Tutorial = () => {
     });
   };
 
+  const handlePlayLocalFile = async () => {
+    const result = await DocumentPicker.getDocumentAsync({
+      type: 'video/*',
+      multiple: false,
+      copyToCacheDirectory: false,
+    });
+
+    if (result.canceled || !result.assets?.[0]) {
+      return;
+    }
+
+    const video = result.assets[0];
+    navigation.navigate('Player', {
+      linkIndex: 0,
+      episodeList: [
+        {
+          id: video.uri,
+          title: video.name || 'Local video',
+          link: video.uri,
+        },
+      ],
+      directUrl: video.uri,
+      type: 'mp4',
+      primaryTitle: video.name || 'Local video',
+      poster: {},
+    });
+  };
+
   return showTutorial ? (
-    <View className="absolute inset-0 z-50 bg-black/90 justify-center items-center w-full h-full">
+    <View
+      style={{backgroundColor: colors.background}}
+      className="absolute inset-0 z-50 justify-center items-center w-full h-full">
       <Animated.View
         entering={FadeInRight.duration(500)}
         className="rounded-2xl p-6 w-full max-w-sm items-center">
         <MaterialCommunityIcons
           name="package-variant-closed"
           size={64}
-          color="#6B7280"
+          color={colors.onSurfaceVariant}
           style={{marginBottom: 16}}
         />
-        <Text className="text-white text-2xl font-bold text-center mb-4">
+        <Text
+          style={{
+            color: colors.onSurface,
+            fontSize: 24,
+            fontWeight: '700',
+            textAlign: 'center',
+            marginBottom: 16,
+          }}>
           No Provider Installed
         </Text>
-        <Text className="text-gray-400 text-base text-center mb-6 leading-6">
-          You need to install at least one provider to start watching content.
-          Providers give you access to different streaming sources.
+        <Text
+          style={{
+            color: colors.onSurfaceVariant,
+            fontSize: 16,
+            textAlign: 'center',
+            marginBottom: 24,
+            lineHeight: 24,
+          }}>
+          Connect your cloud provider to play network streams or play local
+          content.
         </Text>
         <TouchableOpacity
           onPress={handleGoToExtensions}
           className="px-6 py-3 rounded-xl w-full flex-row items-center justify-center"
-          style={{backgroundColor: primary}}>
-          <MaterialCommunityIcons name="download" size={20} color="white" />
-          <Text className="text-white font-semibold ml-2 text-base">
-            Install Providers
+          style={{backgroundColor: colors.primary}}>
+          <MaterialCommunityIcons
+            name="download"
+            size={20}
+            color={colors.onPrimary}
+          />
+          <Text
+            style={{
+              color: colors.onPrimary,
+              fontSize: 16,
+              fontWeight: '600',
+              marginLeft: 8,
+            }}>
+            Install Cloud Providers
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          onPress={handlePlayLocalFile}
+          className="px-6 py-3 rounded-xl w-full flex-row items-center justify-center mt-3"
+          style={{
+            backgroundColor: colors.secondaryContainer,
+            borderColor: colors.outline,
+            borderWidth: 1,
+          }}>
+          <MaterialCommunityIcons
+            name="play-circle-outline"
+            size={20}
+            color={colors.onSecondaryContainer}
+          />
+          <Text
+            style={{
+              color: colors.onSecondaryContainer,
+              fontSize: 16,
+              fontWeight: '600',
+              marginLeft: 8,
+            }}>
+            Play local file
           </Text>
         </TouchableOpacity>
       </Animated.View>
