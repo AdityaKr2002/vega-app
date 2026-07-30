@@ -107,7 +107,7 @@ module.exports = () => {
       autolinking: {exclude: ['expo-splash-screen']},
       plugins,
       slug: 'vega',
-      version: '3.5.0',
+      version: '4.0.0',
       userInterfaceStyle: 'dark',
       experiments: {
         reactCompiler: true,
@@ -118,7 +118,7 @@ module.exports = () => {
           : {}),
         minSdkVersion: 28,
         package: PACKAGE_NAME,
-        versionCode: 178,
+        versionCode: 180,
         permissions: [
           'FOREGROUND_SERVICE',
           'FOREGROUND_SERVICE_DATA_SYNC',
