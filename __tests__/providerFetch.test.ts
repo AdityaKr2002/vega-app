@@ -6,11 +6,7 @@ jest.mock('axios', () => ({
 }));
 
 jest.mock('../src/lib/services/cookieManager', () => ({
-  buildCookieString: (cookies: Record<string, string>) =>
-    Object.entries(cookies)
-      .map(([name, value]) => `${name}=${value}`)
-      .join('; '),
-  getCookies: jest.fn(),
+  getCookieHeader: jest.fn(),
 }));
 
 jest.mock('../src/lib/sandbox/rateLimiter', () => ({
@@ -20,11 +16,11 @@ jest.mock('../src/lib/sandbox/rateLimiter', () => ({
 }));
 
 import axios from 'axios';
-import {getCookies} from '../src/lib/services/cookieManager';
+import {getCookieHeader} from '../src/lib/services/cookieManager';
 import {providerFetch} from '../src/lib/sandbox/providerFetch';
 
 const mockAxiosRequest = jest.mocked(axios.request);
-const mockGetCookies = jest.mocked(getCookies);
+const mockGetCookieHeader = jest.mocked(getCookieHeader);
 
 const emptyRequest = {
   method: 'POST',
@@ -35,7 +31,8 @@ const emptyRequest = {
 describe('providerFetch cookies', () => {
   beforeEach(() => {
     mockAxiosRequest.mockReset();
-    mockGetCookies.mockReset();
+    mockGetCookieHeader.mockReset();
+    mockGetCookieHeader.mockResolvedValue('');
     mockAxiosRequest.mockResolvedValue({
       status: 200,
       statusText: 'OK',
@@ -46,11 +43,11 @@ describe('providerFetch cookies', () => {
   });
 
   it('injects cookies scoped to the request URL', async () => {
-    mockGetCookies.mockResolvedValue({session: 'mobile-token'});
+    mockGetCookieHeader.mockResolvedValue('session=mobile-token');
 
     await providerFetch('https://drive.example.com/form', emptyRequest);
 
-    expect(mockGetCookies).toHaveBeenCalledWith(
+    expect(mockGetCookieHeader).toHaveBeenCalledWith(
       'https://drive.example.com/form',
     );
     expect(mockAxiosRequest).toHaveBeenCalledWith(
@@ -61,7 +58,7 @@ describe('providerFetch cookies', () => {
   });
 
   it('does not replace a provider supplied cookie header', async () => {
-    mockGetCookies.mockResolvedValue({session: 'native-token'});
+    mockGetCookieHeader.mockResolvedValue('session=native-token');
 
     await providerFetch('https://drive.example.com/form', {
       ...emptyRequest,
@@ -72,6 +69,26 @@ describe('providerFetch cookies', () => {
       expect.objectContaining({
         headers: expect.objectContaining({
           cookie: 'session=provider-token',
+        }),
+      }),
+    );
+  });
+
+  it('adds native companion cookies to a provider supplied WAF cookie', async () => {
+    mockGetCookieHeader.mockResolvedValue(
+      'cf_clearance=native-token; wordpress_test_cookie=WP%20Cookie%20check',
+    );
+
+    await providerFetch('https://cinevood.example/hollywood/', {
+      ...emptyRequest,
+      headers: [['Cookie', 'cf_clearance=provider-token']],
+    });
+
+    expect(mockAxiosRequest).toHaveBeenCalledWith(
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          Cookie:
+            'cf_clearance=provider-token; wordpress_test_cookie=WP%20Cookie%20check',
         }),
       }),
     );

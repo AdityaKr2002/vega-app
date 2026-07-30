@@ -1,5 +1,3 @@
-
-
 interface NativeCookie {
   name: string;
   value: string;
@@ -35,7 +33,6 @@ export const pickUserAgent = (
   return key ? h[key] : undefined;
 };
 
-
 export const getCookieObjects = async (
   url: string,
 ): Promise<NativeCookie[]> => {
@@ -45,21 +42,28 @@ export const getCookieObjects = async (
   }
   try {
     await CookieManager.flush();
-  } catch { }
+  } catch {}
   const stores = await Promise.all([
     CookieManager.get(url, true).catch(() => ({})),
     CookieManager.get(url, false).catch(() => ({})),
   ]);
-  const byName: Record<string, NativeCookie> = {};
+  const cookies: NativeCookie[] = [];
+  const seen = new Set<string>();
   for (const store of stores) {
     for (const key of Object.keys(store)) {
       const cookie = store[key] as NativeCookie;
       if (cookie?.name) {
-        byName[cookie.name] = cookie;
+        const identity = `${cookie.name}\u0000${cookie.domain ?? ''}\u0000${
+          cookie.path ?? ''
+        }\u0000${cookie.value}`;
+        if (!seen.has(identity)) {
+          seen.add(identity);
+          cookies.push(cookie);
+        }
       }
     }
   }
-  return Object.values(byName);
+  return cookies;
 };
 
 // Reads cookies for `url` as a name -> value map.
@@ -74,8 +78,18 @@ export const getCookies = async (
   return map;
 };
 
-// Deletes a specific cookie for a URL 
-export const deleteCookie = async (url: string, name: string): Promise<void> => {
+// Builds the request header from native cookie objects without collapsing
+// same-name cookies that are scoped to different domains or paths.
+export const getCookieHeader = async (url: string): Promise<string> => {
+  const objects = await getCookieObjects(url);
+  return objects.map(cookie => `${cookie.name}=${cookie.value}`).join('; ');
+};
+
+// Deletes a specific cookie for a URL
+export const deleteCookie = async (
+  url: string,
+  name: string,
+): Promise<void> => {
   const CookieManager = getCookieManager();
   if (!CookieManager) return;
   try {
@@ -112,4 +126,3 @@ export const buildCookieString = (map: Record<string, string>): string =>
   Object.entries(map)
     .map(([name, value]) => `${name}=${value}`)
     .join('; ');
-

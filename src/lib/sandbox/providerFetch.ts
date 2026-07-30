@@ -1,6 +1,6 @@
 import axios, {type AxiosRequestConfig} from 'axios';
 import {headers as commonHeaders} from '../providers/headers';
-import {buildCookieString, getCookies} from '../services/cookieManager';
+import {getCookieHeader} from '../services/cookieManager';
 import {bytesToBase64, base64ToBytes} from './base64';
 import {providerRateLimiter} from './rateLimiter';
 import {
@@ -106,10 +106,28 @@ export const providerFetch = async (
     ) {
       headers['Content-Type'] = body.contentType;
     }
-    if (!hasHeader(headers, 'cookie')) {
-      const cookies = buildCookieString(await getCookies(url.toString()));
-      if (cookies) {
-        headers.Cookie = cookies;
+    const nativeCookieHeader = await getCookieHeader(url.toString());
+    const cookieKey = Object.keys(headers).find(
+      key => key.toLowerCase() === 'cookie',
+    );
+    if (nativeCookieHeader) {
+      if (cookieKey && headers[cookieKey]) {
+        const suppliedCookieNames = new Set(
+          headers[cookieKey]
+            .split(';')
+            .map(cookie => cookie.split('=', 1)[0]?.trim())
+            .filter(Boolean),
+        );
+        const missingNativeCookies = nativeCookieHeader
+          .split(';')
+          .map(cookie => cookie.trim())
+          .filter(cookie => !suppliedCookieNames.has(cookie.split('=', 1)[0]));
+        if (missingNativeCookies.length) {
+          headers[cookieKey] =
+            `${headers[cookieKey]}; ${missingNativeCookies.join('; ')}`;
+        }
+      } else {
+        headers.Cookie = nativeCookieHeader;
       }
     }
 
