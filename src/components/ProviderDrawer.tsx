@@ -12,7 +12,7 @@ const ProviderDrawer = ({onClose}: {onClose: () => void}) => {
 
   return (
     <View className="flex-1" style={{backgroundColor: 'rgba(0,0,0,0.8)'}}>
-      <View className="mt-8 px-4 pb-4 border-b border-white/10">
+      <View className="mt-10 px-4 pb-4 border-b border-white/10">
         <Text className="text-white text-2xl font-bold">Select Provider</Text>
         <Text className="text-gray-400 mt-1 text-sm">Content source</Text>
       </View>

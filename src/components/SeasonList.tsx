@@ -732,6 +732,7 @@ const SeasonList: React.FC<SeasonListProps> = ({
             }
             getLabel={item => item.title || 'Unknown'}
             onChange={handleSeasonChange}
+            showFullOptionLabels
           />
         )}
 
@@ -777,6 +778,7 @@ const SeasonList: React.FC<SeasonListProps> = ({
         }
         getLabel={item => item.title || 'Unknown'}
         onChange={handleSeasonChange}
+        showFullOptionLabels
         style={{marginBottom: 8}}
       />
 

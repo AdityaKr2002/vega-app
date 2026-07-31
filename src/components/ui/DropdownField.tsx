@@ -22,6 +22,7 @@ interface DropdownFieldProps<T> {
   getLabel: (option: T) => string;
   onChange: (option: T) => void;
   placeholder?: string;
+  showFullOptionLabels?: boolean;
   style?: ViewStyle;
 }
 
@@ -32,6 +33,7 @@ const DropdownField = <T,>({
   getLabel,
   onChange,
   placeholder = 'Select',
+  showFullOptionLabels = false,
   style,
 }: DropdownFieldProps<T>) => {
   const colors = useM3Colors();
@@ -119,8 +121,9 @@ const DropdownField = <T,>({
                 <DropdownMenuItem.Text>
                   <Text
                     color={selected ? colors.primary : colors.onSurface}
-                    maxLines={2}
-                    overflow="ellipsis"
+                    maxLines={showFullOptionLabels ? undefined : 2}
+                    overflow={showFullOptionLabels ? undefined : 'ellipsis'}
+                    softWrap={showFullOptionLabels}
                     style={{fontWeight: selected ? '700' : '400'}}>
                     {getLabel(option)}
                   </Text>
