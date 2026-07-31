@@ -1,8 +1,9 @@
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
+import {Host, LoadingIndicator} from '@expo/ui/jetpack-compose';
+import {size as indicatorSize} from '@expo/ui/jetpack-compose/modifiers';
 import {StatusBar} from 'expo-status-bar';
 import React, {useEffect, useMemo, useRef, useState} from 'react';
 import {
-  ActivityIndicator,
   FlatList,
   Image,
   Linking,
@@ -20,7 +21,10 @@ import type {
   TmdbStoryCollectionItem,
   TmdbStoryData,
 } from '../../../lib/hooks/useTmdbStory';
-import {useM3Colors} from '../../../theme/M3PaletteContext';
+import {
+  useM3Colors,
+  useM3HostTheme,
+} from '../../../theme/M3PaletteContext';
 import AppText from '../../../components/ui/Text';
 
 interface InfoStoryModalProps {
@@ -647,6 +651,7 @@ const InfoStoryModal = ({
   visible,
 }: InfoStoryModalProps) => {
   const colors = useM3Colors();
+  const hostTheme = useM3HostTheme();
   const {width} = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const [pageIndex, setPageIndex] = useState(0);
@@ -829,14 +834,12 @@ const InfoStoryModal = ({
               padding: 28,
             }}>
             {isFetching ? (
-              <>
-                <ActivityIndicator size="large" color={colors.primary} />
-                <AppText
-                  role="titleMedium"
-                  style={{color: colors.onSurfaceVariant, marginTop: 18}}>
-                  Building the story…
-                </AppText>
-              </>
+              <Host matchContents {...hostTheme}>
+                <LoadingIndicator
+                  color={colors.primary}
+                  modifiers={[indicatorSize(56, 56)]}
+                />
+              </Host>
             ) : (
               <>
                 <MaterialCommunityIcons
