@@ -17,10 +17,6 @@ import {Clipboard} from 'react-native';
 import {TextTrackType} from 'react-native-video';
 import {settingsStorage} from '../lib/storage';
 import {useM3Colors} from '../theme/M3PaletteContext';
-import {LEGACY_TERTIARY_BACKGROUND} from '../theme/seeds';
-
-const SERVER_TEXT = '#F5F0EF';
-// const SERVER_OUTLINE = '#494240';
 
 type Props = {
   data: Stream[];
@@ -138,17 +134,25 @@ const DownloadBottomSheet = ({
                   width={Dimensions.get('window').width - 30}
                   height={35}
                   marginVertical={5}
+                  baseColor={colors.surfaceContainerHigh}
+                  highlightColor={colors.surfaceContainerHighest}
+                  style={{borderRadius: 12}}
                 />
               ))
             : activeTab === 1
               ? streams.map(item => (
                   <TouchableOpacity
                     key={item.link}
+                    activeOpacity={0.72}
                     style={{
-                      backgroundColor: LEGACY_TERTIARY_BACKGROUND,
-                      // borderColor: SERVER_OUTLINE,
+                      backgroundColor: colors.surfaceContainerHigh,
+                      alignItems: 'center',
+                      borderColor: colors.outlineVariant,
                       borderRadius: 16,
                       borderWidth: 1,
+                      flexDirection: 'row',
+                      gap: 12,
+                      justifyContent: 'space-between',
                       marginVertical: 5,
                       paddingHorizontal: 16,
                       paddingVertical: 14,
@@ -169,11 +173,32 @@ const DownloadBottomSheet = ({
                     }}>
                     <Text
                       style={{
-                        color: SERVER_TEXT,
+                        color: colors.onSurface,
+                        flex: 1,
                         fontWeight: '600',
                       }}>
                       {item.server}
                     </Text>
+                    {item.quality ? (
+                      <View
+                        style={{
+                          backgroundColor: colors.secondaryContainer,
+                          borderRadius: 12,
+                          paddingHorizontal: 10,
+                          paddingVertical: 5,
+                        }}>
+                        <Text
+                          style={{
+                            color: colors.onSecondaryContainer,
+                            fontSize: 12,
+                            fontWeight: '700',
+                          }}>
+                          {item.quality.toLowerCase().endsWith('p')
+                            ? item.quality
+                            : `${item.quality}p`}
+                        </Text>
+                      </View>
+                    ) : null}
                   </TouchableOpacity>
                 ))
               : subtitle.length > 0
@@ -181,9 +206,10 @@ const DownloadBottomSheet = ({
                     subs?.map(item => (
                       <TouchableOpacity
                         key={item.uri}
+                        activeOpacity={0.72}
                         style={{
-                          backgroundColor: LEGACY_TERTIARY_BACKGROUND,
-                          // borderColor: SERVER_OUTLINE,
+                          backgroundColor: colors.surfaceContainerHigh,
+                          borderColor: colors.outlineVariant,
                           borderRadius: 16,
                           borderWidth: 1,
                           marginVertical: 5,
@@ -210,7 +236,7 @@ const DownloadBottomSheet = ({
                           });
                           bottomSheetRef.current?.close?.();
                         }}>
-                        <Text style={{color: SERVER_TEXT}}>
+                        <Text style={{color: colors.onSurface}}>
                           {item.language}
                           {' - '} {item.title}
                         </Text>

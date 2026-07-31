@@ -11,6 +11,8 @@ type SkeletonLoaderProps = {
   marginVertical?: number;
   children?: React.ReactNode;
   show?: boolean;
+  baseColor?: string;
+  highlightColor?: string;
 };
 const SkeletonLoader = ({
   width,
@@ -20,6 +22,8 @@ const SkeletonLoader = ({
   marginVertical = 8,
   children,
   show = true,
+  baseColor,
+  highlightColor,
 }: SkeletonLoaderProps) => {
   const animatedValue = useRef(new Animated.Value(0)).current;
 
@@ -40,7 +44,12 @@ const SkeletonLoader = ({
 
   const lightColors = ['#E0E0E0', '#F5F5F5', '#E0E0E0'];
   const darkColors = ['#333333', '#444', '#333333'];
-  const colors = darkMode ? darkColors : lightColors;
+  const fallbackColors = darkMode ? darkColors : lightColors;
+  const colors =
+    baseColor && highlightColor
+      ? [baseColor, highlightColor, baseColor]
+      : fallbackColors;
+  const resolvedBaseColor = baseColor || fallbackColors[0];
 
   const animationWidth = typeof width === 'string' ? 200 : width;
   const translateX = animatedValue.interpolate({
@@ -53,7 +62,12 @@ const SkeletonLoader = ({
   }
 
   return (
-    <View style={[styles.skeleton, {width, height, marginVertical}, style]}>
+    <View
+      style={[
+        styles.skeleton,
+        {backgroundColor: resolvedBaseColor, width, height, marginVertical},
+        style,
+      ]}>
       <Animated.View
         style={{
           flex: 1,
