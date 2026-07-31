@@ -46,12 +46,15 @@ export interface Info {
   image: string;
   logo?: string;
   synopsis: string;
-  imdbId: string;
+  imdbId?: string;
+  tmdbId?: number | string;
   type: string;
+  populateMeta?: boolean;
   webUrl?: string;
   tags?: string[];
   cast?: string[];
   rating?: string;
+  trailerUrl?: string;
   linkList: Link[];
 }
 // getEpisodeLinks

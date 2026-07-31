@@ -13,16 +13,7 @@ import * as Application from 'expo-application';
 import * as Updates from 'expo-updates';
 import Constants from 'expo-constants';
 import {showAppDialog} from '../lib/zustand/appDialogStore';
-// Lazy-load Crashlytics to avoid requiring Firebase when not configured
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const getCrashlytics = (): any | null => {
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    return require('@react-native-firebase/crashlytics').default;
-  } catch {
-    return null;
-  }
-};
+import {getCrashlytics, isFirebaseNativeReady} from '../lib/utils/firebaseSafe';
 
 interface GlobalErrorBoundaryProps {
   children: React.ReactNode;
@@ -71,7 +62,9 @@ export default class GlobalErrorBoundary extends React.Component<
 
     // Report to Crashlytics
     try {
-      const hasFirebase = Boolean(Constants?.expoConfig?.extra?.hasFirebase);
+      const hasFirebase =
+        Boolean(Constants?.expoConfig?.extra?.hasFirebase) &&
+        isFirebaseNativeReady();
       if (hasFirebase) {
         const crashlytics = getCrashlytics();
         crashlytics &&

@@ -6,29 +6,22 @@ import Constants from 'expo-constants';
 import DownloadLocationPreference from './components/DownloadLocationPreference';
 import useNavigationPreferencesStore from '../../lib/zustand/navigationPreferencesStore';
 import DownloadConcurrencyPreference from './components/DownloadConcurrencyPreference';
+import TmdbApiKeyPreference from './components/TmdbApiKeyPreference';
 import AppText from '../../components/ui/Text';
 import SettingsSection from '../../components/ui/SettingsSection';
 import SettingsSwitchRow from '../../components/ui/SettingsSwitchRow';
 import Surface from '../../components/ui/Surface';
 import {useM3Colors} from '../../theme/M3PaletteContext';
-// Lazy-load Firebase to allow running without google-services.json
-const getAnalytics = (): any | null => {
-  try {
-    return require('@react-native-firebase/analytics').default;
-  } catch {
-    return null;
-  }
-};
-const getCrashlytics = (): any | null => {
-  try {
-    return require('@react-native-firebase/crashlytics').default;
-  } catch {
-    return null;
-  }
-};
+import {
+  getAnalytics,
+  getCrashlytics,
+  isFirebaseNativeReady,
+} from '../../lib/utils/firebaseSafe';
 
 const Preferences = () => {
-  const hasFirebase = Boolean(Constants?.expoConfig?.extra?.hasFirebase);
+  const hasFirebase =
+    Boolean(Constants?.expoConfig?.extra?.hasFirebase) &&
+    isFirebaseNativeReady();
   const colors = useM3Colors();
   // const [showRecentlyWatched, setShowRecentlyWatched] = useState(
   //   settingsStorage.getBool('showRecentlyWatched') || false,
@@ -200,6 +193,8 @@ const Preferences = () => {
             />
           </SettingsSection>
         ) : null}
+
+        <TmdbApiKeyPreference />
 
         <SettingsSection title="Playback">
           <SettingsSwitchRow

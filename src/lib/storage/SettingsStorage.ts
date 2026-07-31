@@ -51,6 +51,10 @@ export enum SettingsKeys {
   // Telemetry (privacy)
   TELEMETRY_OPT_IN = 'telemetryOptIn',
 
+  // Metadata services
+  TMDB_API_KEY = 'tmdbApiKey',
+  TMDB_API_KEY_REVISION = 'tmdbApiKeyRevision',
+
   // DNS over HTTPS
   DOH_ENABLED = 'dohEnabled',
   DOH_PROVIDER = 'dohProvider',
@@ -302,6 +306,27 @@ export class SettingsStorage {
 
   setTelemetryOptIn(enabled: boolean): void {
     mainStorage.setBool(SettingsKeys.TELEMETRY_OPT_IN, enabled);
+  }
+
+  getTmdbApiKey(): string {
+    return mainStorage.getString(SettingsKeys.TMDB_API_KEY)?.trim() || '';
+  }
+
+  setTmdbApiKey(apiKey: string): void {
+    const normalizedKey = apiKey.trim();
+    if (normalizedKey) {
+      mainStorage.setString(SettingsKeys.TMDB_API_KEY, normalizedKey);
+    } else {
+      mainStorage.delete(SettingsKeys.TMDB_API_KEY);
+    }
+    mainStorage.setNumber(
+      SettingsKeys.TMDB_API_KEY_REVISION,
+      this.getTmdbApiKeyRevision() + 1,
+    );
+  }
+
+  getTmdbApiKeyRevision(): number {
+    return mainStorage.getNumber(SettingsKeys.TMDB_API_KEY_REVISION) || 0;
   }
 
   // Generic get/set methods for settings not covered by specific methods

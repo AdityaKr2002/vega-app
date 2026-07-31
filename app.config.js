@@ -1,7 +1,16 @@
 const fs = require('fs');
+const path = require('path');
 
-const hasAndroidGoogleServices = fs.existsSync('./google-services.json');
-const hasIosGooglePlist = fs.existsSync('./GoogleService-Info.plist');
+const androidGoogleServicesFile = './google-services.json';
+const iosGoogleServicesFile = './GoogleService-Info.plist';
+const hasAndroidGoogleServices = fs.existsSync(
+  path.resolve(__dirname, androidGoogleServicesFile),
+);
+const hasIosGooglePlist = fs.existsSync(
+  path.resolve(__dirname, iosGoogleServicesFile),
+);
+const tmdbApiKey =
+  process.env.TMDB_API_KEY || process.env.EXPO_PUBLIC_TMDB_API_KEY || '';
 
 module.exports = () => {
   const plugins = [
@@ -114,7 +123,7 @@ module.exports = () => {
       },
       android: {
         ...(hasAndroidGoogleServices
-          ? {googleServicesFile: './google-services.json'}
+          ? {googleServicesFile: androidGoogleServicesFile}
           : {}),
         minSdkVersion: 28,
         package: PACKAGE_NAME,
@@ -153,13 +162,14 @@ module.exports = () => {
       },
       ios: {
         ...(hasIosGooglePlist
-          ? {googleServicesFile: './GoogleService-Info.plist'}
+          ? {googleServicesFile: iosGoogleServicesFile}
           : {}),
       },
       platforms: ['ios', 'android'],
       extra: {
         hasFirebase: hasAndroidGoogleServices || hasIosGooglePlist,
         isPlayStore: IS_PLAYSTORE,
+        tmdbApiKey,
       },
     },
   };

@@ -23,6 +23,7 @@ import {M3PaletteContext, useM3Colors} from '../../theme/M3PaletteContext';
 import type {MaterialColors} from '../../theme/colors';
 import {mixHex} from '../../theme/seeds';
 import ContentOverview from './components/ContentOverview';
+import InfoStoryModal from './components/InfoStoryModal';
 import InfoSkeleton from './components/InfoSkeleton';
 import StatusBarScrim from '../../components/ui/StatusBarScrim';
 
@@ -50,6 +51,7 @@ export default function Info({route, navigation}: Props): React.JSX.Element {
     watchListStorage.isInWatchList(route.params.link),
   );
   const [readMore, setReadMore] = useState(false);
+  const [storyVisible, setStoryVisible] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [refreshVersion, setRefreshVersion] = useState(0);
   const [imageAccent, setImageAccent] = useState<string>();
@@ -142,14 +144,7 @@ export default function Info({route, navigation}: Props): React.JSX.Element {
       outlineVariant: tintedSurface('#5A5A5A', 0.18),
     };
   }, [colors, imageAccent]);
-  const trailerUrl = meta?.trailers?.[0]?.source
-    ? `https://www.youtube.com/watch?v=${meta.trailers[0].source}`
-    : undefined;
   const webUrl = info?.webUrl?.trim();
-  const cast = useMemo(
-    () => Array.from(new Set([...(meta?.cast ?? []), ...(info?.cast ?? [])])),
-    [info?.cast, meta?.cast],
-  );
   const filteredLinkList = useMemo(() => {
     if (!info?.linkList) {
       return [];
@@ -275,12 +270,16 @@ export default function Info({route, navigation}: Props): React.JSX.Element {
               <>
                 <ContentOverview
                   backgroundImage={backgroundImage}
-                  cast={cast}
                   genres={meta?.genres}
                   inLibrary={inLibrary}
                   isLoading={isLoading}
                   logo={displayLogo}
                   onBack={navigation.goBack}
+                  onOpenStory={
+                    info?.tmdbId || info?.imdbId
+                      ? () => setStoryVisible(true)
+                      : undefined
+                  }
                   onOpenWeb={
                     webUrl
                       ? () => navigation.navigate('Webview', {link: webUrl})
@@ -297,7 +296,7 @@ export default function Info({route, navigation}: Props): React.JSX.Element {
                   synopsisLoading={isSynopsisLoading}
                   tags={info?.tags}
                   title={displayTitle}
-                  trailerUrl={trailerUrl}
+                  trailerUrl={info?.trailerUrl?.trim()}
                   year={meta?.year}
                 />
                 <View style={{paddingHorizontal: 18, paddingTop: 24}}>
@@ -339,6 +338,16 @@ export default function Info({route, navigation}: Props): React.JSX.Element {
                 onRefresh={handleRefresh}
               />
             }
+          />
+          <InfoStoryModal
+            fallbackBackdrop={backgroundImage}
+            fallbackOverview={synopsis}
+            fallbackTitle={displayTitle}
+            imdbId={info?.imdbId}
+            onClose={() => setStoryVisible(false)}
+            tmdbId={info?.tmdbId}
+            type={info?.type}
+            visible={storyVisible}
           />
         </View>
       </M3PaletteContext.Provider>

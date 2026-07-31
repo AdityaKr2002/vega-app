@@ -59,7 +59,11 @@ export const useContentInfo = (link: string, providerValue: string) => {
 };
 
 // Hook for fetching enhanced metadata from Stremio
-export const useEnhancedMetadata = (imdbId: string, type: string) => {
+export const useEnhancedMetadata = (
+  imdbId: string,
+  type: string,
+  enabled = false,
+) => {
   const cacheKey = getEnhancedMetadataCacheKey(imdbId, type);
   const query = useQuery({
     queryKey: ['enhancedMeta', imdbId, type],
@@ -80,11 +84,14 @@ export const useEnhancedMetadata = (imdbId: string, type: string) => {
         return null;
       }
     },
-    enabled: !!imdbId && !!type,
+    enabled: enabled && !!imdbId && !!type,
     staleTime: 30 * 60 * 1000, // 30 minutes - metadata changes rarely
     gcTime: 2 * 60 * 60 * 1000, // 2 hours
     retry: 1, // Don't retry too much for external API
     initialData: () => {
+      if (!enabled) {
+        return undefined;
+      }
       const cached =
         cacheStorage.getString(cacheKey) || cacheStorage.getString(imdbId);
       if (cached) {
@@ -121,14 +128,18 @@ export const useContentDetails = (link: string, providerValue: string) => {
 
   const imdbId = info?.imdbId || '';
   const contentType = info?.type || '';
+  const shouldPopulateMeta = info?.populateMeta === true;
 
-  // Then, get enhanced metadata if imdbId is available
+  // Only enrich providers that explicitly opt in to Cinemeta metadata.
   const {
-    data: meta,
-    isLoading: metaLoading,
-    isFetching: metaFetching,
+    data: enhancedMeta,
+    isLoading: enhancedMetaLoading,
+    isFetching: enhancedMetaFetching,
     refetch: refetchMeta,
-  } = useEnhancedMetadata(imdbId, contentType);
+  } = useEnhancedMetadata(imdbId, contentType, shouldPopulateMeta);
+  const meta = shouldPopulateMeta ? enhancedMeta : null;
+  const metaLoading = shouldPopulateMeta && enhancedMetaLoading;
+  const metaFetching = shouldPopulateMeta && enhancedMetaFetching;
 
   return {
     info,
@@ -146,7 +157,7 @@ export const useContentDetails = (link: string, providerValue: string) => {
     error: infoError,
     refetch: async () => {
       await refetchInfo();
-      if (imdbId && contentType) {
+      if (shouldPopulateMeta && imdbId && contentType) {
         await refetchMeta();
       }
     },

@@ -8,12 +8,12 @@ import AppText from '../../../components/ui/Text';
 
 interface ContentOverviewProps {
   backgroundImage: string;
-  cast?: string[];
   genres?: string[];
   inLibrary: boolean;
   isLoading: boolean;
   logo?: string;
   onBack: () => void;
+  onOpenStory?: () => void;
   onOpenWeb?: () => void;
   onSearchTitle: () => void;
   onToggleLibrary: () => void;
@@ -30,7 +30,7 @@ interface ContentOverviewProps {
   year?: string;
 }
 
-const IconAction = ({
+const HeaderIconButton = ({
   icon,
   label,
   onPress,
@@ -57,6 +57,46 @@ const IconAction = ({
   );
 };
 
+const InfoAction = ({
+  icon,
+  label,
+  onPress,
+}: {
+  icon: React.ComponentProps<typeof MaterialCommunityIcons>['name'];
+  label: string;
+  onPress: () => void;
+}) => {
+  const colors = useM3Colors();
+
+  return (
+    <TouchableOpacity
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      activeOpacity={0.65}
+      onPress={onPress}
+      style={{
+        alignItems: 'center',
+        flex: 1,
+        justifyContent: 'flex-start',
+        minHeight: 76,
+        paddingHorizontal: 4,
+        paddingVertical: 8,
+      }}>
+      <MaterialCommunityIcons name={icon} size={30} color={colors.primary} />
+      <AppText
+        role="labelMediumEmphasized"
+        numberOfLines={2}
+        style={{
+          color: colors.onSurfaceVariant,
+          marginTop: 9,
+          textAlign: 'center',
+        }}>
+        {label}
+      </AppText>
+    </TouchableOpacity>
+  );
+};
+
 const CompactChip = ({label}: {label: string}) => {
   const colors = useM3Colors();
 
@@ -77,12 +117,12 @@ const CompactChip = ({label}: {label: string}) => {
 
 const ContentOverview = ({
   backgroundImage,
-  cast,
   genres,
   inLibrary,
   isLoading,
   logo,
   onBack,
+  onOpenStory,
   onOpenWeb,
   onSearchTitle,
   onToggleLibrary,
@@ -108,7 +148,6 @@ const ContentOverview = ({
         .slice(0, 6),
     [genres, runtime, tags, year],
   );
-  const visibleCast = useMemo(() => (cast ?? []).slice(0, 5), [cast]);
   const synopsisText =
     synopsis.length > 240 && !readMore
       ? `${synopsis.slice(0, 240)}...`
@@ -158,7 +197,11 @@ const ContentOverview = ({
             position: 'absolute',
             top: 42,
           }}>
-          <IconAction icon="arrow-left" label="Go back" onPress={onBack} />
+          <HeaderIconButton
+            icon="arrow-left"
+            label="Go back"
+            onPress={onBack}
+          />
         </View>
       </View>
 
@@ -224,32 +267,6 @@ const ContentOverview = ({
           </View>
         ) : null}
 
-        {visibleCast.length > 0 ? (
-          <View
-            style={{
-              alignItems: 'flex-start',
-              flexDirection: 'row',
-              marginTop: 20,
-            }}>
-            <AppText
-              role="titleLargeEmphasized"
-              style={{color: colors.onBackground, marginRight: 14}}>
-              Cast
-            </AppText>
-            <View
-              style={{
-                flex: 1,
-                flexDirection: 'row',
-                flexWrap: 'wrap',
-                gap: 7,
-              }}>
-              {visibleCast.map(actor => (
-                <CompactChip key={actor} label={actor} />
-              ))}
-            </View>
-          </View>
-        ) : null}
-
         <View
           style={{
             alignItems: 'center',
@@ -269,29 +286,6 @@ const ContentOverview = ({
               style={{color: colors.primary}}>
               {providerName}
             </AppText>
-          </View>
-          <View style={{flexDirection: 'row'}}>
-            {trailerUrl ? (
-              <IconAction
-                icon="movie-play-outline"
-                label="Watch trailer"
-                onPress={() => Linking.openURL(trailerUrl)}
-              />
-            ) : null}
-            <IconAction
-              icon="magnify"
-              label="Search this title"
-              onPress={onSearchTitle}
-            />
-            {onOpenWeb ? (
-              <IconAction icon="web" label="Open in web" onPress={onOpenWeb} />
-            ) : null}
-
-            <IconAction
-              icon={inLibrary ? 'bookmark' : 'bookmark-outline'}
-              label={inLibrary ? 'Remove from watch list' : 'Add to watch list'}
-              onPress={onToggleLibrary}
-            />
           </View>
         </View>
 
@@ -321,6 +315,36 @@ const ContentOverview = ({
             </AppText>
           </Pressable>
         ) : null}
+
+        <View
+          style={{
+            flexDirection: 'row',
+            marginHorizontal: -4,
+            marginTop: 18,
+          }}>
+          <InfoAction icon="magnify" label="Search" onPress={onSearchTitle} />
+          {onOpenWeb ? (
+            <InfoAction icon="web" label="Web" onPress={onOpenWeb} />
+          ) : null}
+          {onOpenStory ? (
+            <InfoAction
+              icon="book-open-page-variant-outline"
+              label="Info"
+              onPress={onOpenStory}
+            />
+          ) : trailerUrl ? (
+            <InfoAction
+              icon="movie-play-outline"
+              label="Trailer"
+              onPress={() => Linking.openURL(trailerUrl)}
+            />
+          ) : null}
+          <InfoAction
+            icon={inLibrary ? 'bookmark' : 'bookmark-outline'}
+            label={inLibrary ? 'In watchlist' : 'Watchlist'}
+            onPress={onToggleLibrary}
+          />
+        </View>
       </View>
     </View>
   );
