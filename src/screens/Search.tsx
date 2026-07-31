@@ -1,8 +1,9 @@
 import {View, FlatList, Pressable, Text} from 'react-native';
 import React, {useState, useEffect, useCallback, memo, useRef} from 'react';
 import {useNavigation} from '@react-navigation/native';
+import type {BottomTabNavigationProp} from '@react-navigation/bottom-tabs';
 import {NativeStackNavigationProp} from '@react-navigation/native-stack';
-import {SearchStackParamList} from '../App';
+import {SearchStackParamList, TabStackParamList} from '../App';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import {MMKV} from '../lib/Mmkv';
 import {SafeAreaView} from 'react-native-safe-area-context';
@@ -147,19 +148,42 @@ const Search = () => {
   );
   const [searchResults, setSearchResults] = useState<OMDBResult[]>([]);
   const searchFieldRef = useRef<SearchFieldRef>(null);
+  const focusAfterTabResetRef = useRef(false);
 
   useEffect(() => {
-    const tabNavigation = navigation.getParent();
+    const tabNavigation =
+      navigation.getParent<BottomTabNavigationProp<TabStackParamList>>();
     if (!tabNavigation) {
       return;
     }
 
-    return tabNavigation.addListener('tabPress', () => {
+    const unsubscribeTabPress = tabNavigation.addListener('tabPress', event => {
       const state = tabNavigation.getState();
-      if (state.routes[state.index]?.name === 'SearchStack') {
-        searchFieldRef.current?.focus();
+      if (state.routes[state.index]?.name !== 'SearchStack') {
+        return;
       }
+
+      if (!navigation.isFocused()) {
+        event.preventDefault();
+        focusAfterTabResetRef.current = true;
+        navigation.popToTop();
+        return;
+      }
+
+      searchFieldRef.current?.focus();
     });
+    const unsubscribeFocus = navigation.addListener('focus', () => {
+      if (!focusAfterTabResetRef.current) {
+        return;
+      }
+      focusAfterTabResetRef.current = false;
+      searchFieldRef.current?.focus();
+    });
+
+    return () => {
+      unsubscribeTabPress();
+      unsubscribeFocus();
+    };
   }, [navigation]);
 
   const debouncedSearch = useCallback(
