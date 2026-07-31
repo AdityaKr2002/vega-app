@@ -43,7 +43,7 @@ import {updateProvidersService} from './lib/services/UpdateProviders';
 import {QueryClientProvider} from '@tanstack/react-query';
 import {queryClient} from './lib/client';
 import GlobalErrorBoundary from './components/GlobalErrorBoundary';
-import notifee from '@notifee/react-native';
+import notifee, {EventType} from '@notifee/react-native';
 import notificationService from './lib/services/Notification';
 import WafWebViewDialog from './components/WafWebViewDialog';
 import ProviderSandboxHost from './components/ProviderSandboxHost';
@@ -62,25 +62,11 @@ import {
 } from './lib/sync/syncService';
 import StreamingTabBar from './components/navigation/StreamingTabBar';
 import AppDialogHost from './components/AppDialogHost';
-// Lazy-load Firebase modules so app runs without google-services files
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const getAnalytics = (): any | null => {
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    return require('@react-native-firebase/analytics').default;
-  } catch {
-    return null;
-  }
-};
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const getCrashlytics = (): any | null => {
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    return require('@react-native-firebase/crashlytics').default;
-  } catch {
-    return null;
-  }
-};
+import {
+  getAnalytics,
+  getCrashlytics,
+  isFirebaseNativeReady,
+} from './lib/utils/firebaseSafe';
 
 enableScreens(true);
 enableFreeze(true);
@@ -201,7 +187,9 @@ const App = () => {
   const WatchListStack = createNativeStackNavigator<WatchListStackParamList>();
   const DownloadsStack = createNativeStackNavigator<DownloadsStackParamList>();
   const SettingsStack = createNativeStackNavigator<SettingsStackParamList>();
-  const hasFirebase = Boolean(Constants?.expoConfig?.extra?.hasFirebase);
+  const hasFirebase =
+    Boolean(Constants?.expoConfig?.extra?.hasFirebase) &&
+    isFirebaseNativeReady();
 
   // const showTabBarLables = settingsStorage.showTabBarLabels();
 
@@ -311,6 +299,24 @@ const App = () => {
     const unsubscribe = notifee.onForegroundEvent(({type, detail}) => {
       notificationService.actionHandler({type, detail});
     });
+    notifee
+      .getInitialNotification()
+      .then(initialNotification => {
+        if (!initialNotification) {
+          return;
+        }
+        const pressActionId = initialNotification.pressAction?.id;
+        return notificationService.actionHandler({
+          type:
+            pressActionId && pressActionId !== 'default'
+              ? EventType.ACTION_PRESS
+              : EventType.PRESS,
+          detail: initialNotification,
+        });
+      })
+      .catch(error =>
+        console.warn('Failed to handle initial notification:', error),
+      );
     return () => {
       unsubscribe();
     };

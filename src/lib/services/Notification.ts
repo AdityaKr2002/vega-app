@@ -178,6 +178,7 @@ class NotificationService {
         color: notificationColor,
         pressAction: {
           id: 'default',
+          launchActivity: 'default',
         },
         ...(options.progress ? {progress: options.progress} : {}),
         ...(options.actions ? {actions: options.actions} : {}),
