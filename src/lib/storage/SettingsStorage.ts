@@ -126,7 +126,7 @@ export class SettingsStorage {
 
   // UI preferences
   showTabBarLabels(): boolean {
-    return mainStorage.getBool(SettingsKeys.SHOW_TAB_BAR_LABELS, false);
+    return mainStorage.getBool(SettingsKeys.SHOW_TAB_BAR_LABELS, true);
   }
 
   setShowTabBarLabels(show: boolean): void {
