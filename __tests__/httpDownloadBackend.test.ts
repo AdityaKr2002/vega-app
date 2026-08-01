@@ -50,7 +50,10 @@ jest.mock('../src/lib/zustand/downloadsStore', () => ({
   },
 }));
 
-import {httpDownloadBackend} from '../src/lib/downloadBackends/httpBackend';
+import {
+  createDownloadProgressReporter,
+  httpDownloadBackend,
+} from '../src/lib/downloadBackends/httpBackend';
 import {DownloadPauseSupportError} from '../src/lib/downloadBackends/types';
 
 const context = {
@@ -117,5 +120,46 @@ describe('HTTP download backend pause support', () => {
     );
 
     await httpDownloadBackend.cancel('download-1');
+  });
+});
+
+describe('HTTP download progress reporting', () => {
+  it('uses the real sample duration instead of under-reporting fast downloads', () => {
+    let currentTime = 0;
+    const report = jest.fn();
+    const onProgress = createDownloadProgressReporter(
+      report,
+      () => currentTime,
+    );
+
+    currentTime = 100;
+    onProgress({bytesWritten: 2 * 1024 * 1024, totalBytes: 100 * 1024 * 1024});
+    expect(report).not.toHaveBeenCalled();
+
+    currentTime = 500;
+    onProgress({
+      bytesWritten: 10 * 1024 * 1024,
+      totalBytes: 100 * 1024 * 1024,
+    });
+
+    expect(report).toHaveBeenCalledWith(
+      10 * 1024 * 1024,
+      100 * 1024 * 1024,
+      20 * 1024 * 1024,
+    );
+  });
+
+  it('always publishes the final sample even inside the throttle window', () => {
+    let currentTime = 0;
+    const report = jest.fn();
+    const onProgress = createDownloadProgressReporter(
+      report,
+      () => currentTime,
+    );
+
+    currentTime = 200;
+    onProgress({bytesWritten: 4 * 1024, totalBytes: 4 * 1024});
+
+    expect(report).toHaveBeenCalledTimes(1);
   });
 });

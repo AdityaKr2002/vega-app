@@ -106,6 +106,110 @@ describe('Vega sync manifest', () => {
     );
   });
 
+  it('uses the newest saved playback position for an episode', () => {
+    const older = manifest('mobile', {
+      history: {
+        episode: {
+          id: 'episode',
+          title: 'Show',
+          link: '/show',
+          progress: 120,
+          duration: 1800,
+          updatedAt: 10,
+        },
+      },
+    });
+    const newer = manifest('desktop', {
+      history: {
+        episode: {
+          id: 'episode',
+          title: 'Show',
+          link: '/show',
+          progress: 360,
+          duration: 1800,
+          updatedAt: 20,
+        },
+      },
+    });
+
+    expect(mergeSyncManifests([older, newer]).history.episode.progress).toBe(
+      360,
+    );
+  });
+
+  it('keeps a history tombstone from resurrecting older playback', () => {
+    const played = manifest('mobile', {
+      history: {
+        episode: {
+          id: 'episode',
+          title: 'Show',
+          link: '/show',
+          progress: 120,
+          updatedAt: 10,
+        },
+      },
+    });
+    const removed = manifest('desktop', {
+      tombstones: {
+        [getTombstoneKey('history', 'episode')]: {
+          kind: 'history',
+          id: 'episode',
+          deletedAt: 20,
+        },
+      },
+    });
+
+    expect(mergeSyncManifests([played, removed]).history).toEqual({});
+  });
+
+  it('allows playback saved after a history removal to win again', () => {
+    const removed = manifest('mobile', {
+      tombstones: {
+        [getTombstoneKey('history', 'episode')]: {
+          kind: 'history',
+          id: 'episode',
+          deletedAt: 10,
+        },
+      },
+    });
+    const replayed = manifest('desktop', {
+      history: {
+        episode: {
+          id: 'episode',
+          title: 'Show',
+          link: '/show',
+          progress: 45,
+          updatedAt: 20,
+        },
+      },
+    });
+
+    expect(
+      mergeSyncManifests([removed, replayed]).history.episode.progress,
+    ).toBe(45);
+  });
+
+  it('syncs only the 100 most recently played episodes', () => {
+    const history = Object.fromEntries(
+      Array.from({length: 105}, (_, index) => [
+        `episode-${index}`,
+        {
+          id: `episode-${index}`,
+          title: `Episode ${index}`,
+          link: '/show',
+          progress: index,
+          updatedAt: index,
+        },
+      ]),
+    );
+
+    const merged = mergeSyncManifests([manifest('mobile', {history})]);
+
+    expect(Object.keys(merged.history)).toHaveLength(100);
+    expect(merged.history['episode-104']).toBeDefined();
+    expect(merged.history['episode-0']).toBeUndefined();
+  });
+
   it('deduplicates different platform ids for the same episode', () => {
     const mobileEpisode = {
       id: 'Show_SSeason 1_E1',

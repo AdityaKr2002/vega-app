@@ -329,7 +329,7 @@ const ContentOverview = ({
           {onOpenStory ? (
             <InfoAction
               icon="book-open-page-variant-outline"
-              label="Info"
+              label="Explore"
               onPress={onOpenStory}
             />
           ) : trailerUrl ? (

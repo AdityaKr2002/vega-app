@@ -29,9 +29,9 @@ export class WatchListStorage {
     const watchList =
       mainStorage.getArray<Partial<WatchListItem>>(WatchListKeys.WATCH_LIST) ||
       [];
-    return watchList.filter((item): item is WatchListItem =>
-      Boolean(item.title && item.poster && item.link && item.provider),
-    );
+    return watchList
+      .filter(item => Boolean(item.title && item.link && item.provider))
+      .map(item => ({...item, poster: item.poster || ''}) as WatchListItem);
   }
 
   /**

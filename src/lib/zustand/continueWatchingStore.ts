@@ -34,15 +34,19 @@ const useContinueWatchingStore = create<ContinueWatchingState>()(
           items: [
             item,
             ...state.items.filter(existing => existing.id !== item.id),
-          ].slice(0, 30),
+          ]
+            .sort((a, b) => b.updatedAt - a.updatedAt)
+            .slice(0, 30),
         })),
       updateProgress: (id, position, duration) =>
         set(state => ({
-          items: state.items.map(item =>
-            item.id === id
-              ? {...item, position, duration, updatedAt: Date.now()}
-              : item,
-          ),
+          items: state.items
+            .map(item =>
+              item.id === id
+                ? {...item, position, duration, updatedAt: Date.now()}
+                : item,
+            )
+            .sort((a, b) => b.updatedAt - a.updatedAt),
         })),
       removeItem: id =>
         set(state => ({items: state.items.filter(item => item.id !== id)})),

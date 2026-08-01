@@ -4,6 +4,7 @@ import React, {useCallback, useMemo, useState} from 'react';
 import {FlatList, View} from 'react-native';
 import ReactNativeHapticFeedback from 'react-native-haptic-feedback';
 import type {HomeStackParamList} from '../App';
+import {useImageAccent} from '../lib/hooks/useImageAccent';
 import {settingsStorage} from '../lib/storage';
 import useContinueWatchingStore, {
   type ContinueWatchingItem,
@@ -12,6 +13,55 @@ import {useM3Colors} from '../theme/M3PaletteContext';
 import AppDialog from './AppDialog';
 import MediaPosterCard from './MediaPosterCard';
 import AppText from './ui/Text';
+
+interface ContinueWatchingCardProps {
+  item: ContinueWatchingItem;
+  onOpen: (item: ContinueWatchingItem) => void;
+  onRemove: (item: ContinueWatchingItem) => void;
+}
+
+const ContinueWatchingCard = ({
+  item,
+  onOpen,
+  onRemove,
+}: ContinueWatchingCardProps) => {
+  const colors = useM3Colors();
+  const poster = item.poster || item.background;
+  const progressColor = useImageAccent(poster, colors.primary);
+  const progress =
+    item.duration > 0
+      ? Math.min(100, Math.max(0, (item.position / item.duration) * 100))
+      : 0;
+
+  return (
+    <View style={{width: 124}}>
+      <MediaPosterCard
+        title={item.title}
+        subtitle={item.episodeTitle}
+        poster={poster}
+        width={124}
+        onPress={() => onOpen(item)}
+        onLongPress={() => onRemove(item)}
+      />
+      <View
+        style={{
+          backgroundColor: colors.surfaceContainerHighest,
+          borderRadius: 2,
+          height: 3,
+          marginTop: 7,
+          overflow: 'hidden',
+        }}>
+        <View
+          style={{
+            backgroundColor: progressColor,
+            height: 3,
+            width: `${progress}%`,
+          }}
+        />
+      </View>
+    </View>
+  );
+};
 
 const ContinueWatching = () => {
   const colors = useM3Colors();
@@ -80,43 +130,13 @@ const ContinueWatching = () => {
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={{paddingHorizontal: 20}}
         ItemSeparatorComponent={() => <View style={{width: 14}} />}
-        renderItem={({item}) => {
-          const progress =
-            item.duration > 0
-              ? Math.min(
-                  100,
-                  Math.max(0, (item.position / item.duration) * 100),
-                )
-              : 0;
-          return (
-            <View style={{width: 124}}>
-              <MediaPosterCard
-                title={item.title}
-                subtitle={item.episodeTitle}
-                poster={item.poster || item.background}
-                width={124}
-                onPress={() => openInfo(item)}
-                onLongPress={() => removeContinueWatchingItem(item)}
-              />
-              <View
-                style={{
-                  backgroundColor: colors.surfaceContainerHighest,
-                  borderRadius: 2,
-                  height: 3,
-                  marginTop: 7,
-                  overflow: 'hidden',
-                }}>
-                <View
-                  style={{
-                    backgroundColor: colors.primary,
-                    height: 3,
-                    width: `${progress}%`,
-                  }}
-                />
-              </View>
-            </View>
-          );
-        }}
+        renderItem={({item}) => (
+          <ContinueWatchingCard
+            item={item}
+            onOpen={openInfo}
+            onRemove={removeContinueWatchingItem}
+          />
+        )}
       />
       <AppDialog
         visible={itemToRemove !== null}

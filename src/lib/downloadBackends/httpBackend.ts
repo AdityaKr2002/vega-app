@@ -16,13 +16,70 @@ interface ActiveHttpDownload {
 
 const activeDownloads = new Map<string, ActiveHttpDownload>();
 
+const PROGRESS_UPDATE_INTERVAL_MS = 500;
+
+interface DownloadProgressSample {
+  bytesWritten: number;
+  totalBytes: number;
+}
+
+export const createDownloadProgressReporter = (
+  report: (downloaded: number, total: number, speed: number) => void,
+  now: () => number = Date.now,
+) => {
+  let previousBytes = 0;
+  let previousTime = now();
+  let smoothedSpeed = 0;
+
+  return (progress: DownloadProgressSample): void => {
+    const currentTime = now();
+    const elapsedMilliseconds = currentTime - previousTime;
+    const isComplete =
+      progress.totalBytes > 0 && progress.bytesWritten >= progress.totalBytes;
+
+    // Expo emits native progress about every 100 ms. Updating Zustand here on
+    // every event also serializes the complete persisted download state each
+    // time, so publish a less frequent, accurately timed sample instead.
+    if (elapsedMilliseconds < PROGRESS_UPDATE_INTERVAL_MS && !isComplete) {
+      return;
+    }
+
+    if (elapsedMilliseconds <= 0) {
+      return;
+    }
+
+    const bytesSincePreviousSample = Math.max(
+      progress.bytesWritten - previousBytes,
+      0,
+    );
+    const instantaneousSpeed =
+      (bytesSincePreviousSample * 1000) / elapsedMilliseconds;
+    smoothedSpeed =
+      smoothedSpeed > 0
+        ? smoothedSpeed * 0.35 + instantaneousSpeed * 0.65
+        : instantaneousSpeed;
+    previousBytes = progress.bytesWritten;
+    previousTime = currentTime;
+
+    report(
+      progress.bytesWritten,
+      Math.max(progress.totalBytes, 0),
+      smoothedSpeed,
+    );
+  };
+};
+
 const toFileUri = (path: string): string =>
   path.startsWith('file://') ? path : `file://${path}`;
 
 export const httpDownloadBackend: DownloadBackend = {
   async start({record, destination}: DownloadBackendContext): Promise<void> {
-    let previousBytes = 0;
-    let previousTime = Date.now();
+    const reportProgress = createDownloadProgressReporter(
+      (downloaded, total, speed) =>
+        useDownloadsStore
+          .getState()
+          .updateProgress(record.id, downloaded, total, speed),
+    );
     const task = File.createDownloadTask(
       record.url,
       new File(toFileUri(destination.stagingPath)),
@@ -33,25 +90,7 @@ export const httpDownloadBackend: DownloadBackend = {
           if (!active || active.cancelled || active.task !== task) {
             return;
           }
-          const currentTime = Date.now();
-          const elapsedSeconds = Math.max(
-            (currentTime - previousTime) / 1000,
-            1,
-          );
-          const speed = Math.max(
-            (progress.bytesWritten - previousBytes) / elapsedSeconds,
-            0,
-          );
-          previousBytes = progress.bytesWritten;
-          previousTime = currentTime;
-          useDownloadsStore
-            .getState()
-            .updateProgress(
-              record.id,
-              progress.bytesWritten,
-              progress.totalBytes,
-              speed,
-            );
+          reportProgress(progress);
         },
       },
     );

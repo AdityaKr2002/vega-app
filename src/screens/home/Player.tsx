@@ -55,6 +55,34 @@ import useContinueWatchingStore from '../../lib/zustand/continueWatchingStore';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Player'>;
 
+const getEpisodeIdentity = (episode?: {
+  sourceLink?: string;
+  id?: string;
+  link?: string;
+}) => episode?.sourceLink || episode?.id || episode?.link || '';
+
+const readCachedProgress = (link?: string) => {
+  if (!link) {
+    return {position: 0, duration: 0};
+  }
+  try {
+    const cached = cacheStorage.getString(link);
+    if (!cached) {
+      return {position: 0, duration: 0};
+    }
+    const parsed = JSON.parse(cached) as {
+      position?: number;
+      duration?: number;
+    };
+    return {
+      position: parsed.position || 0,
+      duration: parsed.duration || 0,
+    };
+  } catch {
+    return {position: 0, duration: 0};
+  }
+};
+
 const goFullScreen = () => {
   if (Platform.OS === 'android') {
     // Sticky-immersive behavior is handled by the system under edge-to-edge;
@@ -93,10 +121,20 @@ const reapplyFullscreenMode = (isFullScreenEnabled: boolean) => {
 };
 
 const Player = ({route}: Props): React.JSX.Element => {
+  const [syncReady, setSyncReady] = useState(false);
+
   useEffect(() => {
-    syncFromSharedFolder().catch(error =>
-      console.warn('[VegaSync] Player sync failed:', error),
-    );
+    let mounted = true;
+    syncFromSharedFolder()
+      .catch(error => console.warn('[VegaSync] Player sync failed:', error))
+      .finally(() => {
+        if (mounted) {
+          setSyncReady(true);
+        }
+      });
+    return () => {
+      mounted = false;
+    };
   }, []);
 
   const colors = useM3Colors();
@@ -109,6 +147,7 @@ const Player = ({route}: Props): React.JSX.Element => {
   const updateContinueWatchingProgress = useContinueWatchingStore(
     state => state.updateProgress,
   );
+  const continueWatchingItems = useContinueWatchingStore(state => state.items);
 
   // Player ref
   const playerRef = useRef<VideoRef>(null as unknown as VideoRef);
@@ -232,9 +271,27 @@ const Player = ({route}: Props): React.JSX.Element => {
   } = usePlayerSettings();
   const isFullScreenRef = useRef(isFullScreen);
   const continueWatchingId = route.params.infoUrl || activeEpisode?.link;
+  const syncedContinueWatching = useMemo(
+    () => continueWatchingItems.find(item => item.id === continueWatchingId),
+    [continueWatchingId, continueWatchingItems],
+  );
+  const syncedEpisodeMatches =
+    Boolean(syncedContinueWatching) &&
+    getEpisodeIdentity(syncedContinueWatching?.episode) ===
+      getEpisodeIdentity(activeEpisode);
+  const syncedPosition = syncedEpisodeMatches
+    ? syncedContinueWatching?.position || 0
+    : 0;
+  const syncedDuration = syncedEpisodeMatches
+    ? syncedContinueWatching?.duration || 0
+    : 0;
+  const syncedUpdatedAt = syncedEpisodeMatches
+    ? syncedContinueWatching?.updatedAt || 0
+    : 0;
 
   useEffect(() => {
     if (
+      !syncReady ||
       !continueWatchingId ||
       !route.params.infoUrl ||
       !route.params.primaryTitle ||
@@ -243,8 +300,13 @@ const Player = ({route}: Props): React.JSX.Element => {
     ) {
       return;
     }
-    const cached = cacheStorage.getString(activeEpisode.link);
-    const progress = cached ? JSON.parse(cached) : {};
+    const cachedProgress = readCachedProgress(activeEpisode.link);
+    const position = syncedEpisodeMatches
+      ? syncedPosition
+      : cachedProgress.position;
+    const duration = syncedEpisodeMatches
+      ? syncedDuration
+      : cachedProgress.duration;
     upsertContinueWatching({
       id: continueWatchingId,
       title: route.params.primaryTitle,
@@ -255,9 +317,9 @@ const Player = ({route}: Props): React.JSX.Element => {
       background: route.params.poster?.background,
       providerValue: route.params.providerValue,
       infoUrl: route.params.infoUrl,
-      position: progress.position || 0,
-      duration: progress.duration || 0,
-      updatedAt: Date.now(),
+      position,
+      duration,
+      updatedAt: syncedUpdatedAt || (position > 0 ? Date.now() : 0),
     });
   }, [
     activeEpisode,
@@ -269,6 +331,11 @@ const Player = ({route}: Props): React.JSX.Element => {
     route.params.providerValue,
     route.params.secondaryTitle,
     route.params.type,
+    syncReady,
+    syncedDuration,
+    syncedEpisodeMatches,
+    syncedPosition,
+    syncedUpdatedAt,
     upsertContinueWatching,
   ]);
 
@@ -308,9 +375,11 @@ const Player = ({route}: Props): React.JSX.Element => {
 
   // Memoized watched duration
   const watchedDuration = useMemo(() => {
-    const cached = cacheStorage.getString(activeEpisode?.link);
-    return cached ? JSON.parse(cached).position : 0;
-  }, [activeEpisode?.link]);
+    if (syncedEpisodeMatches) {
+      return syncedPosition;
+    }
+    return readCachedProgress(activeEpisode?.link).position;
+  }, [activeEpisode?.link, syncedEpisodeMatches, syncedPosition]);
 
   useEffect(() => {
     resumeAppliedRef.current = false;
