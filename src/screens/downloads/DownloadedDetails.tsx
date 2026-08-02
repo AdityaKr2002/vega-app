@@ -147,11 +147,9 @@ const DownloadedDetails = ({navigation, route}: DownloadedDetailsProps) => {
         downloadLocation: item.downloadLocation,
         outputDirectoryNames: [
           createDownloadDirectoryName(item.showName || item.title),
-          ...(item.type === 'series'
-            ? [createDownloadSeasonDirectoryName(item.seasonTitle)].filter(
-                (name): name is string => Boolean(name),
-              )
-            : []),
+          ...[createDownloadSeasonDirectoryName(item.seasonTitle)].filter(
+            (name): name is string => Boolean(name),
+          ),
         ],
       });
       if (deleted || !(await downloadOutputExists(item.filePath))) {

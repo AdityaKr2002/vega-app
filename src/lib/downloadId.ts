@@ -1,13 +1,16 @@
-export const createSeriesDownloadId = (
+export const createGroupedDownloadId = (
   baseTitle: string,
-  seasonTitle: string,
-  episodeIndex: number,
-): string => `${baseTitle}_S${seasonTitle}_E${episodeIndex + 1}`;
+  groupTitle: string,
+  itemIndex: number,
+): string => `${baseTitle}_S${groupTitle}_E${itemIndex + 1}`;
+
+export const createSeriesDownloadId = createGroupedDownloadId;
 
 export const createDirectDownloadId = (
   baseTitle: string,
+  groupTitle: string,
   linkIndex: number,
-): string => `${baseTitle}_direct_${linkIndex}`;
+): string => createGroupedDownloadId(baseTitle, groupTitle, linkIndex);
 
 const MAX_FILE_NAME_LENGTH = 160;
 

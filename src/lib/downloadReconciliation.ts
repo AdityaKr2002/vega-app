@@ -74,11 +74,9 @@ const reconcileFinalizing = async (record: DownloadItem): Promise<void> => {
       fileType: record.videoType || 'mp4',
       outputDirectoryNames: [
         createDownloadDirectoryName(record.showName || record.title),
-        ...(record.type === 'series'
-          ? [createDownloadSeasonDirectoryName(record.seasonTitle)].filter(
-              (name): name is string => Boolean(name),
-            )
-          : []),
+        ...[createDownloadSeasonDirectoryName(record.seasonTitle)].filter(
+          (name): name is string => Boolean(name),
+        ),
       ],
     });
     store.markCompleted(record.id, {

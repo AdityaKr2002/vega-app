@@ -542,7 +542,10 @@ const SeasonList: React.FC<SeasonListProps> = ({
                   ? metaTitle.slice(0, 30) + '... ' + item.title
                   : metaTitle + ' ' + item.title
               }
-              fileName={createDesktopCompatibleFileName(item.title, 'series')}
+              fileName={createDesktopCompatibleFileName(
+                `${activeSeason.title}_${item.title}`,
+                'series',
+              )}
             />
           </View>
         </View>
@@ -578,7 +581,11 @@ const SeasonList: React.FC<SeasonListProps> = ({
         item.link,
         index,
       );
-      const downloadId = createDirectDownloadId(metaTitle, downloadIndex);
+      const downloadId = createDirectDownloadId(
+        metaTitle,
+        activeSeason.title,
+        downloadIndex,
+      );
       const displayTitle =
         activeSeason?.directLinks?.length && activeSeason.directLinks.length > 1
           ? item.title
@@ -667,7 +674,10 @@ const SeasonList: React.FC<SeasonListProps> = ({
                   ? metaTitle.slice(0, 30) + '... ' + item.title
                   : metaTitle + ' ' + item.title
               }
-              fileName={createDesktopCompatibleFileName(item.title, 'series')}
+              fileName={createDesktopCompatibleFileName(
+                `${activeSeason.title}_${item.title}`,
+                'series',
+              )}
             />
           </View>
         </View>

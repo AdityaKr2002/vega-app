@@ -63,7 +63,7 @@ export class DownloadManager {
     }
     return seasonTitle
       ? createSeriesDownloadId(baseTitle, seasonTitle, index)
-      : createDirectDownloadId(baseTitle, index);
+      : createDirectDownloadId(baseTitle, 'Default', index);
   }
 }
 

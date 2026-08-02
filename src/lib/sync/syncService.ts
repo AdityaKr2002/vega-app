@@ -74,7 +74,7 @@ const addTombstone = (
 const getRelativePath = (item: DownloadItem) =>
   [
     (item.showName || item.title).replace(/[^a-z0-9]/gi, '_').toLowerCase(),
-    ...(item.type === 'series' && item.seasonTitle
+    ...(item.seasonTitle
       ? [item.seasonTitle.replace(/[^a-z0-9]/gi, '_').toLowerCase()]
       : []),
     getSafEntryName(item.finalDocumentUri || item.filePath) ||

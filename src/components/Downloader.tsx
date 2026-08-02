@@ -166,7 +166,14 @@ const DownloadComponent = ({
   const colors = useM3Colors();
   const primary = colors.primary;
   const provider = useContentStore(state => state.provider);
-  const download = useDownloadsStore(state => state.downloads[downloadId]);
+  const download = useDownloadsStore(
+    state =>
+      state.downloads[downloadId] ||
+      Object.values(state.downloads).find(
+        item => item.infoUrl === infoUrl && item.sourceLink === link,
+      ),
+  );
+  const storedDownloadId = download?.id || downloadId;
   const removeDownload = useDownloadsStore(state => state.removeDownload);
   const [legacyDownloadedFile, setLegacyDownloadedFile] = useState<
     string | boolean
@@ -235,11 +242,9 @@ const DownloadComponent = ({
             downloadLocation: download.downloadLocation,
             outputDirectoryNames: [
               createDownloadDirectoryName(download.showName || download.title),
-              ...(download.type === 'series'
-                ? [
-                    createDownloadSeasonDirectoryName(download.seasonTitle),
-                  ].filter((name): name is string => Boolean(name))
-                : []),
+              ...[createDownloadSeasonDirectoryName(download.seasonTitle)].filter(
+                (name): name is string => Boolean(name),
+              ),
             ],
           })
         : await deleteDownloadedFileByBaseName(
@@ -248,7 +253,7 @@ const DownloadComponent = ({
           );
 
       if (deleted) {
-        removeDownload(downloadId);
+        removeDownload(storedDownloadId);
         setLegacyDownloadedFile(false);
       }
     } catch (error) {
@@ -339,7 +344,7 @@ const DownloadComponent = ({
           variant: 'destructive',
           onPress: async () => {
             try {
-              await cancelDownload(downloadId);
+              await cancelDownload(storedDownloadId);
             } catch (error) {
               console.log('Error cancelling download', error);
             }
