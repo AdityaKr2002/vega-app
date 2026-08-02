@@ -86,11 +86,12 @@ https://reactnative.dev/docs/signed-apk-android
 
 
 ## Leave a star if this was helpful
+
 <a href="https://www.star-history.com/?repos=vega-org%2Fvega-app&type=date&legend=top-left">
  <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=vega-org/vega-app&type=date&theme=dark&legend=top-left&sealed_token=-I7j1Po7SdncNAdqtUOsTzYS9tjaBH6Rwsnl-_pPmn5_SaAScEKBXB_7Kwd6hMGQK8_8fYCRJYmoOdoxDvVDtEEv7gf6QASammwDPS04qIt5q8riYCdpk_RKabSl79-zrSUHnqi3iagtPtKn-u3Q9Q4kBICxLDw1atvs1k5gijdYKQij-AFVGv21Eo7R" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=vega-org/vega-app&type=date&legend=top-left&sealed_token=-I7j1Po7SdncNAdqtUOsTzYS9tjaBH6Rwsnl-_pPmn5_SaAScEKBXB_7Kwd6hMGQK8_8fYCRJYmoOdoxDvVDtEEv7gf6QASammwDPS04qIt5q8riYCdpk_RKabSl79-zrSUHnqi3iagtPtKn-u3Q9Q4kBICxLDw1atvs1k5gijdYKQij-AFVGv21Eo7R" />
-   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=vega-org/vega-app&type=date&legend=top-left&sealed_token=-I7j1Po7SdncNAdqtUOsTzYS9tjaBH6Rwsnl-_pPmn5_SaAScEKBXB_7Kwd6hMGQK8_8fYCRJYmoOdoxDvVDtEEv7gf6QASammwDPS04qIt5q8riYCdpk_RKabSl79-zrSUHnqi3iagtPtKn-u3Q9Q4kBICxLDw1atvs1k5gijdYKQij-AFVGv21Eo7R" />
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=vega-org/vega-app&type=date&theme=dark&legend=top-left&sealed_token=ajfKjwdP9VUHI3OOuOW40FrTlJWZRFXQqjUVf51d1HcT6QFCcR2mvv8ykA_FM5u7a9rqhzNtERwdQjth0A63L5tRJ6ImisXf5ktSU4eYU-SB1m3-xp5HOQ" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=vega-org/vega-app&type=date&legend=top-left&sealed_token=ajfKjwdP9VUHI3OOuOW40FrTlJWZRFXQqjUVf51d1HcT6QFCcR2mvv8ykA_FM5u7a9rqhzNtERwdQjth0A63L5tRJ6ImisXf5ktSU4eYU-SB1m3-xp5HOQ" />
+   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=vega-org/vega-app&type=date&legend=top-left&sealed_token=ajfKjwdP9VUHI3OOuOW40FrTlJWZRFXQqjUVf51d1HcT6QFCcR2mvv8ykA_FM5u7a9rqhzNtERwdQjth0A63L5tRJ6ImisXf5ktSU4eYU-SB1m3-xp5HOQ" />
  </picture>
 </a>
 
