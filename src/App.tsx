@@ -26,7 +26,7 @@ import {enableFreeze, enableScreens} from 'react-native-screens';
 import Preferences from './screens/settings/Preference';
 import Appearance from './screens/settings/Appearance';
 import {M3ThemeProvider} from './theme/M3ThemeProvider';
-import {AppState, Dimensions, LogBox} from 'react-native';
+import {AppState, LogBox, useWindowDimensions} from 'react-native';
 import {EpisodeLink} from './lib/providers/types';
 import {
   SafeAreaProvider,
@@ -70,8 +70,6 @@ import {
 
 enableScreens(true);
 enableFreeze(true);
-
-const isLargeScreen = Dimensions.get('window').width > 768;
 
 export type HomeStackParamList = {
   Home: undefined;
@@ -177,6 +175,8 @@ export const openDownloadsScreen = (): void => {
 };
 
 const App = () => {
+  const {width: windowWidth} = useWindowDimensions();
+  const isLargeScreen = windowWidth > 768;
   LogBox.ignoreLogs([
     'You have passed a style to FlashList',
     'new NativeEventEmitter()',
