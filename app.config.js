@@ -45,6 +45,12 @@ module.exports = () => {
       },
     ],
     [
+      'react-native-google-cast',
+      {
+        expandedController: true,
+      },
+    ],
+    [
       'react-native-edge-to-edge',
       {
         android: {
@@ -116,7 +122,7 @@ module.exports = () => {
       autolinking: {exclude: ['expo-splash-screen']},
       plugins,
       slug: 'vega',
-      version: '4.0.2',
+      version: '4.0.3',
       userInterfaceStyle: 'dark',
       experiments: {
         reactCompiler: true,
@@ -127,7 +133,7 @@ module.exports = () => {
           : {}),
         minSdkVersion: 28,
         package: PACKAGE_NAME,
-        versionCode: 183,
+        versionCode: 184,
         permissions: [
           'FOREGROUND_SERVICE',
           'FOREGROUND_SERVICE_DATA_SYNC',
