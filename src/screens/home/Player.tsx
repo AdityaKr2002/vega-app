@@ -35,9 +35,8 @@ import {
   SelectedTrackType,
 } from 'react-native-video';
 import useContentStore from '../../lib/zustand/contentStore';
-// import {CastButton, useRemoteMediaClient} from 'react-native-google-cast';
+import {CastButton, useRemoteMediaClient} from 'react-native-google-cast';
 import {SafeAreaView} from 'react-native-safe-area-context';
-// import GoogleCast from 'react-native-google-cast';
 import * as DocumentPicker from 'expo-document-picker';
 import {FlashList} from '@shopify/flash-list';
 import SearchSubtitles from '../../components/SearchSubtitles';
@@ -52,6 +51,7 @@ import {torrentManager} from '../../lib/torrentManager';
 import {syncFromSharedFolder} from '../../lib/sync/syncService';
 import {useM3Colors} from '../../theme/M3PaletteContext';
 import useContinueWatchingStore from '../../lib/zustand/continueWatchingStore';
+import CastRemotePlayer from '../../components/CastRemotePlayer';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Player'>;
 
@@ -81,6 +81,40 @@ const readCachedProgress = (link?: string) => {
   } catch {
     return {position: 0, duration: 0};
   }
+};
+
+const SHOW_FULLSCREEN_BUTTON = false;
+
+const isCastableStreamUrl = (streamUrl: string, streamType?: string) => {
+  if (!/^https?:\/\//i.test(streamUrl) || streamType === 'torrent') {
+    return false;
+  }
+
+  try {
+    const hostname = new URL(streamUrl).hostname.toLowerCase();
+    return !['localhost', '127.0.0.1', '0.0.0.0', '::1'].includes(hostname);
+  } catch {
+    return false;
+  }
+};
+
+const getCastContentType = (streamUrl: string, streamType?: string) => {
+  const normalizedType = streamType?.toLowerCase() || '';
+  const normalizedUrl = streamUrl.toLowerCase().split('?')[0];
+
+  if (normalizedType === 'm3u8' || normalizedUrl.endsWith('.m3u8')) {
+    return 'application/vnd.apple.mpegurl';
+  }
+  if (normalizedType === 'dash' || normalizedUrl.endsWith('.mpd')) {
+    return 'application/dash+xml';
+  }
+  if (normalizedType === 'webm' || normalizedUrl.endsWith('.webm')) {
+    return 'video/webm';
+  }
+  if (normalizedType === 'mkv' || normalizedUrl.endsWith('.mkv')) {
+    return 'video/x-matroska';
+  }
+  return 'video/mp4';
 };
 
 const goFullScreen = () => {
@@ -151,9 +185,13 @@ const Player = ({route}: Props): React.JSX.Element => {
 
   // Player ref
   const playerRef = useRef<VideoRef>(null as unknown as VideoRef);
+  const remoteMediaClient = useRemoteMediaClient();
   const hasSetInitialTracksRef = useRef(false);
   const videoLoadedRef = useRef(false);
   const resumeAppliedRef = useRef(false);
+  const loadedCastMediaRef = useRef('');
+  const remoteCastPositionRef = useRef(0);
+  const wasCastingRef = useRef(false);
 
   // Shared values for animations
   const loadingOpacity = useSharedValue(0);
@@ -260,6 +298,7 @@ const Player = ({route}: Props): React.JSX.Element => {
     showUnlockButton,
     toastMessage,
     showToast,
+    setToast,
     isTextVisible,
     isFullScreen,
     // setIsFullScreen,
@@ -414,6 +453,13 @@ const Player = ({route}: Props): React.JSX.Element => {
     });
 
   const [processedStreamUrl, setProcessedStreamUrl] = useState<string>('');
+  const canCastStream = useMemo(
+    () =>
+      !Platform.isTV &&
+      isCastableStreamUrl(processedStreamUrl, selectedStream?.type),
+    [processedStreamUrl, selectedStream?.type],
+  );
+  const isCasting = Boolean(remoteMediaClient);
   const [isResolvingStream, setIsResolvingStream] = useState(false);
   const progressIntervalRef = useRef<any>(null);
   const [torrentState, setTorrentState] = useState<string>('');
@@ -571,9 +617,6 @@ const Player = ({route}: Props): React.JSX.Element => {
     };
   }, [selectedStream]);
 
-  // Remote media client for casting
-  // const remoteMediaClient = Platform.isTV ? null : useRemoteMediaClient();
-
   // Memoized format quality function
   const formatQuality = useCallback((quality: string) => {
     if (quality === 'auto') {
@@ -633,10 +676,11 @@ const Player = ({route}: Props): React.JSX.Element => {
 
   // Let the user pick a local video file from the device and play it
   // instead of the online stream. Reuses the same DocumentPicker flow
-  // used for custom subtitle files above, and simply swaps the active
+  // used for custom subtitle files below, and simply swaps the active
   // "stream" for one pointing at the local file uri. Continue Watching
   // keeps working because it is keyed off the episode/infoUrl, not the
-  // stream source.
+  // stream source, and casting is automatically disabled for local files
+  // since isCastableStreamUrl only allows http(s) links.
   const handleSelectLocalVideo = useCallback(async () => {
     try {
       const res = await DocumentPicker.getDocumentAsync({
@@ -672,43 +716,149 @@ const Player = ({route}: Props): React.JSX.Element => {
     }
   }, [setSelectedStream, setShowSettings]);
 
-  // Memoized cast effect
-  // useEffect(() => {
-  //   if (remoteMediaClient && !Platform.isTV && selectedStream?.link) {
-  //     remoteMediaClient.loadMedia({
-  //       startTime: watchedDuration,
-  //       playbackRate: playbackRate,
-  //       autoplay: true,
-  //       mediaInfo: {
-  //         contentUrl: selectedStream.link,
-  //         contentType: 'video/x-matroska',
-  //         metadata: {
-  //           title: route.params?.primaryTitle,
-  //           subtitle: route.params?.secondaryTitle,
-  //           type: 'movie',
-  //           images: [
-  //             {
-  //               url: route.params?.poster?.poster || '',
-  //             },
-  //           ],
-  //         },
-  //       },
-  //     });
-  //     playerRef?.current?.pause();
-  //     GoogleCast.showExpandedControls();
-  //   }
-  //   return () => {
-  //     if (remoteMediaClient) {
-  //       remoteMediaClient?.stop();
-  //     }
-  //   };
-  // }, [
-  //   remoteMediaClient,
-  //   selectedStream,
-  //   watchedDuration,
-  //   playbackRate,
-  //   route.params,
-  // ]);
+  useEffect(() => {
+    if (!remoteMediaClient) {
+      return;
+    }
+
+    const subscription = remoteMediaClient.onMediaProgressUpdated(
+      (progress, duration) => {
+        remoteCastPositionRef.current = progress;
+        if (duration > 0) {
+          handleProgress({currentTime: progress, seekableDuration: duration});
+        }
+      },
+      1,
+    );
+
+    return () => subscription.remove();
+  }, [handleProgress, remoteMediaClient]);
+
+  useEffect(() => {
+    if (remoteMediaClient) {
+      wasCastingRef.current = true;
+      return;
+    }
+
+    if (!wasCastingRef.current) {
+      return;
+    }
+
+    wasCastingRef.current = false;
+    loadedCastMediaRef.current = '';
+    const resumePosition = remoteCastPositionRef.current;
+    if (resumePosition > 0) {
+      playerRef.current?.seek(resumePosition);
+    }
+    playerRef.current?.resume();
+  }, [remoteMediaClient]);
+
+  useEffect(() => {
+    if (!remoteMediaClient || !canCastStream || !processedStreamUrl) {
+      return;
+    }
+
+    const mediaKey = `${getEpisodeIdentity(activeEpisode)}:${processedStreamUrl}`;
+    if (loadedCastMediaRef.current === mediaKey) {
+      return;
+    }
+
+    let cancelled = false;
+    const loadCastMedia = async () => {
+      const castSubtitleTracks = externalSubs.flatMap((track, index) => {
+        const uri = track?.uri as string | undefined;
+        const type = String(track?.type || '').toLowerCase();
+        if (!uri || !/^https?:\/\//i.test(uri)) {
+          return [];
+        }
+
+        const contentType = type.includes('ttml')
+          ? 'application/ttml+xml'
+          : type.includes('vtt') || uri.toLowerCase().includes('.vtt')
+            ? 'text/vtt'
+            : null;
+        if (!contentType) {
+          return [];
+        }
+
+        return [
+          {
+            id: index + 1,
+            type: 'text' as const,
+            subtype: 'subtitles' as const,
+            contentId: uri,
+            contentType,
+            language: track?.language || 'und',
+            name: track?.title || track?.language || `Subtitle ${index + 1}`,
+          },
+        ];
+      });
+
+      try {
+        await remoteMediaClient.loadMedia({
+          autoplay: true,
+          playbackRate,
+          startTime: Math.max(
+            remoteCastPositionRef.current,
+            videoPositionRef.current.position,
+            watchedDuration,
+          ),
+          mediaInfo: {
+            contentUrl: processedStreamUrl,
+            contentType: getCastContentType(
+              processedStreamUrl,
+              selectedStream?.type,
+            ),
+            mediaTracks: castSubtitleTracks,
+            metadata: {
+              type: 'generic',
+              title: route.params?.primaryTitle,
+              subtitle: activeEpisode?.title || route.params?.secondaryTitle,
+              images: route.params?.poster?.poster
+                ? [{url: route.params.poster.poster}]
+                : undefined,
+            },
+            customData: selectedStream?.headers
+              ? {headers: selectedStream.headers}
+              : undefined,
+          },
+        });
+
+        if (!cancelled) {
+          loadedCastMediaRef.current = mediaKey;
+          wasCastingRef.current = true;
+          playerRef.current?.pause();
+          setToast('Playing on Cast device', 2000);
+        }
+      } catch (error) {
+        console.warn('Failed to load media on Cast device:', error);
+        if (!cancelled) {
+          loadedCastMediaRef.current = '';
+          setToast('This stream could not be played on the Cast device', 3000);
+        }
+      }
+    };
+
+    loadCastMedia();
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    activeEpisode,
+    canCastStream,
+    externalSubs,
+    playbackRate,
+    processedStreamUrl,
+    remoteMediaClient,
+    route.params?.poster?.poster,
+    route.params?.primaryTitle,
+    route.params?.secondaryTitle,
+    selectedStream?.headers,
+    selectedStream?.type,
+    setToast,
+    videoPositionRef,
+    watchedDuration,
+  ]);
 
   // Exit fullscreen on back
   useFocusEffect(
@@ -1011,7 +1161,7 @@ const Player = ({route}: Props): React.JSX.Element => {
   );
 
   // Show loading state
-  if (streamLoading) {
+  if (streamLoading && !isCasting) {
     return (
       <SafeAreaView
         edges={{right: 'off', top: 'off', left: 'off', bottom: 'off'}}
@@ -1040,7 +1190,7 @@ const Player = ({route}: Props): React.JSX.Element => {
   }
 
   // Show error state
-  if (streamError) {
+  if (streamError && !isCasting) {
     return (
       <SafeAreaView className="bg-black flex-1 justify-center items-center">
         <StatusBar translucent={true} hidden={true} />
@@ -1069,8 +1219,20 @@ const Player = ({route}: Props): React.JSX.Element => {
       <StatusBar translucent={true} hidden={true} />
       <OrientationLocker orientation={LANDSCAPE} />
 
-      {/* Video Player */}
-      {processedStreamUrl ? (
+      {/* Local or Cast player */}
+      {remoteMediaClient ? (
+        <CastRemotePlayer
+          client={remoteMediaClient}
+          title={route.params?.primaryTitle}
+          subtitle={activeEpisode?.title || route.params?.secondaryTitle}
+          artwork={
+            route.params?.poster?.background || route.params?.poster?.poster
+          }
+          accentColor={primary}
+          onBack={() => navigation.goBack()}
+          onError={message => setToast(message, 3000)}
+        />
+      ) : processedStreamUrl ? (
         <VideoPlayer {...videoPlayerProps} />
       ) : (
         <View className="flex-1 justify-center items-center">
@@ -1094,7 +1256,8 @@ const Player = ({route}: Props): React.JSX.Element => {
       )}
 
       {/* Non-intrusive Torrent Status Overlay */}
-      {selectedStream?.type === 'torrent' &&
+      {!isCasting &&
+        selectedStream?.type === 'torrent' &&
         !streamLoading &&
         torrentState !== 'seeding' &&
         torrentState !== 'finished' && (
@@ -1122,7 +1285,7 @@ const Player = ({route}: Props): React.JSX.Element => {
         )}
 
       {/* Full-screen overlay to detect taps when locked */}
-      {isPlayerLocked && (
+      {!isCasting && isPlayerLocked && (
         <TouchableOpacity
           activeOpacity={1}
           onPress={handleLockedScreenTap}
@@ -1131,7 +1294,7 @@ const Player = ({route}: Props): React.JSX.Element => {
       )}
 
       {/* Lock/Unlock button */}
-      {!streamLoading && !Platform.isTV && (
+      {!isCasting && !streamLoading && !Platform.isTV && (
         <Animated.View
           style={[lockButtonStyle]}
           className="absolute top-5 right-5 flex-row items-center gap-2 z-50">
@@ -1144,25 +1307,31 @@ const Player = ({route}: Props): React.JSX.Element => {
               size={24}
             />
           </TouchableOpacity>
-          <TouchableOpacity
-            onPress={toggleFullScreen}
-            className="opacity-70 p-2 rounded-full">
-            <MaterialIcons
-              name={isFullScreen ? 'fullscreen-exit' : 'fullscreen'}
-              color={'hsl(0, 0%, 70%)'}
-              size={24}
-            />
-          </TouchableOpacity>
-          {/* {!isPlayerLocked && (
-            <CastButton
-              style={{width: 40, height: 40, opacity: 0.5, tintColor: 'white'}}
-            />
-          )} */}
+          {SHOW_FULLSCREEN_BUTTON && (
+            <TouchableOpacity
+              onPress={toggleFullScreen}
+              className="opacity-70 p-2 rounded-full">
+              <MaterialIcons
+                name={isFullScreen ? 'fullscreen-exit' : 'fullscreen'}
+                color={'hsl(0, 0%, 70%)'}
+                size={24}
+              />
+            </TouchableOpacity>
+          )}
+          {!isPlayerLocked && canCastStream && (
+            <View className="opacity-70 p-2 rounded-full">
+              <CastButton
+                accessibilityLabel="Cast video"
+                tintColor="white"
+                style={{width: 24, height: 24}}
+              />
+            </View>
+          )}
         </Animated.View>
       )}
 
       {/* Bottom controls */}
-      {!isPlayerLocked && (
+      {!isCasting && !isPlayerLocked && (
         <Animated.View
           style={[controlsStyle]}
           className="absolute bottom-3 right-6 flex flex-row justify-center w-full gap-x-16">
@@ -1296,7 +1465,7 @@ const Player = ({route}: Props): React.JSX.Element => {
       </Animated.View>
 
       {/* Settings Modal */}
-      {!streamLoading && !isPlayerLocked && showSettings && (
+      {!isCasting && !streamLoading && !isPlayerLocked && showSettings && (
         <Animated.View
           style={[settingsStyle]}
           className="absolute opacity-0 top-0 left-0 w-full h-full bg-black/20 justify-end items-center"
@@ -1527,7 +1696,7 @@ const Player = ({route}: Props): React.JSX.Element => {
                     ))}
 
                   {/* Local video option, mirrors the subtitle screen's
-                      "Add external file" entry */}
+                      "Add external file" entry above */}
                   <TouchableOpacity
                     className="flex-row gap-3 items-center rounded-md my-1 overflow-hidden ml-2 mt-2 pt-2 border-t border-white/20"
                     onPress={handleSelectLocalVideo}>
