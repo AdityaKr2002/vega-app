@@ -1280,7 +1280,7 @@ const Player = ({route}: Props): React.JSX.Element => {
             <View className="opacity-70 p-2 rounded-full">
               <CastButton
                 accessibilityLabel="Cast video"
-                tintColor="white"
+                tintColor="hsl(0, 0%, 70%)"
                 style={{width: 24, height: 24}}
               />
             </View>

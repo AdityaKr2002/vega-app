@@ -1,4 +1,4 @@
-const {withGradleProperties} = require('@expo/config-plugins');
+const {withGradleProperties} = require('expo/config-plugins');
 
 // Keep the Gradle daemon within a memory budget that fits alongside the Kotlin
 // compiler workers and Metro. A 4GB heap starves memory-constrained hosts

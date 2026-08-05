@@ -5,7 +5,7 @@ const {
   withAndroidStyles,
   withDangerousMod,
   withMainActivity,
-} = require('@expo/config-plugins');
+} = require('expo/config-plugins');
 
 const variants = [
   {id: 'White', color: '#FFFFFFFF', enabled: true},

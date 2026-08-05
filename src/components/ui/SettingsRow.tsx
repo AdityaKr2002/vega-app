@@ -27,7 +27,9 @@ const SettingsRow = ({
     <Pressable
       accessibilityRole={onPress ? 'button' : undefined}
       disabled={!onPress}
+      hitSlop={{top: 4, bottom: 4, left: 0, right: 0}}
       onPress={onPress}
+      pressRetentionOffset={24}
       style={({pressed}) => ({
         backgroundColor: pressed ? colors.surfaceContainerHigh : 'transparent',
       })}>
@@ -45,6 +47,7 @@ const SettingsRow = ({
               name={icon}
               size={21}
               color={colors.onSecondaryContainer}
+              pointerEvents="none"
             />
           </View>
         ) : null}
@@ -66,6 +69,7 @@ const SettingsRow = ({
               name="chevron-right"
               size={22}
               color={colors.onSurfaceVariant}
+              pointerEvents="none"
             />
           ) : null)}
       </View>

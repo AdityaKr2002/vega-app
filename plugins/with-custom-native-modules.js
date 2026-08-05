@@ -4,7 +4,7 @@ const {
   withDangerousMod,
   withMainApplication,
   withAppBuildGradle,
-} = require('@expo/config-plugins');
+} = require('expo/config-plugins');
 
 function withCustomNativeModules(config) {
   // 1. Copy the files over

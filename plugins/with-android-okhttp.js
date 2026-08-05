@@ -1,6 +1,6 @@
 const fs = require('fs');
 const path = require('path');
-const {withDangerousMod} = require('@expo/config-plugins');
+const {withDangerousMod} = require('expo/config-plugins');
 
 /**
  * Adds OkHttp dependencies and force resolution strategy after prebuild.

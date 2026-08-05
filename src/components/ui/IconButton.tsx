@@ -47,9 +47,9 @@ const IconButton = ({
       accessibilityRole="button"
       accessibilityState={{disabled: Boolean(disabled), selected}}
       disabled={Boolean(disabled)}
-      hitSlop={4}
+      hitSlop={8}
       onPress={onPress}
-      pressRetentionOffset={12}
+      pressRetentionOffset={24}
       android_ripple={{
         borderless: !buttonWidth,
         color: colors.onSurfaceVariant,
@@ -72,6 +72,7 @@ const IconButton = ({
         name={icon}
         size={size}
         color={resolvedContentColor}
+        pointerEvents="none"
       />
     </Pressable>
   );

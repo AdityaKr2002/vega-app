@@ -1,6 +1,6 @@
 const fs = require('fs');
 const path = require('path');
-const {withDangerousMod} = require('@expo/config-plugins');
+const {withDangerousMod} = require('expo/config-plugins');
 
 /**
  * Ensures ic_notification resources exist after prebuild by copying from assets/android/notification/** into

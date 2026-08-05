@@ -1,6 +1,6 @@
 const fs = require('fs');
 const path = require('path');
-const {withDangerousMod} = require('@expo/config-plugins');
+const {withDangerousMod} = require('expo/config-plugins');
 
 /**
  * Adds release signing configuration that reads from env vars after prebuild.

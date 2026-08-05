@@ -1,6 +1,6 @@
 const fs = require('fs');
 const path = require('path');
-const {withDangerousMod} = require('@expo/config-plugins');
+const {withDangerousMod} = require('expo/config-plugins');
 
 /**
  * Ensures custom release build logic (APK renaming and buildTypes settings) is re-applied after prebuild.

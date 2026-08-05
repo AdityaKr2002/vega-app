@@ -1,7 +1,7 @@
 const {
   withAndroidManifest,
   withAndroidStyles,
-} = require('@expo/config-plugins');
+} = require('expo/config-plugins');
 
 const withAndroidNativeConfig = config => {
   config = withAndroidManifest(config, manifestConfig => {

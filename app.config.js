@@ -13,6 +13,11 @@ const tmdbApiKey =
   process.env.TMDB_API_KEY || process.env.EXPO_PUBLIC_TMDB_API_KEY || '';
 
 module.exports = () => {
+  const IS_PLAYSTORE = process.env.APP_VARIANT === 'playstore';
+  const HAS_FIREBASE =
+    !IS_PLAYSTORE && (hasAndroidGoogleServices || hasIosGooglePlist);
+  const PACKAGE_NAME = IS_PLAYSTORE ? 'vega.app' : 'com.vega';
+  const APP_SCHEME = IS_PLAYSTORE ? 'vegaapp' : 'com.vega';
   const plugins = [
     './plugins/with-custom-native-modules.js',
     './plugins/android-native-config.js',
@@ -24,13 +29,8 @@ module.exports = () => {
     './plugins/with-android-release-gradle.js',
     './plugins/with-android-signing.js',
     './plugins/with-android-okhttp.js',
-    ...(hasAndroidGoogleServices || hasIosGooglePlist
-      ? ['@react-native-firebase/app']
-      : []),
-    ...(hasAndroidGoogleServices || hasIosGooglePlist
-      ? ['@react-native-firebase/crashlytics']
-      : []),
-    ['expo-build-properties', {android: {usePrecompiledHeaders: true}}],
+    ...(HAS_FIREBASE ? ['@react-native-firebase/app'] : []),
+    ...(HAS_FIREBASE ? ['@react-native-firebase/crashlytics'] : []),
     [
       'react-native-video',
       {
@@ -73,6 +73,7 @@ module.exports = () => {
       'expo-build-properties',
       {
         android: {
+          usePrecompiledHeaders: true,
           extraMavenRepos: [
             '../../node_modules/@notifee/react-native/android/libs',
           ],
@@ -108,10 +109,6 @@ module.exports = () => {
     'expo-font',
     'expo-status-bar',
   ];
-  const IS_PLAYSTORE = process.env.APP_VARIANT === 'playstore';
-  const PACKAGE_NAME = IS_PLAYSTORE ? 'vega.app' : 'com.vega';
-  const APP_SCHEME = IS_PLAYSTORE ? 'vegaapp' : 'com.vega';
-
   return {
     expo: {
       name: 'Vega',
@@ -128,12 +125,12 @@ module.exports = () => {
         reactCompiler: true,
       },
       android: {
-        ...(hasAndroidGoogleServices
+        ...(!IS_PLAYSTORE && hasAndroidGoogleServices
           ? {googleServicesFile: androidGoogleServicesFile}
           : {}),
         minSdkVersion: 28,
         package: PACKAGE_NAME,
-        versionCode: 184,
+        versionCode: 186,
         permissions: [
           'FOREGROUND_SERVICE',
           'FOREGROUND_SERVICE_DATA_SYNC',
@@ -167,13 +164,16 @@ module.exports = () => {
         supportsPictureInPicture: true,
       },
       ios: {
-        ...(hasIosGooglePlist
+        ...(!IS_PLAYSTORE && hasIosGooglePlist
           ? {googleServicesFile: iosGoogleServicesFile}
           : {}),
       },
       platforms: ['ios', 'android'],
       extra: {
-        hasFirebase: hasAndroidGoogleServices || hasIosGooglePlist,
+        eas: {
+          projectId: '40d98354-d3c8-4616-ab2e-70d9c297091f',
+        },
+        hasFirebase: HAS_FIREBASE,
         isPlayStore: IS_PLAYSTORE,
         tmdbApiKey,
       },

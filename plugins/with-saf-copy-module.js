@@ -1,6 +1,6 @@
 const fs = require('fs');
 const path = require('path');
-const {withDangerousMod, withMainApplication} = require('@expo/config-plugins');
+const {withDangerousMod, withMainApplication} = require('expo/config-plugins');
 
 const SAF_COPY_MODULE_SOURCE = packageName => `package ${packageName}
 
