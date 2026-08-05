@@ -694,7 +694,9 @@ const Player = ({route}: Props): React.JSX.Element => {
           'video/x-m4v',
         ],
         multiple: false,
-        copyToCacheDirectory: true,
+        // Videos can be several gigabytes. Play the provider URI directly
+        // instead of duplicating the complete file in the app cache.
+        copyToCacheDirectory: false,
       });
 
       if (!res.canceled && res.assets?.[0]) {
