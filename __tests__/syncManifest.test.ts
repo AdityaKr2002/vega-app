@@ -137,6 +137,49 @@ describe('Vega sync manifest', () => {
     );
   });
 
+  it('does not erase episode metadata when newer progress omits it', () => {
+    const metadata = manifest('mobile', {
+      history: {
+        episode: {
+          id: 'episode',
+          title: 'Show',
+          episodeTitle: 'Episode 4',
+          episode: {
+            id: 'episode',
+            title: 'Episode 4',
+            link: '/episode-4',
+          },
+          link: '/show',
+          poster: 'poster.jpg',
+          provider: 'provider',
+          progress: 120,
+          duration: 1800,
+          updatedAt: 10,
+        },
+      },
+    });
+    const progressOnly = manifest('desktop', {
+      history: {
+        episode: {
+          id: 'episode',
+          title: 'Show',
+          link: '/show',
+          progress: 360,
+          updatedAt: 20,
+        },
+      },
+    });
+
+    const merged = mergeSyncManifests([metadata, progressOnly]).history.episode;
+
+    expect(merged.progress).toBe(360);
+    expect(merged.episodeTitle).toBe('Episode 4');
+    expect(merged.episode?.title).toBe('Episode 4');
+    expect(merged.poster).toBe('poster.jpg');
+    expect(merged.provider).toBe('provider');
+    expect(merged.duration).toBe(1800);
+  });
+
   it('keeps a history tombstone from resurrecting older playback', () => {
     const played = manifest('mobile', {
       history: {

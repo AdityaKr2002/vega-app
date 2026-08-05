@@ -208,7 +208,17 @@ export const mergeSyncManifests = (
         history[id] = item;
       } else if (item.updatedAt >= existing.updatedAt) {
         history[id] = {
+          ...existing,
           ...item,
+          title: item.title || existing.title,
+          poster: item.poster ?? existing.poster,
+          background: item.background ?? existing.background,
+          provider: item.provider ?? existing.provider,
+          link: item.link || existing.link,
+          episodeTitle: item.episodeTitle ?? existing.episodeTitle,
+          episode: item.episode ?? existing.episode,
+          type: item.type ?? existing.type,
+          isSeries: item.isSeries ?? existing.isSeries,
           progress: item.progress ?? existing.progress,
           duration: item.duration ?? existing.duration,
           currentTime: item.currentTime ?? existing.currentTime,

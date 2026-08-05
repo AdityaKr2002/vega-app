@@ -349,7 +349,7 @@ const Player = ({route}: Props): React.JSX.Element => {
     upsertContinueWatching({
       id: continueWatchingId,
       title: route.params.primaryTitle,
-      episodeTitle: route.params.secondaryTitle,
+      episodeTitle: activeEpisode.title || route.params.secondaryTitle,
       episode: activeEpisode,
       type: route.params.type,
       poster: route.params.poster?.poster,

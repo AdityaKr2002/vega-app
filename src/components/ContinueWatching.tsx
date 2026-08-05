@@ -27,6 +27,11 @@ const ContinueWatchingCard = ({
 }: ContinueWatchingCardProps) => {
   const colors = useM3Colors();
   const poster = item.poster || item.background;
+  const episodeTitle =
+    item.episodeTitle ||
+    (item.episode?.title && item.episode.title !== item.title
+      ? item.episode.title
+      : undefined);
   const progressColor = useImageAccent(poster, colors.primary);
   const progress =
     item.duration > 0
@@ -37,7 +42,7 @@ const ContinueWatchingCard = ({
     <View style={{width: 124}}>
       <MediaPosterCard
         title={item.title}
-        subtitle={item.episodeTitle}
+        subtitle={episodeTitle}
         poster={poster}
         width={124}
         onPress={() => onOpen(item)}

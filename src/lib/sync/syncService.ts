@@ -126,7 +126,7 @@ const toSyncedHistory = (item: ContinueWatchingItem): SyncedHistory => ({
   currentTime: item.position,
   isSeries: item.type === 'series',
   lastPlayed: item.updatedAt,
-  episodeTitle: item.episodeTitle,
+  episodeTitle: item.episodeTitle || item.episode.title,
   episode: item.episode,
   type: item.type,
   updatedAt: item.updatedAt,
@@ -219,7 +219,9 @@ const applyRemoteHistory = (history: Record<string, SyncedHistory>) => {
       return {
         id: item.link,
         title: item.title,
-        episodeTitle: item.episodeTitle,
+        episodeTitle:
+          item.episodeTitle ||
+          (episode.title !== item.title ? episode.title : undefined),
         episode,
         type: item.type || (item.isSeries ? 'series' : 'movie'),
         poster: item.poster,
