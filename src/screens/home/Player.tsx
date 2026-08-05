@@ -674,6 +674,50 @@ const Player = ({route}: Props): React.JSX.Element => {
     [switchToNextStream, navigation, setShowControls],
   );
 
+  // Let the user pick a local video file from the device and play it
+  // instead of the online stream. Reuses the same DocumentPicker flow
+  // used for custom subtitle files below, and simply swaps the active
+  // "stream" for one pointing at the local file uri. Continue Watching
+  // keeps working because it is keyed off the episode/infoUrl, not the
+  // stream source, and casting is automatically disabled for local files
+  // since isCastableStreamUrl only allows http(s) links.
+  const handleSelectLocalVideo = useCallback(async () => {
+    try {
+      const res = await DocumentPicker.getDocumentAsync({
+        type: [
+          'video/*',
+          'video/mp4',
+          'video/x-matroska',
+          'video/quicktime',
+          'video/x-msvideo',
+          'video/webm',
+          'video/x-m4v',
+        ],
+        multiple: false,
+        // Videos can be several gigabytes. Play the provider URI directly
+        // instead of duplicating the complete file in the app cache.
+        copyToCacheDirectory: false,
+      });
+
+      if (!res.canceled && res.assets?.[0]) {
+        const asset = res.assets[0];
+        setSelectedStream({
+          server: 'Local Video',
+          link: asset.uri,
+          type: 'local',
+        });
+        setShowSettings(false);
+        ToastAndroid.show(
+          `Playing local file: ${asset.name || 'video'}`,
+          ToastAndroid.SHORT,
+        );
+      }
+    } catch (err) {
+      console.log(err);
+      ToastAndroid.show('Could not open the selected file', ToastAndroid.SHORT);
+    }
+  }, [setSelectedStream, setShowSettings]);
+
   useEffect(() => {
     if (!remoteMediaClient) {
       return;
@@ -1369,12 +1413,14 @@ const Player = ({route}: Props): React.JSX.Element => {
             }}>
             <MaterialIcons name="video-settings" size={25} color="white" />
             <Text className="text-xs text-white capitalize">
-              {videoTracks?.length === 1
-                ? formatQuality(videoTracks[0]?.height?.toString() || 'auto')
-                : formatQuality(
-                    videoTracks?.[selectedQualityIndex]?.height?.toString() ||
-                      'auto',
-                  )}
+              {selectedStream?.type === 'local'
+                ? 'Local'
+                : videoTracks?.length === 1
+                  ? formatQuality(videoTracks[0]?.height?.toString() || 'auto')
+                  : formatQuality(
+                      videoTracks?.[selectedQualityIndex]?.height?.toString() ||
+                        'auto',
+                    )}
             </Text>
           </TouchableOpacity>
 
@@ -1650,6 +1696,33 @@ const Player = ({route}: Props): React.JSX.Element => {
                         )}
                       </TouchableOpacity>
                     ))}
+
+                  {/* Local video option, mirrors the subtitle screen's
+                      "Add external file" entry above */}
+                  <TouchableOpacity
+                    className="flex-row gap-3 items-center rounded-md my-1 overflow-hidden ml-2 mt-2 pt-2 border-t border-white/20"
+                    onPress={handleSelectLocalVideo}>
+                    <MaterialIcons
+                      name="folder-open"
+                      size={20}
+                      color={
+                        selectedStream?.type === 'local' ? primary : 'white'
+                      }
+                    />
+                    <Text
+                      className="text-base font-semibold"
+                      style={{
+                        color:
+                          selectedStream?.type === 'local' ? primary : 'white',
+                      }}>
+                      {selectedStream?.type === 'local'
+                        ? 'Local Video'
+                        : 'Select Local Video'}
+                    </Text>
+                    {selectedStream?.type === 'local' && (
+                      <MaterialIcons name="check" size={20} color={primary} />
+                    )}
+                  </TouchableOpacity>
                 </ScrollView>
 
                 <ScrollView>
