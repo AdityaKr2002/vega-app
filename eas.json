@@ -29,17 +29,16 @@
         "APP_VARIANT": "playstore"
       },
       "android": {
-        "buildType": "aab",
-        "gradleCommand": ":app:bundleRelease"
+        "buildType": "app-bundle"
       }
     }
   },
   "submit": {
     "production": {
       "android": {
-        "serviceAccountKeyPath": "./service-account-key.json",
+        "serviceAccountKeyPath": "./vega-eas.json",
         "track": "internal",
-        "releaseStatus": "inProgress"
+        "releaseStatus": "completed"
       }
     }
   }

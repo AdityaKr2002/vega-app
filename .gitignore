@@ -32,6 +32,8 @@ local.properties
 *.hprof
 .cxx/
 *.keystore
+*.jks
+*eas.json
 !debug.keystore
 
 /android

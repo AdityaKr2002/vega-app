@@ -8,7 +8,7 @@ import {
 } from '@expo/ui/jetpack-compose';
 import {defaultMinSize} from '@expo/ui/jetpack-compose/modifiers';
 import React, {ReactNode} from 'react';
-import {ColorValue, View, ViewStyle} from 'react-native';
+import {ColorValue, Pressable, StyleSheet, View, ViewStyle} from 'react-native';
 import {useM3Colors, useM3HostTheme} from '../../theme/M3PaletteContext';
 
 type ButtonVariant =
@@ -72,14 +72,22 @@ const Button = ({
   };
 
   return (
-    <View testID={testID} style={[{alignSelf: 'flex-start'}, style]}>
+    <View
+      style={[
+        {
+          alignSelf: 'flex-start',
+          borderRadius: 999,
+          overflow: 'hidden',
+          position: 'relative',
+        },
+        style,
+      ]}>
       <Host
         matchContents
         {...hostTheme}
-        pointerEvents={disabled ? 'none' : 'auto'}>
+        pointerEvents="none">
         <ButtonComponent
           enabled={!disabled}
-          onClick={onPress}
           colors={buttonColors}
           contentPadding={
             compact
@@ -99,6 +107,16 @@ const Button = ({
           </Text>
         </ButtonComponent>
       </Host>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityState={{disabled: Boolean(disabled)}}
+        android_ripple={{color: String(colors.onSurfaceVariant)}}
+        disabled={Boolean(disabled)}
+        hitSlop={6}
+        onPress={onPress}
+        testID={testID}
+        style={StyleSheet.absoluteFill}
+      />
     </View>
   );
 };
