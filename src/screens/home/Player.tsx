@@ -181,6 +181,9 @@ const Player = ({route}: Props): React.JSX.Element => {
   const updateContinueWatchingProgress = useContinueWatchingStore(
     state => state.updateProgress,
   );
+  const setLocalVideoForContinueWatching = useContinueWatchingStore(
+    state => state.setLocalVideo,
+  );
   const continueWatchingItems = useContinueWatchingStore(state => state.items);
 
   // Player ref
@@ -192,6 +195,7 @@ const Player = ({route}: Props): React.JSX.Element => {
   const loadedCastMediaRef = useRef('');
   const remoteCastPositionRef = useRef(0);
   const wasCastingRef = useRef(false);
+  const appliedPersistedLocalVideoRef = useRef(false);
 
   // Shared values for animations
   const loadingOpacity = useSharedValue(0);
@@ -359,6 +363,12 @@ const Player = ({route}: Props): React.JSX.Element => {
       position,
       duration,
       updatedAt: syncedUpdatedAt || (position > 0 ? Date.now() : 0),
+      localVideoUri: syncedEpisodeMatches
+        ? syncedContinueWatching?.localVideoUri
+        : undefined,
+      localVideoName: syncedEpisodeMatches
+        ? syncedContinueWatching?.localVideoName
+        : undefined,
     });
   }, [
     activeEpisode,
@@ -371,6 +381,8 @@ const Player = ({route}: Props): React.JSX.Element => {
     route.params.secondaryTitle,
     route.params.type,
     syncReady,
+    syncedContinueWatching?.localVideoName,
+    syncedContinueWatching?.localVideoUri,
     syncedDuration,
     syncedEpisodeMatches,
     syncedPosition,
@@ -423,7 +435,27 @@ const Player = ({route}: Props): React.JSX.Element => {
   useEffect(() => {
     resumeAppliedRef.current = false;
     videoLoadedRef.current = false;
+    appliedPersistedLocalVideoRef.current = false;
   }, [activeEpisode?.id, activeEpisode?.link, activeEpisode?.sourceLink]);
+
+  // Auto-resume a remembered local video file for this episode (e.g. when
+  // opening this title again from Continue Watching) instead of forcing the
+  // user to pick the file again. Only applied once per episode so it never
+  // fights a manual server switch made later in the same session.
+  useEffect(() => {
+    if (appliedPersistedLocalVideoRef.current) {
+      return;
+    }
+    if (!syncedEpisodeMatches || !syncedContinueWatching?.localVideoUri) {
+      return;
+    }
+    appliedPersistedLocalVideoRef.current = true;
+    setSelectedStream({
+      server: 'Local Video',
+      link: syncedContinueWatching.localVideoUri,
+      type: 'local',
+    });
+  }, [syncedContinueWatching, syncedEpisodeMatches, setSelectedStream]);
 
   useEffect(() => {
     if (
@@ -707,6 +739,17 @@ const Player = ({route}: Props): React.JSX.Element => {
           type: 'local',
         });
         setShowSettings(false);
+        // Remember this file against the current continue-watching entry so
+        // reopening this same episode later resumes it automatically
+        // instead of prompting the picker again.
+        appliedPersistedLocalVideoRef.current = true;
+        if (continueWatchingId) {
+          setLocalVideoForContinueWatching(
+            continueWatchingId,
+            asset.uri,
+            asset.name || undefined,
+          );
+        }
         ToastAndroid.show(
           `Playing local file: ${asset.name || 'video'}`,
           ToastAndroid.SHORT,
@@ -716,7 +759,12 @@ const Player = ({route}: Props): React.JSX.Element => {
       console.log(err);
       ToastAndroid.show('Could not open the selected file', ToastAndroid.SHORT);
     }
-  }, [setSelectedStream, setShowSettings]);
+  }, [
+    continueWatchingId,
+    setLocalVideoForContinueWatching,
+    setSelectedStream,
+    setShowSettings,
+  ]);
 
   useEffect(() => {
     if (!remoteMediaClient) {
@@ -1163,7 +1211,7 @@ const Player = ({route}: Props): React.JSX.Element => {
   );
 
   // Show loading state
-  if (streamLoading && !isCasting) {
+  if (streamLoading && !isCasting && selectedStream?.type !== 'local') {
     return (
       <SafeAreaView
         edges={{right: 'off', top: 'off', left: 'off', bottom: 'off'}}
@@ -1192,7 +1240,7 @@ const Player = ({route}: Props): React.JSX.Element => {
   }
 
   // Show error state
-  if (streamError && !isCasting) {
+  if (streamError && !isCasting && selectedStream?.type !== 'local') {
     return (
       <SafeAreaView className="bg-black flex-1 justify-center items-center">
         <StatusBar translucent={true} hidden={true} />
@@ -1678,6 +1726,14 @@ const Player = ({route}: Props): React.JSX.Element => {
                         key={i}
                         onPress={() => {
                           setSelectedStream(track);
+                          appliedPersistedLocalVideoRef.current = true;
+                          if (continueWatchingId) {
+                            setLocalVideoForContinueWatching(
+                              continueWatchingId,
+                              undefined,
+                              undefined,
+                            );
+                          }
                           setShowSettings(false);
                           playerRef?.current?.resume();
                         }}>
