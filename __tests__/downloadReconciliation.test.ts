@@ -140,6 +140,57 @@ describe('download startup reconciliation', () => {
     );
   });
 
+  it('requeues a native HTTP download from its partial SAF file', async () => {
+    const partialUri = 'content://downloads/tree/movie/Movie.mp4';
+    mockSafFiles.set(partialUri, 4096);
+    useDownloadsStore.getState().enqueueDownload({
+      id: 'movie_native_0',
+      title: 'Movie',
+      type: 'movie',
+      url: 'https://example.com/movie.mp4',
+      sourceType: 'http',
+      status: 'downloading',
+      finalDocumentUri: partialUri,
+      downloadLocation: location,
+    });
+
+    await reconcileDownloadState();
+
+    expect(useDownloadsStore.getState().downloads.movie_native_0).toMatchObject(
+      {
+        status: 'queued',
+        downloadedBytes: 4096,
+      },
+    );
+    expect(mockScheduleQueuedDownloads).toHaveBeenCalledTimes(1);
+  });
+
+  it('requeues a network-paused native HTTP download after restart', async () => {
+    const partialUri = 'content://downloads/tree/movie/Movie.mp4';
+    mockSafFiles.set(partialUri, 8192);
+    useDownloadsStore.getState().enqueueDownload({
+      id: 'movie_network_paused_0',
+      title: 'Movie',
+      type: 'movie',
+      url: 'https://example.com/movie.mp4',
+      sourceType: 'http',
+      status: 'paused',
+      errorCode: 'NETWORK_INTERRUPTED',
+      finalDocumentUri: partialUri,
+      downloadLocation: location,
+    });
+
+    await reconcileDownloadState();
+
+    expect(
+      useDownloadsStore.getState().downloads.movie_network_paused_0,
+    ).toMatchObject({
+      status: 'queued',
+      downloadedBytes: 8192,
+      errorCode: undefined,
+    });
+  });
+
   it('marks a completed record missing when its SAF document is gone', async () => {
     useDownloadsStore.getState().enqueueDownload({
       id: 'movie_direct_0',

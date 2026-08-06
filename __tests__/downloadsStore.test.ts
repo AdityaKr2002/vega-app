@@ -103,6 +103,37 @@ describe('downloads store', () => {
     });
   });
 
+  it('does not let late progress events overwrite a network pause', () => {
+    const id = createDirectDownloadId('Vega Movie', 0);
+    const store = useDownloadsStore.getState();
+    store.enqueueDownload({
+      id,
+      title: 'Vega Movie',
+      type: 'movie',
+      url: 'https://example.com/video.mp4',
+    });
+    store.updateDownload(id, {
+      status: 'paused',
+      speed: 0,
+      canPause: false,
+      canResume: true,
+      errorCode: 'NETWORK_INTERRUPTED',
+      errorMessage: 'Waiting for network connection',
+    });
+
+    store.updateProgress(id, 50, 100, 10);
+
+    expect(useDownloadsStore.getState().downloads[id]).toMatchObject({
+      status: 'paused',
+      downloadedBytes: 50,
+      totalBytes: 100,
+      speed: 0,
+      canResume: true,
+      errorCode: 'NETWORK_INTERRUPTED',
+      errorMessage: 'Waiting for network connection',
+    });
+  });
+
   it('keeps active downloads in creation order as progress updates arrive', () => {
     const store = useDownloadsStore.getState();
     store.enqueueDownload({

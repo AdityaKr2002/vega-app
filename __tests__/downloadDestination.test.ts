@@ -113,6 +113,50 @@ describe('download destination service', () => {
     expect(first.stagingPath).toContain('Show_SSeason_1_E1');
   });
 
+  it('creates an HTTP target directly inside the selected SAF hierarchy', async () => {
+    const destination = await prepareDownloadDestination({
+      downloadId: 'direct-http',
+      location: {
+        type: 'saf',
+        uri: 'content://downloads/tree',
+        label: 'Downloads',
+      },
+      fileName: 'Episode_1',
+      fileType: 'mkv',
+      directToSaf: true,
+      outputDirectoryNames: ['show', 'season_1'],
+    });
+
+    expect(destination).toEqual({
+      stagingDirectory: '',
+      stagingPath: 'content://downloads/tree/show/season_1/Episode_1.mkv',
+      directFinalDocumentUri:
+        'content://downloads/tree/show/season_1/Episode_1.mkv',
+    });
+    expect(mockDirectories.size).toBe(0);
+  });
+
+  it('reuses a partial SAF document when resuming', async () => {
+    const partialUri = 'content://downloads/tree/show/movie.mp4';
+    mockSafFiles.set(partialUri, 4096);
+
+    const destination = await prepareDownloadDestination({
+      downloadId: 'direct-http',
+      location: {
+        type: 'saf',
+        uri: 'content://downloads/tree',
+        label: 'Downloads',
+      },
+      fileName: 'movie',
+      fileType: 'mp4',
+      directToSaf: true,
+      existingFinalDocumentUri: partialUri,
+    });
+
+    expect(destination.directFinalDocumentUri).toBe(partialUri);
+    expect(mockSafFiles.get(partialUri)).toBe(4096);
+  });
+
   it('rejects a path destination', async () => {
     const stagingPath = '/cache/downloads/movie/movie.mp4.part';
     mockDirectories.add('/cache/downloads/movie');

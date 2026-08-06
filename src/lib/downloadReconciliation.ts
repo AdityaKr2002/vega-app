@@ -2,6 +2,7 @@ import * as RNFS from '@dr.pogodin/react-native-fs';
 import {
   downloadOutputExists,
   finalizeDownloadOutput,
+  getDownloadOutputSize,
   getDownloadStagingDirectory,
   getDownloadStagingPath,
 } from './downloadDestination';
@@ -22,6 +23,16 @@ const STALE_RUNTIME_STATUSES: ReadonlySet<DownloadStatus> = new Set([
   'pausing',
   'canceling',
 ]);
+
+const RESUMABLE_HTTP_STATUSES: ReadonlySet<DownloadStatus> = new Set([
+  'starting',
+  'downloading',
+  'pausing',
+]);
+
+const shouldResumeHttpDownload = (record: DownloadItem): boolean =>
+  RESUMABLE_HTTP_STATUSES.has(record.status) ||
+  (record.status === 'paused' && record.errorCode === 'NETWORK_INTERRUPTED');
 
 const getOutputName = (record: DownloadItem): string =>
   record.displayFileName?.replace(/\.[^.]+$/, '') || record.title;
@@ -107,6 +118,28 @@ const reconcileRecord = async (record: DownloadItem): Promise<void> => {
 
   if (record.status === 'finalizing') {
     await reconcileFinalizing(record);
+    return;
+  }
+
+  if (
+    record.sourceType === 'http' &&
+    record.finalDocumentUri &&
+    shouldResumeHttpDownload(record) &&
+    (await downloadOutputExists(record.finalDocumentUri))
+  ) {
+    const downloadedBytes = await getDownloadOutputSize(
+      record.finalDocumentUri,
+    ).catch(() => record.downloadedBytes);
+    store.updateDownload(record.id, {
+      status: 'queued',
+      downloadedBytes,
+      speed: 0,
+      canPause: false,
+      canResume: false,
+      errorCode: undefined,
+      errorMessage: undefined,
+      retryable: undefined,
+    });
     return;
   }
 

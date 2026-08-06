@@ -7,11 +7,13 @@ export interface DownloadBackendContext {
 }
 
 export interface DownloadBackend {
+  directToSaf?: boolean;
+  preservePartialOnFailure?: boolean;
   start(context: DownloadBackendContext): Promise<void>;
   pause?(downloadId: string): Promise<void>;
   resume?(downloadId: string): Promise<void>;
   cancel(downloadId: string): Promise<void>;
-  cleanup(downloadId: string): Promise<void>;
+  cleanup(downloadId: string, record?: DownloadItem): Promise<void>;
 }
 
 export class DownloadPauseSupportError extends Error {

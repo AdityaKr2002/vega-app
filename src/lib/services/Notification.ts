@@ -4,6 +4,7 @@ import notifee, {
   EventDetail,
   EventType,
   AndroidForegroundServiceType,
+  AndroidLaunchActivityFlag,
   AuthorizationStatus,
 } from '@notifee/react-native';
 import {settingsStorage} from '../storage';
@@ -25,6 +26,7 @@ export interface NotificationOptions {
   id: string;
   title: string;
   body: string;
+  smallIcon?: string;
   color?: string;
   data?: NotificationData;
   progress?: {
@@ -37,6 +39,7 @@ export interface NotificationOptions {
     pressAction: {
       id: string;
       launchActivity?: string;
+      launchActivityFlags?: AndroidLaunchActivityFlag[];
     };
   }>;
   onlyAlertOnce?: boolean;
@@ -63,6 +66,20 @@ class NotificationService {
   private permissionRequest?: Promise<boolean>;
   private pendingApkInstall?: Promise<void>;
   private readonly notificationOperations = new Map<string, Promise<void>>();
+
+  private getAppLaunchPressAction(id = 'default') {
+    return {
+      id,
+      // The app launcher is an activity alias, so Notifee's `default`
+      // resolution is not reliable. Launch the real activity explicitly.
+      launchActivity: `${RNApkInstaller.packageName}.MainActivity`,
+      launchActivityFlags: [
+        AndroidLaunchActivityFlag.NEW_TASK,
+        AndroidLaunchActivityFlag.CLEAR_TOP,
+        AndroidLaunchActivityFlag.SINGLE_TOP,
+      ],
+    };
+  }
 
   constructor() {
     this.initialize();
@@ -174,15 +191,14 @@ class NotificationService {
       body: options.body,
       data: options.data,
       android: {
-        smallIcon: isDownloadNotification
-          ? 'ic_download_notification'
-          : 'ic_notification',
+        smallIcon:
+          options.smallIcon ||
+          (isDownloadNotification
+            ? 'ic_download_notification'
+            : 'ic_notification'),
         channelId: channelId || this._defaultChannelId,
         color: notificationColor,
-        pressAction: {
-          id: 'default',
-          launchActivity: 'default',
-        },
+        pressAction: this.getAppLaunchPressAction(),
         ...(options.progress ? {progress: options.progress} : {}),
         ...(options.actions ? {actions: options.actions} : {}),
         ...(options.groupId ? {groupId: options.groupId} : {}),
@@ -253,6 +269,7 @@ class NotificationService {
       id: this._downloadForegroundId,
       title: count === 1 ? 'Download in progress' : 'Downloads in progress',
       body: count === 1 ? '1 active download' : `${count} active downloads`,
+      smallIcon: 'ic_download_notification_animated',
       data: {navigationTarget: 'downloads'},
       onlyAlertOnce: true,
       asForegroundService: true,
@@ -302,6 +319,7 @@ class NotificationService {
       id: downloadId,
       title: title,
       body: 'Starting download',
+      smallIcon: 'ic_download_notification_animated',
       color,
       data: this.getDownloadData(downloadId, sourceType),
       groupId: 'vega-downloads',
@@ -331,10 +349,7 @@ class NotificationService {
       actions: [
         {
           title: 'Start now',
-          pressAction: {
-            id: 'start-now-download',
-            launchActivity: 'default',
-          },
+          pressAction: this.getAppLaunchPressAction('start-now-download'),
         },
         {title: 'Cancel', pressAction: {id: 'cancel-download'}},
       ],
@@ -367,6 +382,10 @@ class NotificationService {
       id: downloadId,
       title: title,
       body: progressText,
+      smallIcon:
+        action === 'pause'
+          ? 'ic_download_notification_animated'
+          : 'ic_download_notification',
       color,
       data: this.getDownloadData(downloadId, sourceType),
       groupId: 'vega-downloads',

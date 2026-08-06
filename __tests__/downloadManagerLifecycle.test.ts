@@ -47,10 +47,15 @@ jest.mock('../src/lib/services/Notification', () => ({
   },
 }));
 
+jest.mock('../src/lib/imageAccent', () => ({
+  getImageAccent: jest.fn(async () => '#ffffff'),
+}));
+
 jest.mock('../src/lib/storage', () => ({
   settingsStorage: {
     getDownloadLocationConfig: () => undefined,
     getDownloadConcurrency: () => mockDownloadConcurrency,
+    getPrimaryColor: () => '#ffffff',
     setDownloadLocation: jest.fn(),
   },
 }));
@@ -137,6 +142,7 @@ describe('download manager foreground lifecycle', () => {
       'Movie',
       'movie_direct_0',
       'http',
+      '#ffffff',
     );
     expect(mockStopForegroundTask).toHaveBeenCalledWith('movie_direct_0');
   });
@@ -154,11 +160,13 @@ describe('download manager foreground lifecycle', () => {
       'Movie',
       'movie_direct_0',
       'http',
+      '#ffffff',
     );
     expect(mockShowComplete).toHaveBeenCalledWith(
       'Movie',
       'movie_direct_0',
       'http',
+      '#ffffff',
     );
     expect(useDownloadsStore.getState().downloads.movie_direct_0.status).toBe(
       'completed',
@@ -279,6 +287,7 @@ describe('download manager foreground lifecycle', () => {
       'Movie',
       'movie_direct_0',
       'http',
+      '#ffffff',
     );
     expect(mockStopForegroundTask).toHaveBeenCalledWith('movie_direct_0');
   });
@@ -327,7 +336,10 @@ describe('download manager foreground lifecycle', () => {
     await pauseDownload('movie_direct_0');
 
     expect(mockBackendCancel).toHaveBeenCalledWith('movie_direct_0');
-    expect(mockBackendCleanup).toHaveBeenCalledWith('movie_direct_0');
+    expect(mockBackendCleanup).toHaveBeenCalledWith(
+      'movie_direct_0',
+      expect.objectContaining({id: 'movie_direct_0'}),
+    );
     expect(useDownloadsStore.getState().downloads.movie_direct_0).toMatchObject(
       {
         status: 'error',
@@ -344,6 +356,7 @@ describe('download manager foreground lifecycle', () => {
       'Movie',
       'movie_direct_0',
       'http',
+      '#ffffff',
     );
   });
 

@@ -25,6 +25,11 @@ jest.mock('@notifee/react-native', () => ({
   AndroidForegroundServiceType: {
     FOREGROUND_SERVICE_TYPE_DATA_SYNC: 1,
   },
+  AndroidLaunchActivityFlag: {
+    SINGLE_TOP: 1,
+    NEW_TASK: 2,
+    CLEAR_TOP: 4,
+  },
   EventType: {PRESS: 1, ACTION_PRESS: 2},
   AuthorizationStatus: {
     NOT_DETERMINED: -1,
@@ -123,6 +128,12 @@ describe('notification service download lifecycle', () => {
           navigationTarget: 'downloads',
         },
         android: expect.objectContaining({
+          smallIcon: 'ic_download_notification_animated',
+          pressAction: {
+            id: 'default',
+            launchActivity: 'com.vega.test.MainActivity',
+            launchActivityFlags: [2, 4, 1],
+          },
           groupId: 'vega-downloads',
           sortKey: 'movie_direct_0',
           actions: [
@@ -147,7 +158,29 @@ describe('notification service download lifecycle', () => {
 
     expect(mockDisplayNotification).toHaveBeenCalledWith(
       expect.objectContaining({
-        android: expect.objectContaining({color: '#C98A54'}),
+        android: expect.objectContaining({
+          color: '#C98A54',
+          smallIcon: 'ic_download_notification_animated',
+        }),
+      }),
+    );
+  });
+
+  it('uses a static icon when a download is paused', async () => {
+    await notificationService.showDownloadProgress(
+      'Episode 1',
+      'show_s1_e1',
+      0.25,
+      'Paused',
+      'http',
+      'resume',
+    );
+
+    expect(mockDisplayNotification).toHaveBeenCalledWith(
+      expect.objectContaining({
+        android: expect.objectContaining({
+          smallIcon: 'ic_download_notification',
+        }),
       }),
     );
   });
@@ -175,7 +208,8 @@ describe('notification service download lifecycle', () => {
             expect.objectContaining({
               pressAction: {
                 id: 'start-now-download',
-                launchActivity: 'default',
+                launchActivity: 'com.vega.test.MainActivity',
+                launchActivityFlags: [2, 4, 1],
               },
             }),
             expect.objectContaining({pressAction: {id: 'cancel-download'}}),

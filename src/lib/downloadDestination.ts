@@ -6,6 +6,7 @@ import {
   DownloadLocationConfig,
   findSafEntryByName,
   getDownloadFileName,
+  getDownloadMimeType,
   getOrCreateSafDirectory,
   isSafDownloadLocation,
   validateDownloadLocationAccess,
@@ -21,6 +22,7 @@ type SafCopyModule = {
 export interface PreparedDownloadDestination {
   stagingDirectory: string;
   stagingPath: string;
+  directFinalDocumentUri?: string;
 }
 
 export interface FinalizedDownloadOutput {
@@ -30,7 +32,9 @@ export interface FinalizedDownloadOutput {
 }
 
 const getSafCopyModule = (): SafCopyModule | undefined =>
-  NativeModules.SafCopyModule as SafCopyModule | undefined;
+  (NativeModules.HttpDownloadModule || NativeModules.SafCopyModule) as
+    | SafCopyModule
+    | undefined;
 
 export const getDownloadStagingDirectory = (downloadId: string): string =>
   `${DOWNLOAD_STAGING_ROOT}/${sanitizeDownloadFileName(downloadId)}`;
@@ -54,14 +58,53 @@ export const prepareDownloadDestination = async ({
   location,
   fileName,
   fileType,
+  directToSaf = false,
+  existingFinalDocumentUri,
+  outputDirectoryNames,
 }: {
   downloadId: string;
   location: DownloadLocationConfig;
   fileName: string;
   fileType: string;
+  directToSaf?: boolean;
+  existingFinalDocumentUri?: string;
+  outputDirectoryNames?: string[];
 }): Promise<PreparedDownloadDestination> => {
   if (!(await validateDownloadLocation(location))) {
     throw new Error('Download location is unavailable');
+  }
+
+  if (directToSaf) {
+    if (!isSafDownloadLocation(location)) {
+      throw new Error('SAF download location is required');
+    }
+
+    if (
+      existingFinalDocumentUri &&
+      (await downloadOutputExists(existingFinalDocumentUri))
+    ) {
+      return {
+        stagingDirectory: '',
+        stagingPath: existingFinalDocumentUri,
+        directFinalDocumentUri: existingFinalDocumentUri,
+      };
+    }
+
+    let directoryUri = location.uri;
+    for (const directoryName of outputDirectoryNames || []) {
+      directoryUri = await getOrCreateSafDirectory(directoryUri, directoryName);
+    }
+    const directFinalDocumentUri =
+      await FileSystem.StorageAccessFramework.createFileAsync(
+        directoryUri,
+        getDownloadFileName(fileName, fileType),
+        getDownloadMimeType(fileType),
+      );
+    return {
+      stagingDirectory: '',
+      stagingPath: directFinalDocumentUri,
+      directFinalDocumentUri,
+    };
   }
 
   const stagingDirectory = getDownloadStagingDirectory(downloadId);
@@ -94,6 +137,9 @@ const getSafFileSize = async (uri: string): Promise<number> => {
   return info.size;
 };
 
+export const getDownloadOutputSize = async (uri: string): Promise<number> =>
+  getSafFileSize(uri);
+
 export const cleanupDownloadStaging = async (
   downloadId: string,
 ): Promise<void> => {
@@ -110,6 +156,7 @@ export const finalizeDownloadOutput = async ({
   fileName,
   fileType,
   outputDirectoryNames,
+  directFinalDocumentUri,
 }: {
   downloadId: string;
   location: DownloadLocationConfig;
@@ -117,7 +164,20 @@ export const finalizeDownloadOutput = async ({
   fileName: string;
   fileType: string;
   outputDirectoryNames?: string[];
+  directFinalDocumentUri?: string;
 }): Promise<FinalizedDownloadOutput> => {
+  if (directFinalDocumentUri) {
+    const destinationSize = await getSafFileSize(directFinalDocumentUri);
+    if (destinationSize <= 0) {
+      throw new Error('Downloaded SAF file is empty');
+    }
+    return {
+      filePath: directFinalDocumentUri,
+      finalDocumentUri: directFinalDocumentUri,
+      size: destinationSize,
+    };
+  }
+
   if (!(await RNFS.exists(stagingPath))) {
     throw new Error('Downloaded staging file is missing');
   }

@@ -308,15 +308,29 @@ export const useDownloadsStore = create<DownloadState>()(
       },
 
       updateProgress: (id, downloaded, total, speed) => {
-        set(state => ({
-          downloads: updateStatus(state.downloads, id, 'downloading', {
-            downloadedBytes: downloaded,
-            totalBytes: total,
-            speed,
-            errorCode: undefined,
-            errorMessage: undefined,
-          }),
-        }));
+        set(state => {
+          const item = state.downloads[id];
+          if (!item) {
+            return state;
+          }
+          const preservePausedState =
+            item.status === 'paused' || item.status === 'pausing';
+          return {
+            downloads: updateStatus(
+              state.downloads,
+              id,
+              preservePausedState ? item.status : 'downloading',
+              {
+                downloadedBytes: downloaded,
+                totalBytes: total,
+                speed: preservePausedState ? 0 : speed,
+                ...(preservePausedState
+                  ? {}
+                  : {errorCode: undefined, errorMessage: undefined}),
+              },
+            ),
+          };
+        });
       },
 
       markStarting: id => {

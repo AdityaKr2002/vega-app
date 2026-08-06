@@ -1,5 +1,4 @@
 import {
-  cleanupDownloadStaging,
   finalizeDownloadOutput,
   prepareDownloadDestination,
 } from './downloadDestination';
@@ -105,8 +104,9 @@ const startBackendWithRetry = async (
       }
       useDownloadsStore.getState().updateDownload(context.record.id, {
         status: 'starting',
-        downloadedBytes: 0,
-        totalBytes: 0,
+        ...(backend.preservePartialOnFailure
+          ? {}
+          : {downloadedBytes: 0, totalBytes: 0}),
         speed: 0,
         canPause: false,
         canResume: false,
@@ -175,9 +175,13 @@ const showCurrentDownloadNotification = async (
     record.id,
     progress,
     record.status === 'paused'
-      ? record.totalBytes
-        ? `Paused - ${downloadedMB} / ${totalMB} MB`
-        : 'Paused'
+      ? record.errorCode === 'NETWORK_INTERRUPTED'
+        ? record.totalBytes
+          ? `Waiting for network - ${downloadedMB} / ${totalMB} MB`
+          : 'Waiting for network'
+        : record.totalBytes
+          ? `Paused - ${downloadedMB} / ${totalMB} MB`
+          : 'Paused'
       : record.totalBytes
         ? `${downloadedMB} / ${totalMB} MB`
         : 'Downloading',
@@ -198,6 +202,13 @@ const getRecord = (downloadId: string): DownloadItem => {
 
 const getOutputName = (record: DownloadItem): string =>
   record.displayFileName?.replace(/\.[^.]+$/, '') || record.title;
+
+const getOutputDirectoryNames = (record: DownloadItem): string[] => [
+  createDownloadDirectoryName(record.showName || record.title),
+  ...[createDownloadSeasonDirectoryName(record.seasonTitle)].filter(
+    (name): name is string => Boolean(name),
+  ),
+];
 
 const getQueuedDownloads = (): DownloadItem[] =>
   Object.values(useDownloadsStore.getState().downloads)
@@ -291,6 +302,11 @@ export const startDownload = async (
         const updatedRecord = state.downloads[downloadId];
         if (updatedRecord?.status === 'downloading') {
           showProgressNotification(updatedRecord).catch(() => undefined);
+        } else if (
+          updatedRecord?.status === 'paused' &&
+          updatedRecord.errorCode === 'NETWORK_INTERRUPTED'
+        ) {
+          showCurrentDownloadNotification(updatedRecord).catch(() => undefined);
         }
       }),
     );
@@ -299,9 +315,13 @@ export const startDownload = async (
       location,
       fileName: getOutputName(record),
       fileType: record.videoType || 'mp4',
+      directToSaf: backend.directToSaf,
+      existingFinalDocumentUri: record.finalDocumentUri,
+      outputDirectoryNames: getOutputDirectoryNames(record),
     });
     store.updateDownload(downloadId, {
       stagingPath: destination.stagingPath,
+      finalDocumentUri: destination.directFinalDocumentUri,
       downloadLocation: location,
     });
     await startBackendWithRetry(backend, {record, destination});
@@ -317,12 +337,8 @@ export const startDownload = async (
       stagingPath: destination.stagingPath,
       fileName: getOutputName(record),
       fileType: record.videoType || 'mp4',
-      outputDirectoryNames: [
-        createDownloadDirectoryName(record.showName || record.title),
-        ...[createDownloadSeasonDirectoryName(record.seasonTitle)].filter(
-          (name): name is string => Boolean(name),
-        ),
-      ],
+      outputDirectoryNames: getOutputDirectoryNames(record),
+      directFinalDocumentUri: destination.directFinalDocumentUri,
     });
     store.markCompleted(downloadId, {
       filePath: output.filePath,
@@ -338,7 +354,9 @@ export const startDownload = async (
   } catch (error) {
     const cancelled = cancelledDownloads.has(downloadId);
     const pauseFailed = pauseFailedDownloads.has(downloadId);
-    await backend.cleanup(downloadId).catch(() => undefined);
+    if (!backend.preservePartialOnFailure) {
+      await backend.cleanup(downloadId, record).catch(() => undefined);
+    }
     if (cancelled) {
       store.removeDownload(downloadId);
       await notificationService.cancelNotification(downloadId);
@@ -388,7 +406,7 @@ const failPausedDownload = async (
   const message = `Unable to ${operation} this download. Partial download data was deleted. ${detail}`;
   pauseFailedDownloads.add(downloadId);
   await backend.cancel(downloadId).catch(() => undefined);
-  await backend.cleanup(downloadId).catch(() => undefined);
+  await backend.cleanup(downloadId, record).catch(() => undefined);
   useDownloadsStore.getState().markError(downloadId, {
     code: 'PAUSE_UNSUPPORTED',
     message,
@@ -405,7 +423,11 @@ const failPausedDownload = async (
 export const pauseDownload = async (downloadId: string): Promise<void> => {
   const record = getRecord(downloadId);
   const backend = getDownloadBackend(record.sourceType);
-  if (!backend.pause || !record.canPause || record.status !== 'downloading') {
+  if (
+    !backend.pause ||
+    !record.canPause ||
+    (record.status !== 'downloading' && record.status !== 'starting')
+  ) {
     return;
   }
   useDownloadsStore.getState().updateDownload(downloadId, {
@@ -435,21 +457,38 @@ export const resumeDownload = async (downloadId: string): Promise<void> => {
   if (!backend.resume || !record.canResume || record.status !== 'paused') {
     return;
   }
-  useDownloadsStore.getState().updateDownload(downloadId, {
-    status: 'starting',
-    canPause: false,
-    canResume: false,
-  });
+  if (
+    !activeDownloads.has(downloadId) &&
+    backend.directToSaf &&
+    Boolean(record.finalDocumentUri)
+  ) {
+    useDownloadsStore.getState().updateDownload(downloadId, {
+      status: 'queued',
+      canPause: false,
+      canResume: false,
+    });
+    await scheduleQueuedDownloads();
+    return;
+  }
+  if (record.errorCode !== 'NETWORK_INTERRUPTED') {
+    useDownloadsStore.getState().updateDownload(downloadId, {
+      status: 'starting',
+      canPause: false,
+      canResume: false,
+    });
+  }
   if (activeDownloads.has(downloadId)) {
     occupiedDownloadSlots.add(downloadId);
   }
   try {
     await backend.resume(downloadId);
-    useDownloadsStore.getState().updateDownload(downloadId, {
-      status: 'downloading',
-      canPause: true,
-      canResume: false,
-    });
+    if (record.errorCode !== 'NETWORK_INTERRUPTED') {
+      useDownloadsStore.getState().updateDownload(downloadId, {
+        status: 'downloading',
+        canPause: true,
+        canResume: false,
+      });
+    }
     await showCurrentDownloadNotification(getRecord(downloadId));
   } catch (error) {
     occupiedDownloadSlots.delete(downloadId);
@@ -471,7 +510,7 @@ export const cancelDownload = async (downloadId: string): Promise<void> => {
     await backend.cancel(downloadId);
   } finally {
     occupiedDownloadSlots.delete(downloadId);
-    await cleanupDownloadStaging(downloadId).catch(() => undefined);
+    await backend.cleanup(downloadId, record).catch(() => undefined);
     useDownloadsStore.getState().removeDownload(downloadId);
     if (!activeDownloads.has(downloadId)) {
       cancelledDownloads.delete(downloadId);
