@@ -16,22 +16,12 @@ export interface ContinueWatchingItem {
   position: number;
   duration: number;
   updatedAt: number;
-  // When the user picked a local video file for this item, we remember its
-  // uri (and display name) so re-opening it from Continue Watching can
-  // resume playback without prompting the file picker again.
-  localVideoUri?: string;
-  localVideoName?: string;
 }
 
 interface ContinueWatchingState {
   items: ContinueWatchingItem[];
   upsertItem: (item: ContinueWatchingItem) => void;
   updateProgress: (id: string, position: number, duration: number) => void;
-  setLocalVideo: (
-    id: string,
-    localVideoUri?: string,
-    localVideoName?: string,
-  ) => void;
   removeItem: (id: string) => void;
 }
 
@@ -57,12 +47,6 @@ const useContinueWatchingStore = create<ContinueWatchingState>()(
                 : item,
             )
             .sort((a, b) => b.updatedAt - a.updatedAt),
-        })),
-      setLocalVideo: (id, localVideoUri, localVideoName) =>
-        set(state => ({
-          items: state.items.map(item =>
-            item.id === id ? {...item, localVideoUri, localVideoName} : item,
-          ),
         })),
       removeItem: id =>
         set(state => ({items: state.items.filter(item => item.id !== id)})),

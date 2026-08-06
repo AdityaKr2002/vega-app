@@ -51,15 +51,15 @@ import {torrentManager} from '../../lib/torrentManager';
 import {syncFromSharedFolder} from '../../lib/sync/syncService';
 import {useM3Colors} from '../../theme/M3PaletteContext';
 import useContinueWatchingStore from '../../lib/zustand/continueWatchingStore';
+import useLocalVideoStore from '../../lib/zustand/localVideoStore';
 import CastRemotePlayer from '../../components/CastRemotePlayer';
+import {getEpisodeIdentity} from '../../lib/utils/episodeIdentity';
+import {
+  takePersistableUriPermission,
+  releasePersistableUriPermission,
+} from '../../lib/uriPermission';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Player'>;
-
-const getEpisodeIdentity = (episode?: {
-  sourceLink?: string;
-  id?: string;
-  link?: string;
-}) => episode?.sourceLink || episode?.id || episode?.link || '';
 
 const readCachedProgress = (link?: string) => {
   if (!link) {
@@ -181,10 +181,16 @@ const Player = ({route}: Props): React.JSX.Element => {
   const updateContinueWatchingProgress = useContinueWatchingStore(
     state => state.updateProgress,
   );
-  const setLocalVideoForContinueWatching = useContinueWatchingStore(
+  const continueWatchingItems = useContinueWatchingStore(state => state.items);
+  const localVideoAssociations = useLocalVideoStore(
+    state => state.associations,
+  );
+  const setLocalVideoAssociation = useLocalVideoStore(
     state => state.setLocalVideo,
   );
-  const continueWatchingItems = useContinueWatchingStore(state => state.items);
+  const clearLocalVideoAssociation = useLocalVideoStore(
+    state => state.clearLocalVideo,
+  );
 
   // Player ref
   const playerRef = useRef<VideoRef>(null as unknown as VideoRef);
@@ -314,6 +320,13 @@ const Player = ({route}: Props): React.JSX.Element => {
   } = usePlayerSettings();
   const isFullScreenRef = useRef(isFullScreen);
   const continueWatchingId = route.params.infoUrl || activeEpisode?.link;
+  const activeEpisodeKey = useMemo(
+    () => getEpisodeIdentity(activeEpisode),
+    [activeEpisode],
+  );
+  const localVideoForEpisode = activeEpisodeKey
+    ? localVideoAssociations[activeEpisodeKey]
+    : undefined;
   const syncedContinueWatching = useMemo(
     () => continueWatchingItems.find(item => item.id === continueWatchingId),
     [continueWatchingId, continueWatchingItems],
@@ -363,12 +376,6 @@ const Player = ({route}: Props): React.JSX.Element => {
       position,
       duration,
       updatedAt: syncedUpdatedAt || (position > 0 ? Date.now() : 0),
-      localVideoUri: syncedEpisodeMatches
-        ? syncedContinueWatching?.localVideoUri
-        : undefined,
-      localVideoName: syncedEpisodeMatches
-        ? syncedContinueWatching?.localVideoName
-        : undefined,
     });
   }, [
     activeEpisode,
@@ -381,8 +388,6 @@ const Player = ({route}: Props): React.JSX.Element => {
     route.params.secondaryTitle,
     route.params.type,
     syncReady,
-    syncedContinueWatching?.localVideoName,
-    syncedContinueWatching?.localVideoUri,
     syncedDuration,
     syncedEpisodeMatches,
     syncedPosition,
@@ -441,21 +446,23 @@ const Player = ({route}: Props): React.JSX.Element => {
   // Auto-resume a remembered local video file for this episode (e.g. when
   // opening this title again from Continue Watching) instead of forcing the
   // user to pick the file again. Only applied once per episode so it never
-  // fights a manual server switch made later in the same session.
+  // fights a manual server switch made later in the same session. Looked up
+  // directly by the current episode's identity, so it can never carry over
+  // a different episode's file.
   useEffect(() => {
     if (appliedPersistedLocalVideoRef.current) {
       return;
     }
-    if (!syncedEpisodeMatches || !syncedContinueWatching?.localVideoUri) {
+    if (!localVideoForEpisode?.uri) {
       return;
     }
     appliedPersistedLocalVideoRef.current = true;
     setSelectedStream({
       server: 'Local Video',
-      link: syncedContinueWatching.localVideoUri,
+      link: localVideoForEpisode.uri,
       type: 'local',
     });
-  }, [syncedContinueWatching, syncedEpisodeMatches, setSelectedStream]);
+  }, [localVideoForEpisode, setSelectedStream]);
 
   useEffect(() => {
     if (
@@ -726,33 +733,46 @@ const Player = ({route}: Props): React.JSX.Element => {
           'video/x-m4v',
         ],
         multiple: false,
-        // Videos can be several gigabytes. Play the provider URI directly
-        // instead of duplicating the complete file in the app cache.
+        // Videos can be several gigabytes. Play the provider uri directly
+        // instead of duplicating the whole file into app cache — Android's
+        // takePersistableUriPermission (below) keeps it readable across
+        // app restarts without a copy.
         copyToCacheDirectory: false,
       });
 
       if (!res.canceled && res.assets?.[0]) {
         const asset = res.assets[0];
+        const previousUri = localVideoForEpisode?.uri;
+
         setSelectedStream({
           server: 'Local Video',
           link: asset.uri,
           type: 'local',
         });
         setShowSettings(false);
-        // Remember this file against the current continue-watching entry so
-        // reopening this same episode later resumes it automatically
+        // Remember this file against the current episode so reopening it
+        // later (e.g. from Continue Watching) resumes it automatically
         // instead of prompting the picker again.
         appliedPersistedLocalVideoRef.current = true;
-        if (continueWatchingId) {
-          setLocalVideoForContinueWatching(
-            continueWatchingId,
+        if (activeEpisodeKey) {
+          setLocalVideoAssociation(
+            activeEpisodeKey,
             asset.uri,
             asset.name || undefined,
+            continueWatchingId,
           );
         }
+
+        const persisted = await takePersistableUriPermission(asset.uri);
+        if (previousUri && previousUri !== asset.uri) {
+          releasePersistableUriPermission(previousUri);
+        }
+
         ToastAndroid.show(
-          `Playing local file: ${asset.name || 'video'}`,
-          ToastAndroid.SHORT,
+          persisted
+            ? `Playing local file: ${asset.name || 'video'}`
+            : `Playing local file: ${asset.name || 'video'} (may need to be re-selected after closing the app)`,
+          ToastAndroid.LONG,
         );
       }
     } catch (err) {
@@ -760,8 +780,10 @@ const Player = ({route}: Props): React.JSX.Element => {
       ToastAndroid.show('Could not open the selected file', ToastAndroid.SHORT);
     }
   }, [
+    activeEpisodeKey,
     continueWatchingId,
-    setLocalVideoForContinueWatching,
+    localVideoForEpisode?.uri,
+    setLocalVideoAssociation,
     setSelectedStream,
     setShowSettings,
   ]);
@@ -1727,12 +1749,13 @@ const Player = ({route}: Props): React.JSX.Element => {
                         onPress={() => {
                           setSelectedStream(track);
                           appliedPersistedLocalVideoRef.current = true;
-                          if (continueWatchingId) {
-                            setLocalVideoForContinueWatching(
-                              continueWatchingId,
-                              undefined,
-                              undefined,
-                            );
+                          if (activeEpisodeKey) {
+                            if (localVideoForEpisode?.uri) {
+                              releasePersistableUriPermission(
+                                localVideoForEpisode.uri,
+                              );
+                            }
+                            clearLocalVideoAssociation(activeEpisodeKey);
                           }
                           setShowSettings(false);
                           playerRef?.current?.resume();
