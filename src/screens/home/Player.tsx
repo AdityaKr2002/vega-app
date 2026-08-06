@@ -701,6 +701,36 @@ const Player = ({route}: Props): React.JSX.Element => {
   const handleVideoError = useCallback(
     (e: any) => {
       console.log('PlayerError', e);
+
+      if (selectedStream?.type === 'local') {
+        // The remembered local file is unreadable — most likely it was
+        // deleted, moved, or its access permission was revoked. Forget it
+        // and fall back to normal online sources instead of exiting the
+        // player. This usually fires before the background online search
+        // has finished, so: if results are already in, jump straight to
+        // the first one; otherwise clear the selection back to neutral so
+        // the existing "pick streamData[0] once it arrives" logic in
+        // useStream takes over as soon as it resolves.
+        if (activeEpisodeKey) {
+          if (selectedStream.link) {
+            releasePersistableUriPermission(selectedStream.link);
+          }
+          clearLocalVideoAssociation(activeEpisodeKey);
+        }
+        appliedPersistedLocalVideoRef.current = true;
+        ToastAndroid.show(
+          'Local video not found. Trying online sources...',
+          ToastAndroid.SHORT,
+        );
+        setSelectedStream(
+          streamData && streamData.length > 0
+            ? streamData[0]
+            : {server: '', link: '', type: ''},
+        );
+        setShowControls(true);
+        return;
+      }
+
       if (!switchToNextStream()) {
         ToastAndroid.show(
           'Video could not be played, try again later',
@@ -710,7 +740,16 @@ const Player = ({route}: Props): React.JSX.Element => {
       }
       setShowControls(true);
     },
-    [switchToNextStream, navigation, setShowControls],
+    [
+      activeEpisodeKey,
+      clearLocalVideoAssociation,
+      navigation,
+      selectedStream,
+      setSelectedStream,
+      setShowControls,
+      streamData,
+      switchToNextStream,
+    ],
   );
 
   // Let the user pick a local video file from the device and play it
