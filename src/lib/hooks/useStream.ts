@@ -1,10 +1,11 @@
 import {useQuery} from '@tanstack/react-query';
-import {useState, useEffect, useMemo} from 'react';
+import {useState, useEffect, useMemo, useRef} from 'react';
 import {ToastAndroid} from 'react-native';
 import {providerManager} from '../services/ProviderManager';
 import {settingsStorage} from '../storage';
 import {ifExists} from '../file/ifExists';
 import {Stream} from '../providers/types';
+import {getEpisodeIdentity} from '../utils/episodeIdentity';
 
 interface UseStreamOptions {
   activeEpisode: any;
@@ -25,6 +26,23 @@ export const useStream = ({
     type: '',
   });
   const [externalSubs, setExternalSubs] = useState<any[]>([]);
+
+  // A locally-picked/auto-resumed video file is only ever valid for the
+  // episode it was picked for. Whenever the active episode changes, clear
+  // the selection back to neutral so the stream-data effect below falls
+  // through to picking the new episode's first online stream, instead of
+  // silently carrying over the old episode's local file (see the
+  // 'local' guard further down).
+  const activeEpisodeKey = getEpisodeIdentity(activeEpisode);
+  const previousEpisodeKeyRef = useRef(activeEpisodeKey);
+
+  useEffect(() => {
+    if (previousEpisodeKeyRef.current === activeEpisodeKey) {
+      return;
+    }
+    previousEpisodeKeyRef.current = activeEpisodeKey;
+    setSelectedStream({server: '', link: '', type: ''});
+  }, [activeEpisodeKey]);
 
   const {
     data: streamData = [],
@@ -104,6 +122,9 @@ export const useStream = ({
     if (streamData && streamData.length > 0) {
       setSelectedStream(current => {
         if (!current?.link) return streamData[0];
+        // A locally-picked (or auto-resumed) video file will never match an
+        // online stream link — that's expected, not staleness. Leave it be.
+        if (current?.type === 'local') return current;
         const stillExists = streamData.find(s => s.link === current.link);
         return stillExists ? current : streamData[0];
       });
@@ -197,7 +218,6 @@ export const useVideoSettings = () => {
   };
 
   const processVideoTracks = (tracks: any[]) => {
-
     if (!tracks || tracks.length === 0) {
       return;
     }
@@ -210,10 +230,9 @@ export const useVideoSettings = () => {
       }
       return false;
     });
-        console.log('Processing video tracks:', uniqueTracks);
+    console.log('Processing video tracks:', uniqueTracks);
     setVideoTracks(uniqueTracks);
   };
-
 
   const handleVideoLoad = (naturalSize?: {width?: number; height?: number}) => {
     if (!naturalSize?.height) {
@@ -230,7 +249,6 @@ export const useVideoSettings = () => {
     setVideoTracks([]);
     setLoadedVideoSize(null);
   };
-
 
   const effectiveVideoTracks = useMemo(() => {
     if (videoTracks.length > 0) {

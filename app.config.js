@@ -22,6 +22,7 @@ module.exports = () => {
     './plugins/with-custom-native-modules.js',
     './plugins/android-native-config.js',
     './plugins/with-saf-copy-module.js',
+    './plugins/with-uri-permission-module.js',
     './plugins/with-proguard-rules.js',
     './plugins/with-jvm-args.js',
     './plugins/with-android-notification-icons.js',
