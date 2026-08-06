@@ -14,7 +14,10 @@ import ProviderDrawer from '../../components/ProviderDrawer';
 import {NativeStackScreenProps} from '@react-navigation/native-stack';
 import {HomeStackParamList} from '../../App';
 import {Drawer} from 'react-native-drawer-layout';
-import {GestureHandlerRootView} from 'react-native-gesture-handler';
+import {
+  GestureHandlerRootView,
+  type PanGesture,
+} from 'react-native-gesture-handler';
 import {providerManager} from '../../lib/services/ProviderManager';
 import {Catalog} from '../../lib/providers/types';
 import Tutorial from '../../components/Touturial';
@@ -59,6 +62,17 @@ const Home = ({}: Props) => {
   const handleScroll = useCallback((event: any) => {
     setStatusBarScrimVisible(event.nativeEvent.contentOffset.y > 12);
   }, []);
+
+  const configureDrawerGesture = useCallback(
+    (gesture: PanGesture) => {
+      if (!isDrawerOpen) {
+        return gesture.activeOffsetX([-10000, 18]).failOffsetY([-10, 10]);
+      }
+
+      return gesture.activeOffsetX([-18, 18]).failOffsetY([-10, 10]);
+    },
+    [isDrawerOpen],
+  );
 
   // Stable hero post calculation - uses provider value for caching
   const heroPost = useMemo(() => {
@@ -186,7 +200,9 @@ const Home = ({}: Props) => {
             drawerType="front"
             drawerStyle={{width: 200, backgroundColor: 'transparent'}}
             swipeEdgeWidth={disableDrawer ? 0 : 70}
+            swipeMinDistance={72}
             swipeEnabled={!disableDrawer}
+            configureGestureHandler={configureDrawerGesture}
             renderDrawerContent={() =>
               !disableDrawer ? (
                 <ProviderDrawer onClose={() => setIsDrawerOpen(false)} />
