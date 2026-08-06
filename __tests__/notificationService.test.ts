@@ -128,7 +128,7 @@ describe('notification service download lifecycle', () => {
           navigationTarget: 'downloads',
         },
         android: expect.objectContaining({
-          smallIcon: 'ic_download_notification_animated',
+          smallIcon: 'ic_download_notification_system',
           pressAction: {
             id: 'default',
             launchActivity: 'com.vega.test.MainActivity',
@@ -160,7 +160,7 @@ describe('notification service download lifecycle', () => {
       expect.objectContaining({
         android: expect.objectContaining({
           color: '#C98A54',
-          smallIcon: 'ic_download_notification_animated',
+          smallIcon: 'ic_download_notification_system',
         }),
       }),
     );

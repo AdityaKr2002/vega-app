@@ -269,7 +269,7 @@ class NotificationService {
       id: this._downloadForegroundId,
       title: count === 1 ? 'Download in progress' : 'Downloads in progress',
       body: count === 1 ? '1 active download' : `${count} active downloads`,
-      smallIcon: 'ic_download_notification_animated',
+      smallIcon: 'ic_download_notification_system',
       data: {navigationTarget: 'downloads'},
       onlyAlertOnce: true,
       asForegroundService: true,
@@ -319,7 +319,7 @@ class NotificationService {
       id: downloadId,
       title: title,
       body: 'Starting download',
-      smallIcon: 'ic_download_notification_animated',
+      smallIcon: 'ic_download_notification_system',
       color,
       data: this.getDownloadData(downloadId, sourceType),
       groupId: 'vega-downloads',
@@ -384,7 +384,7 @@ class NotificationService {
       body: progressText,
       smallIcon:
         action === 'pause'
-          ? 'ic_download_notification_animated'
+          ? 'ic_download_notification_system'
           : 'ic_download_notification',
       color,
       data: this.getDownloadData(downloadId, sourceType),

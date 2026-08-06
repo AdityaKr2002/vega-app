@@ -55,6 +55,7 @@ module.exports = function withAndroidNotificationIcons(config) {
 
       // Common resource buckets to copy if present
       const buckets = [
+        'values',
         'drawable-anydpi-v24',
         'drawable',
         'drawable-mdpi',
