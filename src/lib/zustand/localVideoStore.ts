@@ -1,6 +1,9 @@
 import {create} from 'zustand';
 import {createJSONStorage, persist} from 'zustand/middleware';
 import {createZustandStorage} from '../storage/StorageService';
+import {releasePersistableUriPermission} from '../uriPermission';
+
+const MAX_LOCAL_VIDEO_ASSOCIATIONS = 64;
 
 export interface LocalVideoAssociation {
   // Same value as getEpisodeIdentity(episode) — the episode/movie this
@@ -37,8 +40,9 @@ const useLocalVideoStore = create<LocalVideoState>()(
         if (!episodeKey) {
           return;
         }
-        set(state => ({
-          associations: {
+        set(state => {
+          const previous = state.associations[episodeKey];
+          const associations = {
             ...state.associations,
             [episodeKey]: {
               episodeKey,
@@ -47,8 +51,26 @@ const useLocalVideoStore = create<LocalVideoState>()(
               name,
               updatedAt: Date.now(),
             },
-          },
-        }));
+          };
+
+          if (previous?.uri && previous.uri !== uri) {
+            releasePersistableUriPermission(previous.uri);
+          }
+
+          const entries = Object.entries(associations).sort(
+            ([, a], [, b]) => b.updatedAt - a.updatedAt,
+          );
+          const evicted = entries.slice(MAX_LOCAL_VIDEO_ASSOCIATIONS);
+          evicted.forEach(([, association]) => {
+            releasePersistableUriPermission(association.uri);
+          });
+
+          return {
+            associations: Object.fromEntries(
+              entries.slice(0, MAX_LOCAL_VIDEO_ASSOCIATIONS),
+            ),
+          };
+        });
       },
       clearLocalVideo: episodeKey => {
         if (!episodeKey) {
@@ -59,6 +81,7 @@ const useLocalVideoStore = create<LocalVideoState>()(
             return state;
           }
           const next = {...state.associations};
+          releasePersistableUriPermission(next[episodeKey].uri);
           delete next[episodeKey];
           return {associations: next};
         });

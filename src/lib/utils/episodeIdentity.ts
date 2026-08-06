@@ -11,3 +11,22 @@ export interface EpisodeIdentityLike {
 
 export const getEpisodeIdentity = (episode?: EpisodeIdentityLike): string =>
   episode?.sourceLink || episode?.id || episode?.link || '';
+
+export const getLocalVideoAssociationKey = ({
+  episode,
+  provider,
+  infoUrl,
+}: {
+  episode?: EpisodeIdentityLike;
+  provider?: string;
+  infoUrl?: string;
+}): string => {
+  const episodeIdentity = getEpisodeIdentity(episode);
+  if (!episodeIdentity) {
+    return '';
+  }
+
+  return [provider || '', infoUrl || '', episodeIdentity]
+    .map(part => encodeURIComponent(part))
+    .join('|');
+};

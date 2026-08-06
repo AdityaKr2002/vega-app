@@ -53,10 +53,12 @@ import {useM3Colors} from '../../theme/M3PaletteContext';
 import useContinueWatchingStore from '../../lib/zustand/continueWatchingStore';
 import useLocalVideoStore from '../../lib/zustand/localVideoStore';
 import CastRemotePlayer from '../../components/CastRemotePlayer';
-import {getEpisodeIdentity} from '../../lib/utils/episodeIdentity';
+import {
+  getEpisodeIdentity,
+  getLocalVideoAssociationKey,
+} from '../../lib/utils/episodeIdentity';
 import {
   takePersistableUriPermission,
-  releasePersistableUriPermission,
 } from '../../lib/uriPermission';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Player'>;
@@ -321,8 +323,18 @@ const Player = ({route}: Props): React.JSX.Element => {
   const isFullScreenRef = useRef(isFullScreen);
   const continueWatchingId = route.params.infoUrl || activeEpisode?.link;
   const activeEpisodeKey = useMemo(
-    () => getEpisodeIdentity(activeEpisode),
-    [activeEpisode],
+    () =>
+      getLocalVideoAssociationKey({
+        episode: activeEpisode,
+        provider: route.params.providerValue || provider.value,
+        infoUrl: continueWatchingId,
+      }),
+    [
+      activeEpisode,
+      continueWatchingId,
+      provider.value,
+      route.params.providerValue,
+    ],
   );
   const localVideoForEpisode = activeEpisodeKey
     ? localVideoAssociations[activeEpisodeKey]
@@ -712,9 +724,6 @@ const Player = ({route}: Props): React.JSX.Element => {
         // the existing "pick streamData[0] once it arrives" logic in
         // useStream takes over as soon as it resolves.
         if (activeEpisodeKey) {
-          if (selectedStream.link) {
-            releasePersistableUriPermission(selectedStream.link);
-          }
           clearLocalVideoAssociation(activeEpisodeKey);
         }
         appliedPersistedLocalVideoRef.current = true;
@@ -781,8 +790,6 @@ const Player = ({route}: Props): React.JSX.Element => {
 
       if (!res.canceled && res.assets?.[0]) {
         const asset = res.assets[0];
-        const previousUri = localVideoForEpisode?.uri;
-
         setSelectedStream({
           server: 'Local Video',
           link: asset.uri,
@@ -803,9 +810,6 @@ const Player = ({route}: Props): React.JSX.Element => {
         }
 
         const persisted = await takePersistableUriPermission(asset.uri);
-        if (previousUri && previousUri !== asset.uri) {
-          releasePersistableUriPermission(previousUri);
-        }
 
         ToastAndroid.show(
           persisted
@@ -821,7 +825,6 @@ const Player = ({route}: Props): React.JSX.Element => {
   }, [
     activeEpisodeKey,
     continueWatchingId,
-    localVideoForEpisode?.uri,
     setLocalVideoAssociation,
     setSelectedStream,
     setShowSettings,
@@ -1789,11 +1792,6 @@ const Player = ({route}: Props): React.JSX.Element => {
                           setSelectedStream(track);
                           appliedPersistedLocalVideoRef.current = true;
                           if (activeEpisodeKey) {
-                            if (localVideoForEpisode?.uri) {
-                              releasePersistableUriPermission(
-                                localVideoForEpisode.uri,
-                              );
-                            }
                             clearLocalVideoAssociation(activeEpisodeKey);
                           }
                           setShowSettings(false);
