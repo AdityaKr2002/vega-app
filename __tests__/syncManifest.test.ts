@@ -1,6 +1,7 @@
 import {
   getDownloadMediaKey,
   getTombstoneKey,
+  MAX_SYNC_HISTORY_ITEMS,
   mergeSyncManifests,
   parseSyncManifest,
   type VegaSyncManifest,
@@ -232,7 +233,7 @@ describe('Vega sync manifest', () => {
     ).toBe(45);
   });
 
-  it('syncs only the 100 most recently played episodes', () => {
+  it('syncs only the 50 most recently played episodes', () => {
     const history = Object.fromEntries(
       Array.from({length: 105}, (_, index) => [
         `episode-${index}`,
@@ -248,7 +249,7 @@ describe('Vega sync manifest', () => {
 
     const merged = mergeSyncManifests([manifest('mobile', {history})]);
 
-    expect(Object.keys(merged.history)).toHaveLength(100);
+    expect(Object.keys(merged.history)).toHaveLength(MAX_SYNC_HISTORY_ITEMS);
     expect(merged.history['episode-104']).toBeDefined();
     expect(merged.history['episode-0']).toBeUndefined();
   });

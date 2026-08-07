@@ -41,6 +41,7 @@ import MaterialDialogSurface from './ui/MaterialDialogSurface';
 import {LEGACY_TERTIARY_BACKGROUND} from '../theme/seeds';
 import Text from './ui/Text';
 import EpisodeRowContent from './EpisodeRowContent';
+import {setSyncedEpisodeProgress} from '../lib/sync/syncService';
 
 const CONTROL_TEXT = '#F5F0EF';
 const CONTROL_TEXT_MUTED = '#D4CBC9';
@@ -421,9 +422,25 @@ const SeasonList: React.FC<SeasonListProps> = ({
           duration: 1,
         }),
       );
+      const episode = [...episodeList, ...(activeSeason.directLinks || [])].find(
+        item => item.link === stickyMenu.link,
+      );
+      if (episode) {
+        setSyncedEpisodeProgress({
+          episode,
+          title: metaTitle,
+          poster: poster.poster,
+          background: poster.background,
+          provider: providerValue,
+          infoUrl: routeParams.link,
+          type,
+          position: 10000,
+          duration: 1,
+        });
+      }
       setStickyMenu({active: false});
     }
-  }, [stickyMenu.link]);
+  }, [activeSeason.directLinks, episodeList, metaTitle, poster.background, poster.poster, providerValue, routeParams.link, stickyMenu.link, type]);
 
   // Memoized mark as unwatched handler
   const markAsUnwatched = useCallback(() => {
@@ -435,9 +452,25 @@ const SeasonList: React.FC<SeasonListProps> = ({
           duration: 1,
         }),
       );
+      const episode = [...episodeList, ...(activeSeason.directLinks || [])].find(
+        item => item.link === stickyMenu.link,
+      );
+      if (episode) {
+        setSyncedEpisodeProgress({
+          episode,
+          title: metaTitle,
+          poster: poster.poster,
+          background: poster.background,
+          provider: providerValue,
+          infoUrl: routeParams.link,
+          type,
+          position: 0,
+          duration: 1,
+        });
+      }
       setStickyMenu({active: false});
     }
-  }, [stickyMenu.link]);
+  }, [activeSeason.directLinks, episodeList, metaTitle, poster.background, poster.poster, providerValue, routeParams.link, stickyMenu.link, type]);
 
   // Memoized sticky menu external player handler
   const handleStickyMenuExternalPlayer = useCallback(() => {
