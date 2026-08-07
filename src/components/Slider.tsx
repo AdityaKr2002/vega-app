@@ -1,5 +1,6 @@
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
-import {FlatList, Pressable, View} from 'react-native';
+import {Pressable, View} from 'react-native';
+import {FlatList} from 'react-native-gesture-handler';
 import React, {memo, useCallback} from 'react';
 import type {Post} from '../lib/providers/types';
 import {NativeStackNavigationProp} from '@react-navigation/native-stack';
