@@ -17,7 +17,7 @@
     "postinstall": "patch-package"
   },
   "dependencies": {
-    "@8man/react-native-media-console": "^2.2.4-alpha.35",
+    "@8man/react-native-media-console": "^2.2.4-alpha.38",
     "@dr.pogodin/react-native-fs": "^2.34.0",
     "@expo/metro-runtime": "~57.0.8",
     "@expo/ui": "~57.0.9",
@@ -47,8 +47,8 @@
     "expo-crypto": "~57.0.1",
     "expo-dev-client": "~57.0.10",
     "expo-document-picker": "~57.0.1",
-    "expo-font": "~57.0.1",
     "expo-file-system": "~57.0.1",
+    "expo-font": "~57.0.1",
     "expo-intent-launcher": "~57.0.1",
     "expo-navigation-bar": "~57.0.2",
     "expo-status-bar": "~57.0.1",

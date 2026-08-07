@@ -48,7 +48,6 @@ import notificationService from './lib/services/Notification';
 import WafWebViewDialog from './components/WafWebViewDialog';
 import ProviderSandboxHost from './components/ProviderSandboxHost';
 import {syncDohSettings} from './lib/services/dohService';
-import {runWasmProbe} from './lib/services/wasmProbe';
 import {
   reconcileCompletedDownloadOutputs,
   reconcileDownloadState,
@@ -241,17 +240,6 @@ const App = () => {
       }
     }, 30000);
     return () => clearInterval(interval);
-  }, []);
-
-  useEffect(() => {
-    // DEV-only: probe whether Hermes on this build can run WebAssembly, to
-    // decide if quickjs-emscripten is a viable provider sandbox engine.
-    // Remove once the question is answered.
-    if (__DEV__) {
-      runWasmProbe().catch(error =>
-        console.warn('[wasm-probe] failed to run:', error),
-      );
-    }
   }, []);
 
   useEffect(() => {

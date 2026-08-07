@@ -9,6 +9,8 @@ import {
 
 const MANIFEST_MIME_TYPE = 'application/json';
 
+let manifestWriteQueue: Promise<void> = Promise.resolve();
+
 const findChild = async (directoryUri: string, name: string) => {
   const entries =
     await FileSystem.StorageAccessFramework.readDirectoryAsync(directoryUri);
@@ -55,7 +57,7 @@ export const readMobileSyncManifests = async (
   );
 };
 
-export const writeMobileSyncManifest = async (
+const writeMobileSyncManifestNow = async (
   location: SafDownloadLocation,
   manifest: VegaSyncManifest,
 ): Promise<void> => {
@@ -65,24 +67,31 @@ export const writeMobileSyncManifest = async (
   }
   const fileName = `vega-${manifest.deviceId}.json`;
   const existing = await findChild(directory, fileName);
-  if (existing) {
-    await FileSystem.StorageAccessFramework.deleteAsync(existing);
-  }
-  const fileUri = await FileSystem.StorageAccessFramework.createFileAsync(
-    directory,
-    fileName,
-    MANIFEST_MIME_TYPE,
-  );
+  const fileUri =
+    existing ||
+    (await FileSystem.StorageAccessFramework.createFileAsync(
+      directory,
+      fileName,
+      MANIFEST_MIME_TYPE,
+    ));
   const content = JSON.stringify(manifest);
   await FileSystem.StorageAccessFramework.writeAsStringAsync(fileUri, content);
   const written =
     await FileSystem.StorageAccessFramework.readAsStringAsync(fileUri);
   if (!parseSyncManifest(written)) {
-    await FileSystem.StorageAccessFramework.deleteAsync(fileUri).catch(
-      () => undefined,
-    );
     throw new Error('Vega sync manifest verification failed');
   }
+};
+
+export const writeMobileSyncManifest = (
+  location: SafDownloadLocation,
+  manifest: VegaSyncManifest,
+): Promise<void> => {
+  const write = manifestWriteQueue.then(() =>
+    writeMobileSyncManifestNow(location, manifest),
+  );
+  manifestWriteQueue = write.catch(() => undefined);
+  return write;
 };
 
 export const resolveMobileSyncFile = async (
