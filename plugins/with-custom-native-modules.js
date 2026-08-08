@@ -67,6 +67,7 @@ function withCustomNativeModules(config) {
       'HttpDownloadPackage()',
       'TorrentPackage()',
       'LauncherIconPackage()',
+      'VideoThumbnailPackage()',
     ];
 
     for (const pkg of packagesToAdd) {
@@ -126,6 +127,16 @@ function withCustomNativeModules(config) {
         /dependencies\s*\{/,
         match =>
           `${match}\n    implementation 'com.squareup.okhttp3:okhttp:4.12.0'\n`,
+      );
+    }
+
+    // MediaMetadataRetriever can return the first frame for every timestamp
+    // on remote videos. Media3's frame extractor performs a real HTTP/HLS seek.
+    if (!contents.includes('androidx.media3:media3-transformer')) {
+      contents = contents.replace(
+        /dependencies\s*\{/,
+        match =>
+          `${match}\n    implementation 'androidx.media3:media3-transformer:1.8.0'\n`,
       );
     }
 

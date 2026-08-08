@@ -17,7 +17,6 @@ import Animated, {
   withTiming,
   withRepeat,
   withSequence,
-  withDelay,
 } from 'react-native-reanimated';
 import {NativeStackScreenProps} from '@react-navigation/native-stack';
 import {RootStackParamList} from '../../App';
@@ -26,6 +25,7 @@ import {OrientationLocker, LANDSCAPE} from 'react-native-orientation-locker';
 import VideoPlayer from '@8man/react-native-media-console';
 import {useFocusEffect, useNavigation} from '@react-navigation/native';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
+import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import {
   VideoRef,
   SelectedVideoTrack,
@@ -60,6 +60,11 @@ import {
 import {
   takePersistableUriPermission,
 } from '../../lib/uriPermission';
+import AnimatedHourglass from '../../components/AnimatedHourglass';
+import PlayerMenuRow from '../../components/PlayerMenuRow';
+import {extractImageAccent} from '../../lib/imageAccent';
+import {mixHex} from '../../theme/seeds';
+import ReactNativeHapticFeedback from 'react-native-haptic-feedback';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Player'>;
 
@@ -85,7 +90,68 @@ const readCachedProgress = (link?: string) => {
   }
 };
 
+const getResumePosition = (position: number, duration: number) => {
+  if (!Number.isFinite(position) || position <= 5) {
+    return 0;
+  }
+
+  // Completed episodes (including the 1/1 and legacy 10000/1 "watched"
+  // sentinels) must start from the beginning. Seeking to the exact end of an
+  // MKV makes Media3 try to parse EOF as another EBML element.
+  if (Number.isFinite(duration) && duration > 0 && position / duration > 0.85) {
+    return 0;
+  }
+
+  return position;
+};
+
 const SHOW_FULLSCREEN_BUTTON = false;
+const BOTTOM_CONTROL_ICON_COLOR = 'rgba(255,255,255,0.68)';
+const BOTTOM_CONTROL_LABEL_STYLE = {
+  color: BOTTOM_CONTROL_ICON_COLOR,
+  fontWeight: '300' as const,
+};
+
+type QualityIconName =
+  | '8k'
+  | '4k'
+  | '2k'
+  | 'hd'
+  | 'sd'
+  | 'video-settings';
+
+const getQualityIconName = (
+  height?: number | string,
+  fallbackQuality?: string,
+): QualityIconName => {
+  const normalizedFallback = fallbackQuality?.trim().toLowerCase() || '';
+  const parsedHeight =
+    Number(height) || Number(normalizedFallback.match(/\d+/)?.[0]);
+
+  if (parsedHeight >= 3000 || /(?:8k|4320)/.test(normalizedFallback)) {
+    return '8k';
+  }
+  if (parsedHeight >= 1500 || /(?:4k|2160)/.test(normalizedFallback)) {
+    return '4k';
+  }
+  if (parsedHeight >= 1200 || normalizedFallback.includes('1440')) {
+    return '2k';
+  }
+  if (
+    parsedHeight >= 500 ||
+    /(?:1080|720|\bhd\b)/.test(normalizedFallback)
+  ) {
+    return 'hd';
+  }
+  if (
+    parsedHeight > 0 ||
+    /(?:480|360|240|144|\bsd\b)/.test(normalizedFallback)
+  ) {
+    return 'sd';
+  }
+
+  return 'video-settings';
+};
 
 const isCastableStreamUrl = (streamUrl: string, streamType?: string) => {
   if (!/^https?:\/\//i.test(streamUrl) || streamType === 'torrent') {
@@ -175,6 +241,36 @@ const Player = ({route}: Props): React.JSX.Element => {
 
   const colors = useM3Colors();
   const primary = colors.primary;
+  const dynamicInfoAccentEnabled =
+    settingsStorage.isDynamicInfoAccentEnabled();
+  const hourglassArtwork =
+    route.params?.poster?.poster || route.params?.poster?.background;
+  const [hourglassSandColor, setHourglassSandColor] = useState(primary);
+
+  useEffect(() => {
+    let active = true;
+    if (!dynamicInfoAccentEnabled || !hourglassArtwork) {
+      setHourglassSandColor(primary);
+      return () => {
+        active = false;
+      };
+    }
+
+    extractImageAccent(
+      hourglassArtwork,
+      `detail-poster-accent-v1:${hourglassArtwork}`,
+    ).then(accent => {
+      if (active) {
+        setHourglassSandColor(
+          accent ? mixHex(accent, '#FFFFFF', 0.72) : primary,
+        );
+      }
+    });
+
+    return () => {
+      active = false;
+    };
+  }, [dynamicInfoAccentEnabled, hourglassArtwork, primary]);
   const {provider} = useContentStore();
   const navigation = useNavigation();
   const upsertContinueWatching = useContinueWatchingStore(
@@ -208,7 +304,6 @@ const Player = ({route}: Props): React.JSX.Element => {
   // Shared values for animations
   const loadingOpacity = useSharedValue(0);
   const loadingScale = useSharedValue(0.8);
-  const loadingRotation = useSharedValue(0);
   const lockButtonTranslateY = useSharedValue(-150);
   const lockButtonOpacity = useSharedValue(0);
   const textVisibility = useSharedValue(0);
@@ -223,10 +318,6 @@ const Player = ({route}: Props): React.JSX.Element => {
   const loadingContainerStyle = useAnimatedStyle(() => ({
     opacity: loadingOpacity.value,
     transform: [{scale: loadingScale.value}],
-  }));
-
-  const loadingIconStyle = useAnimatedStyle(() => ({
-    transform: [{rotate: `${loadingRotation.value}deg`}],
   }));
 
   const lockButtonStyle = useAnimatedStyle(() => ({
@@ -444,10 +535,19 @@ const Player = ({route}: Props): React.JSX.Element => {
   // Memoized watched duration
   const watchedDuration = useMemo(() => {
     if (syncedEpisodeMatches) {
-      return syncedPosition;
+      return getResumePosition(syncedPosition, syncedDuration);
     }
-    return readCachedProgress(activeEpisode?.link).position;
-  }, [activeEpisode?.link, syncedEpisodeMatches, syncedPosition]);
+    const cachedProgress = readCachedProgress(activeEpisode?.link);
+    return getResumePosition(
+      cachedProgress.position,
+      cachedProgress.duration,
+    );
+  }, [
+    activeEpisode?.link,
+    syncedDuration,
+    syncedEpisodeMatches,
+    syncedPosition,
+  ]);
 
   useEffect(() => {
     resumeAppliedRef.current = false;
@@ -614,7 +714,7 @@ const Player = ({route}: Props): React.JSX.Element => {
                   setTorrentDownloaded((stats.totalDone || 0) / 1024 / 1024);
                   setTorrentDownloadSpeed(stats.downloadRate || 0);
                 }
-              } catch (e) {}
+              } catch {}
             }, 1000);
           }
 
@@ -694,6 +794,33 @@ const Player = ({route}: Props): React.JSX.Element => {
     }
     return quality;
   }, []);
+
+  const selectedPlayerQuality = useMemo(() => {
+    const selectedTrack =
+      videoTracks?.length === 1
+        ? videoTracks[0]
+        : videoTracks?.[selectedQualityIndex];
+    const selectedTrackHeight = Number(selectedTrack?.height) || 0;
+    const quality =
+      (selectedTrackHeight > 0 ? selectedTrackHeight.toString() : undefined) ||
+      selectedStream?.quality ||
+      'auto';
+
+    if (selectedStream?.type === 'local') {
+      return {icon: 'video-settings' as const, label: 'Local'};
+    }
+
+    return {
+      icon: getQualityIconName(selectedTrackHeight, selectedStream?.quality),
+      label: formatQuality(quality),
+    };
+  }, [
+    formatQuality,
+    selectedQualityIndex,
+    selectedStream?.quality,
+    selectedStream?.type,
+    videoTracks,
+  ]);
 
   // Memoized next episode handler
   const handleNextEpisode = useCallback(() => {
@@ -1096,15 +1223,6 @@ const Player = ({route}: Props): React.JSX.Element => {
     if (streamLoading || isResolvingStream) {
       loadingOpacity.value = withTiming(1, {duration: 800});
       loadingScale.value = withTiming(1, {duration: 800});
-      loadingRotation.value = withRepeat(
-        withSequence(
-          withDelay(500, withTiming(180, {duration: 900})),
-          withTiming(180, {duration: 600}),
-          withTiming(360, {duration: 900}),
-          withTiming(360, {duration: 600}),
-        ),
-        -1,
-      );
     }
   }, [isResolvingStream, streamLoading]);
 
@@ -1204,7 +1322,6 @@ const Player = ({route}: Props): React.JSX.Element => {
       },
       videoRef: playerRef,
       rate: playbackRate,
-      poster: route.params?.poster?.logo || '',
       subtitleStyle: {
         fontSize: settingsStorage.getSubtitleFontSize() || 16,
         opacity: settingsStorage.getSubtitleOpacity() || 1,
@@ -1245,6 +1362,14 @@ const Player = ({route}: Props): React.JSX.Element => {
       controlAnimationTiming: 357,
       controlTimeoutDelay: 10000,
       hideAllControlls: isPlayerLocked,
+      onSeekSnap: () => {
+        if (settingsStorage.isHapticFeedbackEnabled()) {
+          ReactNativeHapticFeedback.trigger('effectTick', {
+            enableVibrateFallback: true,
+            ignoreAndroidSystemSettings: false,
+          });
+        }
+      },
     }),
     [
       isPlayerLocked,
@@ -1292,9 +1417,9 @@ const Player = ({route}: Props): React.JSX.Element => {
             <Animated.View
               style={[loadingContainerStyle]}
               className="justify-center items-center">
-              <Animated.View style={[loadingIconStyle]} className="mb-2">
-                <MaterialIcons name="hourglass-empty" size={60} color="white" />
-              </Animated.View>
+              <View className="mb-2">
+                <AnimatedHourglass sandColor={hourglassSandColor} />
+              </View>
               <Text className="text-white text-lg mt-4">Loading stream...</Text>
             </Animated.View>
           </View>
@@ -1351,9 +1476,7 @@ const Player = ({route}: Props): React.JSX.Element => {
       ) : (
         <View className="flex-1 justify-center items-center">
           <Animated.View style={[loadingContainerStyle]}>
-            <Animated.View style={[loadingIconStyle]}>
-              <MaterialIcons name="hourglass-empty" size={60} color="white" />
-            </Animated.View>
+            <AnimatedHourglass sandColor={hourglassSandColor} />
           </Animated.View>
           <TouchableOpacity
             className="mt-6 flex-row items-center gap-2 px-4 py-2"
@@ -1361,7 +1484,11 @@ const Player = ({route}: Props): React.JSX.Element => {
               setActiveTab('server');
               setShowSettings(true);
             }}>
-            <MaterialIcons name="video-settings" size={24} color="white" />
+            <MaterialIcons
+              name={selectedPlayerQuality.icon}
+              size={24}
+              color="white"
+            />
             <Text className="text-white text-sm capitalize opacity-80">
               {selectedStream?.server || 'Change server'}
             </Text>
@@ -1411,13 +1538,14 @@ const Player = ({route}: Props): React.JSX.Element => {
       {!isCasting && !streamLoading && !Platform.isTV && (
         <Animated.View
           style={[lockButtonStyle]}
-          className="absolute top-5 right-5 flex-row items-center gap-2 z-50">
+          className="absolute top-5 right-5 flex-row items-center gap-2 z-50"
+          pointerEvents="box-none">
           <TouchableOpacity
             onPress={togglePlayerLock}
-            className="opacity-70 p-2 rounded-full">
-            <MaterialIcons
-              name={isPlayerLocked ? 'lock' : 'lock-open'}
-              color={'hsl(0, 0%, 70%)'}
+            className="p-2 rounded-full">
+            <MaterialCommunityIcons
+              name={isPlayerLocked ? 'lock-outline' : 'lock-open-outline'}
+              color={BOTTOM_CONTROL_ICON_COLOR}
               size={24}
             />
           </TouchableOpacity>
@@ -1447,22 +1575,27 @@ const Player = ({route}: Props): React.JSX.Element => {
       {/* Bottom controls */}
       {!isCasting && !isPlayerLocked && (
         <Animated.View
-          style={[controlsStyle]}
-          className="absolute bottom-3 right-6 flex flex-row justify-center w-full gap-x-16">
+          style={[
+            controlsStyle,
+            {left: '10%', right: '10%', bottom: 20},
+          ]}
+          className="absolute flex-row items-center">
           {/* Audio controls */}
           <TouchableOpacity
             onPress={() => {
               setActiveTab('audio');
               setShowSettings(!showSettings);
             }}
-            className="flex flex-row gap-x-1 items-center">
-            <MaterialIcons
-              style={{opacity: 0.7}}
-              name={'multitrack-audio'}
-              size={26}
-              color="white"
+            className="min-w-0 flex-1 flex-row items-center justify-center gap-x-1">
+            <MaterialCommunityIcons
+              name="waveform"
+              size={24}
+              color={BOTTOM_CONTROL_ICON_COLOR}
             />
-            <Text className="capitalize text-xs text-white opacity-70">
+            <Text
+              className="capitalize text-xs text-white"
+              style={BOTTOM_CONTROL_LABEL_STYLE}
+              numberOfLines={1}>
               {audioTracks[selectedAudioTrackIndex]?.language || 'auto'}
             </Text>
           </TouchableOpacity>
@@ -1473,14 +1606,16 @@ const Player = ({route}: Props): React.JSX.Element => {
               setActiveTab('subtitle');
               setShowSettings(!showSettings);
             }}
-            className="flex flex-row gap-x-1 items-center">
-            <MaterialIcons
-              style={{opacity: 0.6}}
-              name={'subtitles'}
+            className="min-w-0 flex-1 flex-row items-center justify-center gap-x-1">
+            <MaterialCommunityIcons
+              name="subtitles-outline"
               size={24}
-              color="white"
+              color={BOTTOM_CONTROL_ICON_COLOR}
             />
-            <Text className="text-xs capitalize text-white opacity-70">
+            <Text
+              className="text-xs capitalize text-white"
+              style={BOTTOM_CONTROL_LABEL_STYLE}
+              numberOfLines={1}>
               {selectedTextTrackIndex === 1000
                 ? 'none'
                 : textTracks[selectedTextTrackIndex]?.language}
@@ -1489,13 +1624,19 @@ const Player = ({route}: Props): React.JSX.Element => {
 
           {/* Speed controls */}
           <TouchableOpacity
-            className="flex-row gap-1 items-center opacity-60"
+            className="min-w-0 flex-1 flex-row items-center justify-center gap-1"
             onPress={() => {
               setActiveTab('speed');
               setShowSettings(!showSettings);
             }}>
-            <MaterialIcons name="speed" size={26} color="white" />
-            <Text className="text-white text-sm">
+            <MaterialCommunityIcons
+              name="speedometer"
+              size={24}
+              color={BOTTOM_CONTROL_ICON_COLOR}
+            />
+            <Text
+              className="text-white text-sm"
+              style={BOTTOM_CONTROL_LABEL_STYLE}>
               {playbackRate === 1 ? '1.0' : playbackRate}
             </Text>
           </TouchableOpacity>
@@ -1503,45 +1644,56 @@ const Player = ({route}: Props): React.JSX.Element => {
           {/* PIP */}
           {!Platform.isTV && (
             <TouchableOpacity
-              className="flex-row gap-1 items-center opacity-60"
+              className="min-w-0 flex-1 flex-row items-center justify-center gap-1"
               onPress={() => {
                 playerRef?.current?.enterPictureInPicture();
               }}>
-              <MaterialIcons
-                name="picture-in-picture"
+              <MaterialCommunityIcons
+                name="picture-in-picture-bottom-right-outline"
                 size={24}
-                color="white"
+                color={BOTTOM_CONTROL_ICON_COLOR}
               />
-              <Text className="text-white text-xs">PIP</Text>
+              <Text
+                className="text-white text-xs"
+                style={BOTTOM_CONTROL_LABEL_STYLE}>
+                PIP
+              </Text>
             </TouchableOpacity>
           )}
 
           {/* Server & Quality */}
           <TouchableOpacity
-            className="flex-row gap-1 items-center opacity-60"
+            className="min-w-0 flex-1 flex-row items-center justify-center gap-1"
             onPress={() => {
               setActiveTab('server');
               setShowSettings(!showSettings);
             }}>
-            <MaterialIcons name="video-settings" size={25} color="white" />
-            <Text className="text-xs text-white capitalize">
-              {selectedStream?.type === 'local'
-                ? 'Local'
-                : videoTracks?.length === 1
-                  ? formatQuality(videoTracks[0]?.height?.toString() || 'auto')
-                  : formatQuality(
-                      videoTracks?.[selectedQualityIndex]?.height?.toString() ||
-                        'auto',
-                    )}
+            <MaterialIcons
+              name={selectedPlayerQuality.icon}
+              size={24}
+              color={BOTTOM_CONTROL_ICON_COLOR}
+            />
+            <Text
+              className="text-xs text-white capitalize"
+              style={BOTTOM_CONTROL_LABEL_STYLE}
+              numberOfLines={1}>
+              {selectedPlayerQuality.label}
             </Text>
           </TouchableOpacity>
 
           {/* Resize button */}
           <TouchableOpacity
-            className="flex-row gap-1 items-center opacity-60"
+            className="min-w-0 flex-1 flex-row items-center justify-center gap-1"
             onPress={handleResizeMode}>
-            <MaterialIcons name="fit-screen" size={28} color="white" />
-            <Text className="text-white text-sm min-w-[38px]">
+            <MaterialCommunityIcons
+              name="fit-to-screen-outline"
+              size={25}
+              color={BOTTOM_CONTROL_ICON_COLOR}
+            />
+            <Text
+              className="text-white text-sm min-w-[38px]"
+              style={BOTTOM_CONTROL_LABEL_STYLE}
+              numberOfLines={1}>
               {resizeMode === ResizeMode.NONE
                 ? 'Fit'
                 : resizeMode === ResizeMode.COVER
@@ -1559,10 +1711,19 @@ const Player = ({route}: Props): React.JSX.Element => {
               videoPositionRef.current.duration >
               0.8 && (
               <TouchableOpacity
-                className="flex-row items-center opacity-60"
+                className="min-w-0 flex-1 flex-row items-center justify-center"
                 onPress={handleNextEpisode}>
-                <Text className="text-white text-base">Next</Text>
-                <MaterialIcons name="skip-next" size={28} color="white" />
+                <Text
+                  className="text-white text-base"
+                  style={BOTTOM_CONTROL_LABEL_STYLE}
+                  numberOfLines={1}>
+                  Next
+                </Text>
+                <MaterialCommunityIcons
+                  name="skip-next-outline"
+                  size={26}
+                  color={BOTTOM_CONTROL_ICON_COLOR}
+                />
               </TouchableOpacity>
             )}
         </Animated.View>
@@ -1581,16 +1742,28 @@ const Player = ({route}: Props): React.JSX.Element => {
       {/* Settings Modal */}
       {!isCasting && !streamLoading && !isPlayerLocked && showSettings && (
         <Animated.View
-          style={[settingsStyle]}
-          className="absolute opacity-0 top-0 left-0 w-full h-full bg-black/20 justify-end items-center"
+          style={[
+            settingsStyle,
+            {backgroundColor: 'rgba(0,0,0,0.48)'},
+          ]}
+          className="absolute opacity-0 top-0 left-0 w-full h-full justify-end items-center"
           onTouchEnd={() => setShowSettings(false)}>
           <View
-            className="bg-black p-3 w-[600px] h-72 rounded-t-lg flex-row justify-start items-center"
+            className="p-3 w-[620px] h-80 rounded-t-3xl flex-row justify-start items-center"
+            style={{
+              backgroundColor: 'rgba(13,13,13,0.94)',
+              borderColor: 'rgba(255,255,255,0.12)',
+              borderWidth: 1,
+              shadowColor: '#000',
+              shadowOpacity: 0.45,
+              shadowRadius: 24,
+              elevation: 18,
+            }}
             onTouchEnd={e => e.stopPropagation()}>
             {/* Audio Tab */}
             {activeTab === 'audio' && (
               <ScrollView className="w-full h-full p-1 px-4">
-                <Text className="text-lg font-bold text-center text-white">
+                <Text className="mb-2 text-lg font-bold text-center text-white">
                   Audio
                 </Text>
                 {audioTracks.length === 0 && (
@@ -1601,9 +1774,15 @@ const Player = ({route}: Props): React.JSX.Element => {
                   </View>
                 )}
                 {audioTracks.map((track, i) => (
-                  <TouchableOpacity
-                    className="flex-row gap-3 items-center rounded-md my-1 overflow-hidden ml-2"
+                  <PlayerMenuRow
                     key={i}
+                    title={track.language || `Audio track ${i + 1}`}
+                    detail={[track.type, track.title]
+                      .filter(Boolean)
+                      .join(' · ')}
+                    selected={selectedAudioTrackIndex === i}
+                    accentColor={primary}
+                    icon="multitrack-audio"
                     onPress={() => {
                       setSelectedAudioTrack({
                         type: SelectedTrackType.LANGUAGE,
@@ -1615,35 +1794,8 @@ const Player = ({route}: Props): React.JSX.Element => {
                       );
                       setSelectedAudioTrackIndex(i);
                       setShowSettings(false);
-                    }}>
-                    <Text
-                      className={'text-lg font-semibold'}
-                      style={{
-                        color:
-                          selectedAudioTrackIndex === i ? primary : 'white',
-                      }}>
-                      {track.language}
-                    </Text>
-                    <Text
-                      className={'text-base italic'}
-                      style={{
-                        color:
-                          selectedAudioTrackIndex === i ? primary : 'white',
-                      }}>
-                      {track.type}
-                    </Text>
-                    <Text
-                      className={'text-sm italic'}
-                      style={{
-                        color:
-                          selectedAudioTrackIndex === i ? primary : 'white',
-                      }}>
-                      {track.title}
-                    </Text>
-                    {selectedAudioTrackIndex === i && (
-                      <MaterialIcons name="check" size={20} color="white" />
-                    )}
-                  </TouchableOpacity>
+                    }}
+                  />
                 ))}
               </ScrollView>
             )}
@@ -1654,11 +1806,14 @@ const Player = ({route}: Props): React.JSX.Element => {
                 data={textTracks}
                 ListHeaderComponent={
                   <View>
-                    <Text className="text-lg font-bold text-center text-white">
+                    <Text className="mb-2 text-lg font-bold text-center text-white">
                       Subtitle
                     </Text>
-                    <TouchableOpacity
-                      className="flex-row gap-3 items-center rounded-md my-1 overflow-hidden ml-3"
+                    <PlayerMenuRow
+                      title="Disabled"
+                      selected={selectedTextTrackIndex === 1000}
+                      accentColor={primary}
+                      icon="subtitles-off"
                       onPress={() => {
                         setSelectedTextTrack({
                           type: SelectedTrackType.DISABLED,
@@ -1666,22 +1821,16 @@ const Player = ({route}: Props): React.JSX.Element => {
                         setSelectedTextTrackIndex(1000);
                         cacheStorage.setString('lastTextTrack', '');
                         setShowSettings(false);
-                      }}>
-                      <Text
-                        className="text-base font-semibold"
-                        style={{
-                          color:
-                            selectedTextTrackIndex === 1000 ? primary : 'white',
-                        }}>
-                        Disabled
-                      </Text>
-                    </TouchableOpacity>
+                      }}
+                    />
                   </View>
                 }
                 ListFooterComponent={
                   <>
-                    <TouchableOpacity
-                      className="flex-row gap-3 items-center rounded-md my-1 overflow-hidden ml-2"
+                    <PlayerMenuRow
+                      title="Add external file"
+                      accentColor={primary}
+                      icon="add"
                       onPress={async () => {
                         try {
                           const res = await DocumentPicker.getDocumentAsync({
@@ -1710,12 +1859,8 @@ const Player = ({route}: Props): React.JSX.Element => {
                         } catch (err) {
                           console.log(err);
                         }
-                      }}>
-                      <MaterialIcons name="add" size={20} color="white" />
-                      <Text className="text-base font-semibold text-white">
-                        Add external file
-                      </Text>
-                    </TouchableOpacity>
+                      }}
+                    />
                     <SearchSubtitles
                       searchQuery={searchQuery}
                       setSearchQuery={setSearchQuery}
@@ -1724,8 +1869,14 @@ const Player = ({route}: Props): React.JSX.Element => {
                   </>
                 }
                 renderItem={({item: track}) => (
-                  <TouchableOpacity
-                    className="flex-row gap-3 items-center rounded-md my-1 overflow-hidden ml-2"
+                  <PlayerMenuRow
+                    title={track.language || 'Unknown'}
+                    detail={[track.type, track.title]
+                      .filter(Boolean)
+                      .join(' · ')}
+                    selected={selectedTextTrackIndex === track.index}
+                    accentColor={primary}
+                    icon="subtitles"
                     onPress={() => {
                       setSelectedTextTrack({
                         type: SelectedTrackType.INDEX,
@@ -1737,41 +1888,8 @@ const Player = ({route}: Props): React.JSX.Element => {
                         track.language || '',
                       );
                       setShowSettings(false);
-                    }}>
-                    <Text
-                      className={'text-base font-semibold'}
-                      style={{
-                        color:
-                          selectedTextTrackIndex === track.index
-                            ? primary
-                            : 'white',
-                      }}>
-                      {track.language}
-                    </Text>
-                    <Text
-                      className={'text-sm italic'}
-                      style={{
-                        color:
-                          selectedTextTrackIndex === track.index
-                            ? primary
-                            : 'white',
-                      }}>
-                      {track.type}
-                    </Text>
-                    <Text
-                      className={'text-sm italic text-white'}
-                      style={{
-                        color:
-                          selectedTextTrackIndex === track.index
-                            ? primary
-                            : 'white',
-                      }}>
-                      {track.title}
-                    </Text>
-                    {selectedTextTrackIndex === track.index && (
-                      <MaterialIcons name="check" size={20} color="white" />
-                    )}
-                  </TouchableOpacity>
+                    }}
+                  />
                 )}
               />
             )}
@@ -1779,15 +1897,21 @@ const Player = ({route}: Props): React.JSX.Element => {
             {/* Server Tab */}
             {activeTab === 'server' && (
               <View className="flex flex-row w-full h-full p-1 px-4">
-                <ScrollView className="border-r border-white/50">
-                  <Text className="w-full text-center text-white text-lg font-extrabold">
+                <ScrollView
+                  className="border-r border-white/10"
+                  contentContainerStyle={{paddingRight: 8}}>
+                  <Text className="mb-2 w-full text-center text-white text-lg font-extrabold">
                     Server
                   </Text>
                   {streamData?.length > 0 &&
                     streamData?.map((track, i) => (
-                      <TouchableOpacity
-                        className="flex-row gap-3 items-center rounded-md my-1 overflow-hidden ml-2"
+                      <PlayerMenuRow
                         key={i}
+                        title={track.server || `Server ${i + 1}`}
+                        detail={track.quality}
+                        selected={track.link === selectedStream.link}
+                        accentColor={primary}
+                        icon="dns"
                         onPress={() => {
                           setSelectedStream(track);
                           appliedPersistedLocalVideoRef.current = true;
@@ -1796,89 +1920,51 @@ const Player = ({route}: Props): React.JSX.Element => {
                           }
                           setShowSettings(false);
                           playerRef?.current?.resume();
-                        }}>
-                        <Text
-                          className={'text-base capitalize font-semibold'}
-                          style={{
-                            color:
-                              track.link === selectedStream.link
-                                ? primary
-                                : 'white',
-                          }}>
-                          {track.server}
-                        </Text>
-                        {track.link === selectedStream.link && (
-                          <MaterialIcons name="check" size={20} color="white" />
-                        )}
-                      </TouchableOpacity>
+                        }}
+                      />
                     ))}
 
                   {/* Local video option, mirrors the subtitle screen's
                       "Add external file" entry above */}
-                  <TouchableOpacity
-                    className="flex-row gap-3 items-center rounded-md my-1 overflow-hidden ml-2 mt-2 pt-2 border-t border-white/20"
-                    onPress={handleSelectLocalVideo}>
-                    <MaterialIcons
-                      name="folder-open"
-                      size={20}
-                      color={
-                        selectedStream?.type === 'local' ? primary : 'white'
-                      }
+                  <View className="mt-1 border-t border-white/10 pt-1">
+                    <PlayerMenuRow
+                      title="Local video"
+                      detail="Choose a file from this device"
+                      selected={selectedStream?.type === 'local'}
+                      accentColor={primary}
+                      icon="folder-open"
+                      onPress={handleSelectLocalVideo}
                     />
-                    <Text
-                      className="text-base font-semibold"
-                      style={{
-                        color:
-                          selectedStream?.type === 'local' ? primary : 'white',
-                      }}>
-                      {selectedStream?.type === 'local'
-                        ? 'Local Video'
-                        : 'Select Local Video'}
-                    </Text>
-                    {selectedStream?.type === 'local' && (
-                      <MaterialIcons name="check" size={20} color={primary} />
-                    )}
-                  </TouchableOpacity>
+                  </View>
                 </ScrollView>
 
-                <ScrollView>
-                  <Text className="w-full text-center text-white text-lg font-extrabold">
+                <ScrollView contentContainerStyle={{paddingLeft: 8}}>
+                  <Text className="mb-2 w-full text-center text-white text-lg font-extrabold">
                     Quality
                   </Text>
 
                   {videoTracks &&
                     videoTracks.map((track: any, i: any) => (
-                      <TouchableOpacity
-                        className="flex-row gap-3 items-center rounded-md my-1 overflow-hidden ml-2"
+                      <PlayerMenuRow
                         key={i}
+                        title={`${track.height}x${track.width}`}
+                        detail={[
+                          track.bitrate && `Bitrate ${track.bitrate}`,
+                          track.codecs && `Codec ${track.codecs}`,
+                        ]
+                          .filter(Boolean)
+                          .join(' · ')}
+                        selected={selectedQualityIndex === i}
+                        accentColor={primary}
+                        icon={getQualityIconName(track.height)}
                         onPress={() => {
                           setSelectedVideoTrack({
                             type: SelectedVideoTrackType.INDEX,
                             value: track.index,
                           });
                           setSelectedQualityIndex(i);
-                        }}>
-                        <Text
-                          className={'text-base font-semibold pl-4'}
-                          style={{
-                            color:
-                              selectedQualityIndex === i ? primary : 'white',
-                          }}>
-                          {track.height + 'x' + track.width}
-                        </Text>
-                        <Text
-                          className={''}
-                          style={{
-                            color:
-                              selectedQualityIndex === i ? primary : 'white',
-                          }}>
-                          {!!track.bitrate && `| Bitrate ${track.bitrate}`}
-                          {!!track.codecs && `| Codec ${track.codecs}`}
-                        </Text>
-                        {selectedQualityIndex === i && (
-                          <MaterialIcons name="check" size={20} color="white" />
-                        )}
-                      </TouchableOpacity>
+                        }}
+                      />
                     ))}
                 </ScrollView>
               </View>
@@ -1887,28 +1973,21 @@ const Player = ({route}: Props): React.JSX.Element => {
             {/* Speed Tab */}
             {activeTab === 'speed' && (
               <ScrollView className="w-full h-full p-1 px-4">
-                <Text className="text-lg font-bold text-center text-white">
+                <Text className="mb-2 text-lg font-bold text-center text-white">
                   Playback Speed
                 </Text>
                 {playbacks.map((rate, i) => (
-                  <TouchableOpacity
-                    className="flex-row gap-3 items-center rounded-md my-1 overflow-hidden ml-2"
+                  <PlayerMenuRow
                     key={i}
+                    title={`${rate}x`}
+                    selected={playbackRate === rate}
+                    accentColor={primary}
+                    icon="speed"
                     onPress={() => {
                       setPlaybackRate(rate);
                       setShowSettings(false);
-                    }}>
-                    <Text
-                      className={'text-lg font-semibold'}
-                      style={{
-                        color: playbackRate === rate ? primary : 'white',
-                      }}>
-                      {rate}x
-                    </Text>
-                    {playbackRate === rate && (
-                      <MaterialIcons name="check" size={20} color="white" />
-                    )}
-                  </TouchableOpacity>
+                    }}
+                  />
                 ))}
               </ScrollView>
             )}

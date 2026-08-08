@@ -3,6 +3,7 @@ import {cache as imageColorsCache} from 'react-native-image-colors';
 import {queryClient} from './client';
 import {clearHeroCache} from './hooks/useHomePageData';
 import {clearImageAccentCache} from './imageAccent';
+import {clearDownloadedVideoThumbnailMemoryCache} from './downloadThumbnailCache';
 import {cacheStorageService} from './storage';
 
 const PRESERVED_CACHE_ENTRIES: Set<string> = new Set([]);
@@ -21,6 +22,7 @@ export const clearAppCache = async (): Promise<void> => {
   queryClient.clear();
   imageColorsCache.clear();
   clearImageAccentCache();
+  clearDownloadedVideoThumbnailMemoryCache();
   clearHeroCache();
   await clearFilesystemCache();
 };

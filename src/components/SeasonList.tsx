@@ -418,7 +418,7 @@ const SeasonList: React.FC<SeasonListProps> = ({
       cacheStorage.setString(
         stickyMenu.link,
         JSON.stringify({
-          position: 10000,
+          position: 1,
           duration: 1,
         }),
       );
@@ -434,7 +434,7 @@ const SeasonList: React.FC<SeasonListProps> = ({
           provider: providerValue,
           infoUrl: routeParams.link,
           type,
-          position: 10000,
+          position: 1,
           duration: 1,
         });
       }

@@ -22,6 +22,7 @@ import {
   downloadOutputExists,
 } from '../../lib/downloadDestination';
 import {formatDownloadBytes} from '../../lib/downloadFormatting';
+import {getDownloadedVideoThumbnail} from '../../lib/downloadThumbnailCache';
 import {
   createDownloadDirectoryName,
   createDownloadSeasonDirectoryName,
@@ -43,6 +44,52 @@ type DownloadedDetailsProps = CompositeScreenProps<
 
 const getSeasonTitle = (item: DownloadItem): string =>
   item.seasonTitle || 'Downloaded';
+
+const DownloadedItemThumbnail = ({item}: {item: DownloadItem}) => {
+  const colors = useM3Colors();
+  const [thumbnailUri, setThumbnailUri] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    setThumbnailUri(null);
+    getDownloadedVideoThumbnail(item.filePath)
+      .then(uri => {
+        if (active) setThumbnailUri(uri);
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, [item.filePath]);
+
+  return (
+    <View
+      style={{
+        alignItems: 'center',
+        backgroundColor: colors.secondaryContainer,
+        borderRadius: 12,
+        height: 45,
+        justifyContent: 'center',
+        overflow: 'hidden',
+        width: 80,
+      }}>
+      {thumbnailUri ? (
+        <Image
+          source={{uri: thumbnailUri}}
+          resizeMode="cover"
+          style={{
+            bottom: 0,
+            left: 0,
+            position: 'absolute',
+            right: 0,
+            top: 0,
+          }}
+        />
+      ) : null}
+      <Ionicons name="play" size={18} color="#ffffff" />
+    </View>
+  );
+};
 
 const DownloadedDetails = ({navigation, route}: DownloadedDetailsProps) => {
   const colors = useM3Colors();
@@ -274,18 +321,7 @@ const DownloadedDetails = ({navigation, route}: DownloadedDetailsProps) => {
                   borderWidth: 1,
                 })}
                 onPress={() => playItem(item)}>
-                <View
-                  className="h-10 w-10 items-center justify-center"
-                  style={{
-                    backgroundColor: colors.secondaryContainer,
-                    borderRadius: 16,
-                  }}>
-                  <Ionicons
-                    name="play"
-                    size={20}
-                    color={colors.onSecondaryContainer}
-                  />
-                </View>
+                <DownloadedItemThumbnail item={item} />
                 <View className="ml-3 flex-1">
                   <Text
                     className="font-semibold"

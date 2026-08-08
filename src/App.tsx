@@ -243,7 +243,6 @@ const App = () => {
   }, []);
 
   useEffect(() => {
-    // Apply telemetry preference before using analytics
     const optIn = settingsStorage.isTelemetryOptIn();
     if (hasFirebase) {
       try {
