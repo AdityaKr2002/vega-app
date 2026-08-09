@@ -33,6 +33,7 @@ import {
   ResizeMode,
   SelectedTrack,
   SelectedTrackType,
+  BufferingStrategyType,
 } from 'react-native-video';
 import useContentStore from '../../lib/zustand/contentStore';
 import {CastButton, useRemoteMediaClient} from 'react-native-google-cast';
@@ -1297,7 +1298,20 @@ const Player = ({route}: Props): React.JSX.Element => {
       source: {
         textTracks: externalSubs,
         uri: processedStreamUrl || '',
-        bufferConfig: {backBufferDurationMs: 30000},
+        bufferConfig: {
+          // High-bitrate 4K streams can otherwise fill Android's complete
+          // Java heap: react-native-video defaults the allocator limit to
+          // 100%, then the codec has no room left for output buffers.
+          minBufferMs: 8000,
+          maxBufferMs: 20000,
+          bufferForPlaybackMs: 1500,
+          bufferForPlaybackAfterRebufferMs: 3000,
+          backBufferDurationMs: 0,
+          maxHeapAllocationPercent: 0.18,
+          minBufferMemoryReservePercent: 0.2,
+          minBackBufferMemoryReservePercent: 0.25,
+          cacheSizeMB: 0,
+        },
         shouldCache: true,
         ...(selectedStream?.type === 'm3u8' && {type: 'm3u8'}),
         headers: selectedStream?.headers,
@@ -1349,6 +1363,7 @@ const Player = ({route}: Props): React.JSX.Element => {
       disableVolume: true,
       showHours: true,
       progressUpdateInterval: 1000,
+      bufferingStrategy: BufferingStrategyType.DEPENDING_ON_MEMORY,
       showNotificationControls: showMediaControls,
       onError: handleVideoError,
       resizeMode,

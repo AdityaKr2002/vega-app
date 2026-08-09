@@ -1,10 +1,17 @@
-import React, {useState, useMemo, useCallback, useEffect} from 'react';
+import React, {
+  useState,
+  useMemo,
+  useCallback,
+  useEffect,
+  useRef,
+} from 'react';
 import {
   View,
   TouchableOpacity,
   ToastAndroid,
   FlatList,
   ActivityIndicator,
+  Image,
   ScrollView,
   TextInput,
 } from 'react-native';
@@ -40,7 +47,7 @@ import {useM3Colors} from '../theme/M3PaletteContext';
 import MaterialDialogSurface from './ui/MaterialDialogSurface';
 import {LEGACY_TERTIARY_BACKGROUND} from '../theme/seeds';
 import Text from './ui/Text';
-import EpisodeRowContent from './EpisodeRowContent';
+import EpisodeRowContent, {getValidImageUri} from './EpisodeRowContent';
 import {setSyncedEpisodeProgress} from '../lib/sync/syncService';
 
 const CONTROL_TEXT = '#F5F0EF';
@@ -82,6 +89,12 @@ interface StickyMenuState {
   type?: string;
 }
 
+interface EpisodeDetailsState {
+  title: string;
+  description: string;
+  image?: string;
+}
+
 const getOriginalLinkIndex = <T extends {link: string}>(
   links: T[] | undefined,
   link: string,
@@ -108,6 +121,8 @@ const SeasonList: React.FC<SeasonListProps> = ({
   const navigation =
     useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const {fetchStreams} = useStreamData();
+  const detailsPressRef = useRef<string | null>(null);
+  const episodeSortOrderKey = `episodeSortOrder:${providerValue}:${routeParams.link}`;
 
   // Early return if no LinkList provided
   if (!LinkList || LinkList.length === 0) {
@@ -173,13 +188,27 @@ const SeasonList: React.FC<SeasonListProps> = ({
   // Search and sorting state - memoized initial values
   const [searchText, setSearchText] = useState<string>('');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>(() =>
-    mainStorage.getString('episodeSortOrder') === 'desc' ? 'desc' : 'asc',
+    mainStorage.getString(episodeSortOrderKey) === 'desc' ? 'desc' : 'asc',
   );
+
+  useEffect(() => {
+    setSortOrder(
+      mainStorage.getString(episodeSortOrderKey) === 'desc' ? 'desc' : 'asc',
+    );
+  }, [episodeSortOrderKey]);
 
   // External player state
   const [showServerModal, setShowServerModal] = useState<boolean>(false);
   const [externalPlayerStreams, setExternalPlayerStreams] = useState<any[]>([]);
   const [isLoadingStreams, setIsLoadingStreams] = useState<boolean>(false);
+  const [episodeDetails, setEpisodeDetails] =
+    useState<EpisodeDetailsState | null>(null);
+  const [episodeDetailsImageFailed, setEpisodeDetailsImageFailed] =
+    useState(false);
+
+  useEffect(() => {
+    setEpisodeDetailsImageFailed(false);
+  }, [episodeDetails?.image]);
 
   // VLC loading animation - using shared value so it reacts to vlcLoading state
   const vlcRotation = useSharedValue(0);
@@ -267,8 +296,8 @@ const SeasonList: React.FC<SeasonListProps> = ({
   const toggleSortOrder = useCallback(() => {
     const newOrder = sortOrder === 'asc' ? 'desc' : 'asc';
     setSortOrder(newOrder);
-    mainStorage.setString('episodeSortOrder', newOrder);
-  }, [sortOrder]);
+    mainStorage.setString(episodeSortOrderKey, newOrder);
+  }, [episodeSortOrderKey, sortOrder]);
 
   // Memoized season change handler
   const handleSeasonChange = useCallback(
@@ -422,9 +451,10 @@ const SeasonList: React.FC<SeasonListProps> = ({
           duration: 1,
         }),
       );
-      const episode = [...episodeList, ...(activeSeason.directLinks || [])].find(
-        item => item.link === stickyMenu.link,
-      );
+      const episode = [
+        ...episodeList,
+        ...(activeSeason.directLinks || []),
+      ].find(item => item.link === stickyMenu.link);
       if (episode) {
         setSyncedEpisodeProgress({
           episode,
@@ -440,7 +470,17 @@ const SeasonList: React.FC<SeasonListProps> = ({
       }
       setStickyMenu({active: false});
     }
-  }, [activeSeason.directLinks, episodeList, metaTitle, poster.background, poster.poster, providerValue, routeParams.link, stickyMenu.link, type]);
+  }, [
+    activeSeason.directLinks,
+    episodeList,
+    metaTitle,
+    poster.background,
+    poster.poster,
+    providerValue,
+    routeParams.link,
+    stickyMenu.link,
+    type,
+  ]);
 
   // Memoized mark as unwatched handler
   const markAsUnwatched = useCallback(() => {
@@ -452,9 +492,10 @@ const SeasonList: React.FC<SeasonListProps> = ({
           duration: 1,
         }),
       );
-      const episode = [...episodeList, ...(activeSeason.directLinks || [])].find(
-        item => item.link === stickyMenu.link,
-      );
+      const episode = [
+        ...episodeList,
+        ...(activeSeason.directLinks || []),
+      ].find(item => item.link === stickyMenu.link);
       if (episode) {
         setSyncedEpisodeProgress({
           episode,
@@ -470,7 +511,17 @@ const SeasonList: React.FC<SeasonListProps> = ({
       }
       setStickyMenu({active: false});
     }
-  }, [activeSeason.directLinks, episodeList, metaTitle, poster.background, poster.poster, providerValue, routeParams.link, stickyMenu.link, type]);
+  }, [
+    activeSeason.directLinks,
+    episodeList,
+    metaTitle,
+    poster.background,
+    poster.poster,
+    providerValue,
+    routeParams.link,
+    stickyMenu.link,
+    type,
+  ]);
 
   // Memoized sticky menu external player handler
   const handleStickyMenuExternalPlayer = useCallback(() => {
@@ -494,6 +545,38 @@ const SeasonList: React.FC<SeasonListProps> = ({
         activeSeason.title,
         downloadIndex,
       );
+      const handleEpisodePress = () => {
+        const localDownload =
+          useDownloadsStore.getState().downloads[downloadId];
+        if (localDownload?.status === 'completed') {
+          navigation.navigate('Player', {
+            episodeList: [
+              {
+                id: localDownload.id,
+                title: item.title,
+                link: localDownload.filePath,
+                sourceLink: localDownload.sourceLink,
+              },
+            ],
+            linkIndex: 0,
+            type: '',
+            directUrl: localDownload.filePath,
+            primaryTitle: metaTitle,
+            secondaryTitle: activeSeason.title,
+            poster,
+            providerValue,
+            infoUrl: localDownload.infoUrl || routeParams.link,
+          });
+          return;
+        }
+        playHandler({
+          linkIndex: index,
+          type,
+          primaryTitle: metaTitle,
+          seasonTitle: activeSeason?.title || '',
+          episodeData: filteredAndSortedEpisodes,
+        });
+      };
       return (
         <View
           key={item.link + index}
@@ -513,40 +596,18 @@ const SeasonList: React.FC<SeasonListProps> = ({
               borderWidth: 1,
             }}>
             <TouchableOpacity
+              activeOpacity={0.65}
               className="min-w-0 flex-1 items-center flex-row gap-x-3"
               onPress={() => {
-                const localDownload =
-                  useDownloadsStore.getState().downloads[downloadId];
-                if (localDownload?.status === 'completed') {
-                  navigation.navigate('Player', {
-                    episodeList: [
-                      {
-                        id: localDownload.id,
-                        title: item.title,
-                        link: localDownload.filePath,
-                        sourceLink: localDownload.sourceLink,
-                      },
-                    ],
-                    linkIndex: 0,
-                    type: '',
-                    directUrl: localDownload.filePath,
-                    primaryTitle: metaTitle,
-                    secondaryTitle: activeSeason.title,
-                    poster,
-                    providerValue,
-                    infoUrl: localDownload.infoUrl || routeParams.link,
-                  });
+                if (detailsPressRef.current === item.link) {
+                  detailsPressRef.current = null;
                   return;
                 }
-                playHandler({
-                  linkIndex: index,
-                  type: type,
-                  primaryTitle: metaTitle,
-                  seasonTitle: activeSeason?.title || '',
-                  episodeData: filteredAndSortedEpisodes,
-                });
+                handleEpisodePress();
               }}
-              onLongPress={() => onLongPressHandler(true, item.link, 'series')}>
+              onLongPress={() =>
+                onLongPressHandler(true, item.link, 'series')
+              }>
               <EpisodeRowContent
                 title={item.title}
                 description={item.description}
@@ -554,6 +615,25 @@ const SeasonList: React.FC<SeasonListProps> = ({
                 accentColor={primary}
                 textColor={CONTROL_TEXT}
                 mutedTextColor={CONTROL_TEXT_MUTED}
+                onShowDetailsPressIn={() => {
+                  detailsPressRef.current = item.link;
+                }}
+                onShowDetails={
+                  item.description?.trim()
+                    ? () => {
+                        setEpisodeDetails({
+                          title: item.title,
+                          description: item.description!.trim(),
+                          image: item.image,
+                        });
+                        setTimeout(() => {
+                          if (detailsPressRef.current === item.link) {
+                            detailsPressRef.current = null;
+                          }
+                        }, 0);
+                      }
+                    : undefined
+                }
               />
             </TouchableOpacity>
             <Downloader
@@ -623,6 +703,38 @@ const SeasonList: React.FC<SeasonListProps> = ({
         activeSeason?.directLinks?.length && activeSeason.directLinks.length > 1
           ? item.title
           : 'Play';
+      const handleEpisodePress = () => {
+        const localDownload =
+          useDownloadsStore.getState().downloads[downloadId];
+        if (localDownload?.status === 'completed') {
+          navigation.navigate('Player', {
+            episodeList: [
+              {
+                id: localDownload.id,
+                title: item.title,
+                link: localDownload.filePath,
+                sourceLink: localDownload.sourceLink,
+              },
+            ],
+            linkIndex: 0,
+            type: '',
+            directUrl: localDownload.filePath,
+            primaryTitle: metaTitle,
+            secondaryTitle: activeSeason.title,
+            poster,
+            providerValue,
+            infoUrl: localDownload.infoUrl || routeParams.link,
+          });
+          return;
+        }
+        playHandler({
+          linkIndex: index,
+          type,
+          primaryTitle: metaTitle,
+          seasonTitle: activeSeason?.title || '',
+          episodeData: filteredAndSortedDirectLinks,
+        });
+      };
 
       return (
         <View
@@ -643,38 +755,14 @@ const SeasonList: React.FC<SeasonListProps> = ({
               borderWidth: 1,
             }}>
             <TouchableOpacity
+              activeOpacity={0.65}
               className="min-w-0 flex-1 items-center flex-row gap-x-3"
               onPress={() => {
-                const localDownload =
-                  useDownloadsStore.getState().downloads[downloadId];
-                if (localDownload?.status === 'completed') {
-                  navigation.navigate('Player', {
-                    episodeList: [
-                      {
-                        id: localDownload.id,
-                        title: item.title,
-                        link: localDownload.filePath,
-                        sourceLink: localDownload.sourceLink,
-                      },
-                    ],
-                    linkIndex: 0,
-                    type: '',
-                    directUrl: localDownload.filePath,
-                    primaryTitle: metaTitle,
-                    secondaryTitle: activeSeason.title,
-                    poster,
-                    providerValue,
-                    infoUrl: localDownload.infoUrl || routeParams.link,
-                  });
+                if (detailsPressRef.current === item.link) {
+                  detailsPressRef.current = null;
                   return;
                 }
-                playHandler({
-                  linkIndex: index,
-                  type: type,
-                  primaryTitle: metaTitle,
-                  seasonTitle: activeSeason?.title || '',
-                  episodeData: filteredAndSortedDirectLinks,
-                });
+                handleEpisodePress();
               }}
               onLongPress={() =>
                 onLongPressHandler(true, item.link, item?.type || 'series')
@@ -686,6 +774,25 @@ const SeasonList: React.FC<SeasonListProps> = ({
                 accentColor={primary}
                 textColor={CONTROL_TEXT}
                 mutedTextColor={CONTROL_TEXT_MUTED}
+                onShowDetailsPressIn={() => {
+                  detailsPressRef.current = item.link;
+                }}
+                onShowDetails={
+                  item.description?.trim()
+                    ? () => {
+                        setEpisodeDetails({
+                          title: item.title,
+                          description: item.description.trim(),
+                          image: item.image,
+                        });
+                        setTimeout(() => {
+                          if (detailsPressRef.current === item.link) {
+                            detailsPressRef.current = null;
+                          }
+                        }, 0);
+                      }
+                    : undefined
+                }
               />
             </TouchableOpacity>
             <Downloader
@@ -826,8 +933,8 @@ const SeasonList: React.FC<SeasonListProps> = ({
       />
 
       {/* Search and Sort Controls */}
-      {(episodeList.length > 8 ||
-        (activeSeason?.directLinks && activeSeason.directLinks?.length > 8) ||
+      {(episodeList.length > 2 ||
+        (activeSeason?.directLinks && activeSeason.directLinks?.length > 2) ||
         searchText) && (
         <View className="flex-row items-center mt-2">
           <View
@@ -945,6 +1052,58 @@ const SeasonList: React.FC<SeasonListProps> = ({
           </Text>
         </View>
       )}
+
+      <MaterialDialogSurface
+        visible={episodeDetails !== null}
+        onDismiss={() => setEpisodeDetails(null)}
+        style={{padding: 0}}>
+        {episodeDetails ? (
+          <>
+            {getValidImageUri(episodeDetails.image) &&
+            !episodeDetailsImageFailed ? (
+              <Image
+                source={{uri: getValidImageUri(episodeDetails.image)}}
+                resizeMode="cover"
+                onError={() => setEpisodeDetailsImageFailed(true)}
+                style={{aspectRatio: 16 / 9, width: '100%'}}
+              />
+            ) : (
+              <View
+                style={{
+                  alignItems: 'center',
+                  aspectRatio: 16 / 9,
+                  backgroundColor: colors.surfaceContainerHighest,
+                  justifyContent: 'center',
+                  width: '100%',
+                }}>
+                <MaterialCommunityIcons
+                  name="image-off-outline"
+                  size={44}
+                  color={colors.onSurfaceVariant}
+                />
+              </View>
+            )}
+            <View style={{padding: 20}}>
+              <Text
+                role="titleLarge"
+                style={{color: colors.onSurface, fontWeight: '700'}}>
+                {episodeDetails.title}
+              </Text>
+              <ScrollView style={{maxHeight: 230}}>
+                <Text
+                  role="bodyMedium"
+                  style={{
+                    color: colors.onSurfaceVariant,
+                    lineHeight: 22,
+                    marginTop: 10,
+                  }}>
+                  {episodeDetails.description}
+                </Text>
+              </ScrollView>
+            </View>
+          </>
+        ) : null}
+      </MaterialDialogSurface>
 
       <MaterialDialogSurface
         visible={showServerModal}
