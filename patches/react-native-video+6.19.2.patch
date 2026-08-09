@@ -552,6 +552,15 @@ index e16ac96..0667f6a 100644
  
      // Props from React
      private Source source = new Source();
+@@ -607,7 +612,7 @@ public class ReactExoplayerView extends FrameLayout implements
+                 double minBufferMemoryReservePercent = source.getBufferConfig().getMinBufferMemoryReservePercent() != BufferConfig.Companion.getBufferConfigPropUnsetDouble()
+                         ? source.getBufferConfig().getMinBufferMemoryReservePercent()
+                         : ReactExoplayerView.DEFAULT_MIN_BUFFER_MEMORY_RESERVE;
+-                long reserveMemory = (long) minBufferMemoryReservePercent * runtime.maxMemory();
++                long reserveMemory = (long) (minBufferMemoryReservePercent * runtime.maxMemory());
+                 long bufferedMs = bufferedDurationUs / (long) 1000;
+                 if (reserveMemory > freeMemory && bufferedMs > 2000) {
+                     // We don't have enough memory in reserve so we stop buffering to allow other components to use it instead
 @@ -715,6 +720,7 @@ public class ReactExoplayerView extends FrameLayout implements
      private void initializePlayerCore(ReactExoplayerView self) {
          ExoTrackSelection.Factory videoTrackSelectionFactory = new AdaptiveTrackSelection.Factory();

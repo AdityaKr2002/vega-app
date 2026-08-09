@@ -17,7 +17,7 @@
     "postinstall": "patch-package"
   },
   "dependencies": {
-    "@8man/react-native-media-console": "^2.2.4-alpha.39",
+    "@8man/react-native-media-console": "^2.2.4-alpha.40",
     "@dr.pogodin/react-native-fs": "^2.34.0",
     "@expo/metro-runtime": "~57.0.8",
     "@expo/ui": "~57.0.9",
