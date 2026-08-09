@@ -45,6 +45,7 @@ export interface Info {
   title: string;
   image: string;
   logo?: string;
+  poster?: string;
   synopsis: string;
   imdbId?: string;
   tmdbId?: number | string;
