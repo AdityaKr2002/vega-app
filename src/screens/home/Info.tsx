@@ -79,8 +79,7 @@ export default function Info({route, navigation}: Props): React.JSX.Element {
     route.params.poster ||
     info?.image ||
     'https://placehold.jp/24/363636/ffffff/500x750.png?text=Vega';
-  const accentPoster =
-    info?.poster || route.params.poster || meta?.poster || info?.image;
+  const accentPoster = route.params.poster || meta?.poster || info?.image;
   const backgroundImage =
     meta?.background ||
     info?.image ||
