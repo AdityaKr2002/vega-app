@@ -58,9 +58,7 @@ import {
   getEpisodeIdentity,
   getLocalVideoAssociationKey,
 } from '../../lib/utils/episodeIdentity';
-import {
-  takePersistableUriPermission,
-} from '../../lib/uriPermission';
+import {takePersistableUriPermission} from '../../lib/uriPermission';
 import AnimatedHourglass from '../../components/AnimatedHourglass';
 import PlayerMenuRow from '../../components/PlayerMenuRow';
 import {extractImageAccent} from '../../lib/imageAccent';
@@ -97,8 +95,7 @@ const getResumePosition = (position: number, duration: number) => {
   }
 
   // Completed episodes (including the 1/1 and legacy 10000/1 "watched"
-  // sentinels) must start from the beginning. Seeking to the exact end of an
-  // MKV makes Media3 try to parse EOF as another EBML element.
+
   if (Number.isFinite(duration) && duration > 0 && position / duration > 0.85) {
     return 0;
   }
@@ -113,13 +110,7 @@ const BOTTOM_CONTROL_LABEL_STYLE = {
   fontWeight: '300' as const,
 };
 
-type QualityIconName =
-  | '8k'
-  | '4k'
-  | '2k'
-  | 'hd'
-  | 'sd'
-  | 'video-settings';
+type QualityIconName = '8k' | '4k' | '2k' | 'hd' | 'sd' | 'video-settings';
 
 const getQualityIconName = (
   height?: number | string,
@@ -138,10 +129,7 @@ const getQualityIconName = (
   if (parsedHeight >= 1200 || normalizedFallback.includes('1440')) {
     return '2k';
   }
-  if (
-    parsedHeight >= 500 ||
-    /(?:1080|720|\bhd\b)/.test(normalizedFallback)
-  ) {
+  if (parsedHeight >= 500 || /(?:1080|720|\bhd\b)/.test(normalizedFallback)) {
     return 'hd';
   }
   if (
@@ -189,11 +177,9 @@ const getCastContentType = (streamUrl: string, streamType?: string) => {
 const goFullScreen = () => {
   if (Platform.OS === 'android') {
     // Sticky-immersive behavior is handled by the system under edge-to-edge;
-    // setBehaviorAsync was removed in expo-navigation-bar (SDK 57).
     NavigationBar.setVisibilityAsync('hidden');
     StatusBar.setHidden(true, 'slide');
   }
-  // `expo-status-bar` handles the top bar
 };
 
 const exitFullScreen = () => {
@@ -242,8 +228,7 @@ const Player = ({route}: Props): React.JSX.Element => {
 
   const colors = useM3Colors();
   const primary = colors.primary;
-  const dynamicInfoAccentEnabled =
-    settingsStorage.isDynamicInfoAccentEnabled();
+  const dynamicInfoAccentEnabled = settingsStorage.isDynamicInfoAccentEnabled();
   const hourglassArtwork =
     route.params?.poster?.poster || route.params?.poster?.background;
   const [hourglassSandColor, setHourglassSandColor] = useState(primary);
@@ -539,10 +524,7 @@ const Player = ({route}: Props): React.JSX.Element => {
       return getResumePosition(syncedPosition, syncedDuration);
     }
     const cachedProgress = readCachedProgress(activeEpisode?.link);
-    return getResumePosition(
-      cachedProgress.position,
-      cachedProgress.duration,
-    );
+    return getResumePosition(cachedProgress.position, cachedProgress.duration);
   }, [
     activeEpisode?.link,
     syncedDuration,
@@ -1590,10 +1572,7 @@ const Player = ({route}: Props): React.JSX.Element => {
       {/* Bottom controls */}
       {!isCasting && !isPlayerLocked && (
         <Animated.View
-          style={[
-            controlsStyle,
-            {left: '10%', right: '10%', bottom: 20},
-          ]}
+          style={[controlsStyle, {left: '10%', right: '10%', bottom: 20}]}
           className="absolute flex-row items-center">
           {/* Audio controls */}
           <TouchableOpacity
@@ -1757,10 +1736,7 @@ const Player = ({route}: Props): React.JSX.Element => {
       {/* Settings Modal */}
       {!isCasting && !streamLoading && !isPlayerLocked && showSettings && (
         <Animated.View
-          style={[
-            settingsStyle,
-            {backgroundColor: 'rgba(0,0,0,0.48)'},
-          ]}
+          style={[settingsStyle, {backgroundColor: 'rgba(0,0,0,0.48)'}]}
           className="absolute opacity-0 top-0 left-0 w-full h-full justify-end items-center"
           onTouchEnd={() => setShowSettings(false)}>
           <View
