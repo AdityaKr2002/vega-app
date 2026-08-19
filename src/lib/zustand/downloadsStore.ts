@@ -49,6 +49,8 @@ export interface DownloadItem {
   sourceLink?: string;
   headers?: Record<string, string>;
   subtitles?: DownloadSubtitle[];
+  server?: string;
+  isSubtitle?: boolean;
   videoType?: string | null;
   sourceType: DownloadSourceType;
   isTorrent: boolean;
@@ -88,6 +90,8 @@ export type DownloadMediaInput = Pick<
   | 'background'
   | 'synopsis'
   | 'provider'
+  | 'server'
+  | 'isSubtitle'
   | 'infoUrl'
   | 'sourceLink'
   | 'subtitles'
@@ -500,17 +504,40 @@ export const selectCurrentDownloads = (state: DownloadState): DownloadItem[] =>
     .filter(item => CURRENT_DOWNLOAD_STATUSES.has(item.status))
     .sort((a, b) => a.createdAt - b.createdAt || a.id.localeCompare(b.id));
 
+export const isSubtitleDownloadItem = (item: DownloadItem): boolean => {
+  if (item.isSubtitle) return true;
+  if (item.id.includes('_subtitle_')) return true;
+  const vt = (item.videoType || '').toLowerCase();
+  if (
+    vt === 'vtt' ||
+    vt === 'srt' ||
+    vt === 'text/vtt' ||
+    vt === 'subrip' ||
+    vt.includes('vtt') ||
+    vt.includes('srt')
+  ) {
+    return true;
+  }
+  return false;
+};
+
 export const selectCompletedDownloads = (
   state: DownloadState,
 ): DownloadItem[] =>
-  Object.values(state.downloads).filter(item => item.status === 'completed');
+  Object.values(state.downloads).filter(
+    item => item.status === 'completed' && !isSubtitleDownloadItem(item),
+  );
 
 export const selectMissingDownloads = (state: DownloadState): DownloadItem[] =>
-  Object.values(state.downloads).filter(item => item.status === 'missing');
+  Object.values(state.downloads).filter(
+    item => item.status === 'missing' && !isSubtitleDownloadItem(item),
+  );
 
 export const selectFailedDownloads = (state: DownloadState): DownloadItem[] =>
   Object.values(state.downloads).filter(
-    item => item.status === 'error' || item.status === 'interrupted',
+    item =>
+      (item.status === 'error' || item.status === 'interrupted') &&
+      !isSubtitleDownloadItem(item),
   );
 
 export default useDownloadsStore;

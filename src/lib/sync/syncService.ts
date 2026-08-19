@@ -7,6 +7,7 @@ import {
 } from '../storage/WatchListStorage';
 import {cacheStorage, mainStorage} from '../storage/StorageService';
 import useDownloadsStore, {type DownloadItem} from '../zustand/downloadsStore';
+import {isSubtitleDownloadItem} from '../downloadId';
 import useContinueWatchingStore, {
   type ContinueWatchingItem,
 } from '../zustand/continueWatchingStore';
@@ -83,6 +84,11 @@ const getRelativePath = (item: DownloadItem) =>
   ].join('/');
 
 const toSyncedDownload = (item: DownloadItem): SyncedDownload => {
+  const isSubtitle = Boolean(
+    item.isSubtitle ||
+      item.id.includes('_subtitle_') ||
+      isSubtitleDownloadItem(item),
+  );
   const download: SyncedDownload = {
     id: item.id,
     title: item.title,
@@ -90,6 +96,7 @@ const toSyncedDownload = (item: DownloadItem): SyncedDownload => {
     episodeName: item.episodeName,
     seasonTitle: item.seasonTitle,
     type: item.type,
+    isSubtitle,
     imdbId: item.imdbId,
     poster: item.poster,
     background: item.background,
@@ -321,9 +328,17 @@ const applyRemoteDownloads = async (
   }
   for (const item of Object.values(downloads)) {
     const store = useDownloadsStore.getState();
+    const isItemSubtitle = Boolean(
+      item.isSubtitle || item.id.includes('_subtitle_'),
+    );
     const equivalentEntries = Object.entries(store.downloads).filter(
       ([, candidate]) =>
         candidate.status === 'completed' &&
+        Boolean(
+          candidate.isSubtitle ||
+            candidate.id.includes('_subtitle_') ||
+            isSubtitleDownloadItem(candidate),
+        ) === isItemSubtitle &&
         getDownloadMediaKey(toSyncedDownload(candidate)) === item.mediaKey,
     );
     const existing = equivalentEntries
@@ -347,6 +362,7 @@ const applyRemoteDownloads = async (
     }
     store.enqueueDownload({
       ...item,
+      isSubtitle: isItemSubtitle,
       url: '',
       filePath,
       finalDocumentUri: filePath,
@@ -385,10 +401,16 @@ const applyTombstones = (tombstones: Record<string, SyncTombstone>) => {
   for (const tombstone of Object.values(tombstones)) {
     if (tombstone.kind === 'download') {
       for (const item of Object.values(store.downloads)) {
+        const isItemSub = Boolean(
+          item.isSubtitle ||
+            item.id.includes('_subtitle_') ||
+            isSubtitleDownloadItem(item),
+        );
         const matches =
           item.id === tombstone.id ||
           (tombstone.mediaKey &&
             item.status === 'completed' &&
+            Boolean(tombstone.mediaKey.includes(':subtitle:')) === isItemSub &&
             getDownloadMediaKey(toSyncedDownload(item)) === tombstone.mediaKey);
         if (matches && tombstone.deletedAt >= item.updatedAt) {
           store.removeDownload(item.id);

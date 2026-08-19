@@ -1,8 +1,10 @@
-import React, {useEffect, useState, useRef, useCallback, useMemo} from 'react';
+import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import {
   AppState,
   AppStateStatus,
   BackHandler,
+  FlatList,
+  Image,
   ScrollView,
   Text,
   ToastAndroid,
@@ -18,12 +20,16 @@ import Animated, {
   withRepeat,
   withSequence,
 } from 'react-native-reanimated';
-import {NativeStackScreenProps} from '@react-navigation/native-stack';
-import {RootStackParamList} from '../../App';
-import {cacheStorage, settingsStorage} from '../../lib/storage';
-import {OrientationLocker, LANDSCAPE} from 'react-native-orientation-locker';
-import VideoPlayer from '@8man/react-native-media-console';
-import {useFocusEffect, useNavigation} from '@react-navigation/native';
+import { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { RootStackParamList } from '../../App';
+import { cacheStorage, settingsStorage } from '../../lib/storage';
+import Orientation, {
+  OrientationLocker,
+  LANDSCAPE,
+} from 'react-native-orientation-locker';
+import { SystemBars } from 'react-native-edge-to-edge';
+import VideoPlayer from '../../components/media-console';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import {
@@ -36,21 +42,21 @@ import {
   BufferingStrategyType,
 } from 'react-native-video';
 import useContentStore from '../../lib/zustand/contentStore';
-import {CastButton, useRemoteMediaClient} from 'react-native-google-cast';
-import {SafeAreaView} from 'react-native-safe-area-context';
+import { CastButton, useRemoteMediaClient } from 'react-native-google-cast';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import * as DocumentPicker from 'expo-document-picker';
-import {FlashList} from '@shopify/flash-list';
+import { FlashList } from '@shopify/flash-list';
 import SearchSubtitles from '../../components/SearchSubtitles';
-import {useStream, useVideoSettings} from '../../lib/hooks/useStream';
+import { useStream, useVideoSettings } from '../../lib/hooks/useStream';
 import {
   usePlayerProgress,
   usePlayerSettings,
 } from '../../lib/hooks/usePlayerSettings';
 import * as NavigationBar from 'expo-navigation-bar';
-import {StatusBar} from 'react-native';
-import {torrentManager} from '../../lib/torrentManager';
-import {syncFromSharedFolder} from '../../lib/sync/syncService';
-import {useM3Colors} from '../../theme/M3PaletteContext';
+import { StatusBar } from 'react-native';
+import { torrentManager } from '../../lib/torrentManager';
+import { syncFromSharedFolder } from '../../lib/sync/syncService';
+import { useM3Colors } from '../../theme/M3PaletteContext';
 import useContinueWatchingStore from '../../lib/zustand/continueWatchingStore';
 import useLocalVideoStore from '../../lib/zustand/localVideoStore';
 import CastRemotePlayer from '../../components/CastRemotePlayer';
@@ -58,23 +64,25 @@ import {
   getEpisodeIdentity,
   getLocalVideoAssociationKey,
 } from '../../lib/utils/episodeIdentity';
-import {takePersistableUriPermission} from '../../lib/uriPermission';
+import { takePersistableUriPermission } from '../../lib/uriPermission';
 import AnimatedHourglass from '../../components/AnimatedHourglass';
 import PlayerMenuRow from '../../components/PlayerMenuRow';
-import {extractImageAccent} from '../../lib/imageAccent';
-import {mixHex} from '../../theme/seeds';
+import { extractImageAccent } from '../../lib/imageAccent';
+import { mixHex } from '../../theme/seeds';
 import ReactNativeHapticFeedback from 'react-native-haptic-feedback';
+import { EpisodeLink } from '../../lib/providers/types';
+import { getValidImageUri } from '../../components/EpisodeRowContent';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Player'>;
 
 const readCachedProgress = (link?: string) => {
   if (!link) {
-    return {position: 0, duration: 0};
+    return { position: 0, duration: 0 };
   }
   try {
     const cached = cacheStorage.getString(link);
     if (!cached) {
-      return {position: 0, duration: 0};
+      return { position: 0, duration: 0 };
     }
     const parsed = JSON.parse(cached) as {
       position?: number;
@@ -85,7 +93,7 @@ const readCachedProgress = (link?: string) => {
       duration: parsed.duration || 0,
     };
   } catch {
-    return {position: 0, duration: 0};
+    return { position: 0, duration: 0 };
   }
 };
 
@@ -175,6 +183,7 @@ const getCastContentType = (streamUrl: string, streamType?: string) => {
 };
 
 const goFullScreen = () => {
+  SystemBars.setHidden(true);
   if (Platform.OS === 'android') {
     // Sticky-immersive behavior is handled by the system under edge-to-edge;
     NavigationBar.setVisibilityAsync('hidden');
@@ -183,6 +192,7 @@ const goFullScreen = () => {
 };
 
 const exitFullScreen = () => {
+  SystemBars.setHidden(false);
   if (Platform.OS === 'android') {
     // Show the navigation bar
     NavigationBar.setVisibilityAsync('visible');
@@ -209,7 +219,130 @@ const reapplyFullscreenMode = (isFullScreenEnabled: boolean) => {
   }
 };
 
-const Player = ({route}: Props): React.JSX.Element => {
+type SidebarEpisodeRowProps = {
+  episode: EpisodeLink;
+  index: number;
+  title: string;
+  description?: string;
+  imageUri?: string;
+  isActive: boolean;
+  primaryColor: string;
+  onSelect: () => void;
+};
+
+const SidebarEpisodeRow = React.memo<SidebarEpisodeRowProps>(
+  ({ index, title, description, imageUri, isActive, primaryColor, onSelect }) => {
+    const [imageFailed, setImageFailed] = useState(false);
+
+    useEffect(() => {
+      setImageFailed(false);
+    }, [imageUri]);
+
+    return (
+      <TouchableOpacity
+        activeOpacity={0.7}
+        onPress={onSelect}
+        style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          padding: 8,
+          marginVertical: 4,
+          borderRadius: 8,
+          backgroundColor: isActive
+            ? 'rgba(255, 255, 255, 0.12)'
+            : 'rgba(255, 255, 255, 0.03)',
+          borderWidth: 1,
+          borderColor: isActive ? primaryColor : 'rgba(255, 255, 255, 0.08)',
+        }}>
+        {/* Thumbnail */}
+        <View
+          style={{
+            width: 80,
+            height: 50,
+            borderRadius: 6,
+            overflow: 'hidden',
+            backgroundColor: '#1C1C1E',
+            justifyContent: 'center',
+            alignItems: 'center',
+            marginRight: 10,
+            position: 'relative',
+          }}>
+          {imageUri && !imageFailed ? (
+            <Image
+              source={{ uri: imageUri }}
+              style={{ width: '100%', height: '100%' }}
+              resizeMode="cover"
+              onError={() => setImageFailed(true)}
+            />
+          ) : (
+            <View style={{ alignItems: 'center', justifyContent: 'center' }}>
+              <MaterialCommunityIcons
+                name="movie-outline"
+                size={20}
+                color="rgba(255,255,255,0.4)"
+              />
+              <Text
+                style={{
+                  color: 'rgba(255,255,255,0.5)',
+                  fontSize: 10,
+                  fontWeight: '600',
+                  marginTop: 2,
+                }}>
+                EP {index + 1}
+              </Text>
+            </View>
+          )}
+          {isActive && (
+            <View
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                backgroundColor: 'rgba(0,0,0,0.45)',
+                justifyContent: 'center',
+                alignItems: 'center',
+              }}>
+              <MaterialCommunityIcons
+                name="play-circle"
+                size={24}
+                color={primaryColor}
+              />
+            </View>
+          )}
+        </View>
+
+        {/* Info */}
+        <View style={{ flex: 1, justifyContent: 'center' }}>
+          <Text
+            numberOfLines={1}
+            style={{
+              fontSize: 13,
+              fontWeight: isActive ? '700' : '600',
+              color: isActive ? primaryColor : '#FFFFFF',
+              marginBottom: description ? 3 : 0,
+            }}>
+            {title}
+          </Text>
+          {Boolean(description) && (
+            <Text
+              numberOfLines={2}
+              style={{
+                fontSize: 11,
+                color: 'rgba(255, 255, 255, 0.55)',
+                lineHeight: 14,
+              }}>
+              {description}
+            </Text>
+          )}
+        </View>
+      </TouchableOpacity>
+    );
+  },
+);
+
+const Player = ({ route }: Props): React.JSX.Element => {
   const [syncReady, setSyncReady] = useState(false);
 
   useEffect(() => {
@@ -257,7 +390,7 @@ const Player = ({route}: Props): React.JSX.Element => {
       active = false;
     };
   }, [dynamicInfoAccentEnabled, hourglassArtwork, primary]);
-  const {provider} = useContentStore();
+  const { provider } = useContentStore();
   const navigation = useNavigation();
   const upsertContinueWatching = useContinueWatchingStore(
     state => state.upsertItem,
@@ -299,20 +432,36 @@ const Player = ({route}: Props): React.JSX.Element => {
   const toastOpacity = useSharedValue(0);
   const settingsTranslateY = useSharedValue(10000);
   const settingsOpacity = useSharedValue(0);
+  const sidebarTranslateX = useSharedValue(400);
+  const sidebarBackdropOpacity = useSharedValue(0);
+
+  const [showEpisodeSidebar, setShowEpisodeSidebar] = useState(false);
+  const episodeListRef = useRef<FlatList>(null);
+  const showEpisodeSidebarSetting = useMemo(
+    () => settingsStorage.showPlayerEpisodeSidebar(),
+    [],
+  );
+  const hasMultipleEpisodes = useMemo(
+    () =>
+      Array.isArray(route.params?.episodeList) &&
+      route.params.episodeList.length > 1 &&
+      route.params?.type !== 'movie',
+    [route.params?.episodeList, route.params?.type],
+  );
 
   // Animated styles
   const loadingContainerStyle = useAnimatedStyle(() => ({
     opacity: loadingOpacity.value,
-    transform: [{scale: loadingScale.value}],
+    transform: [{ scale: loadingScale.value }],
   }));
 
   const lockButtonStyle = useAnimatedStyle(() => ({
-    transform: [{translateY: lockButtonTranslateY.value}],
+    transform: [{ translateY: lockButtonTranslateY.value }],
     opacity: lockButtonOpacity.value,
   }));
 
   const controlsStyle = useAnimatedStyle(() => ({
-    transform: [{translateY: controlsTranslateY.value}],
+    transform: [{ translateY: controlsTranslateY.value }],
     opacity: controlsOpacity.value,
   }));
 
@@ -325,9 +474,17 @@ const Player = ({route}: Props): React.JSX.Element => {
   }));
 
   const settingsStyle = useAnimatedStyle(() => ({
-    transform: [{translateY: settingsTranslateY.value}],
+    transform: [{ translateY: settingsTranslateY.value }],
 
     opacity: settingsOpacity.value,
+  }));
+
+  const sidebarDrawerStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: sidebarTranslateX.value }],
+  }));
+
+  const sidebarBackdropStyle = useAnimatedStyle(() => ({
+    opacity: sidebarBackdropOpacity.value,
   }));
 
   // Active episode state
@@ -423,7 +580,7 @@ const Player = ({route}: Props): React.JSX.Element => {
   const syncedEpisodeMatches =
     Boolean(syncedContinueWatching) &&
     getEpisodeIdentity(syncedContinueWatching?.episode) ===
-      getEpisodeIdentity(activeEpisode);
+    getEpisodeIdentity(activeEpisode);
   const syncedPosition = syncedEpisodeMatches
     ? syncedContinueWatching?.position || 0
     : 0;
@@ -494,7 +651,7 @@ const Player = ({route}: Props): React.JSX.Element => {
   );
 
   // Custom hook for progress handling
-  const {videoPositionRef, handleProgress} = usePlayerProgress({
+  const { videoPositionRef, handleProgress } = usePlayerProgress({
     activeEpisode,
     onProgressSaved: saveContinueWatchingProgress,
   });
@@ -640,7 +797,7 @@ const Player = ({route}: Props): React.JSX.Element => {
         activeTorrentRef.current = null;
         try {
           await torrentManager.deleteTorrent(prevHash, true);
-        } catch {}
+        } catch { }
       }
     };
 
@@ -680,7 +837,7 @@ const Player = ({route}: Props): React.JSX.Element => {
           const addData = await torrentManager.addTorrent(selectedStream.link);
           const infoHash = addData.infoHash;
           if (!isMounted) {
-            torrentManager.deleteTorrent(infoHash, true).catch(() => {});
+            torrentManager.deleteTorrent(infoHash, true).catch(() => { });
             return;
           }
           activeTorrentRef.current = infoHash;
@@ -697,7 +854,7 @@ const Player = ({route}: Props): React.JSX.Element => {
                   setTorrentDownloaded((stats.totalDone || 0) / 1024 / 1024);
                   setTorrentDownloadSpeed(stats.downloadRate || 0);
                 }
-              } catch {}
+              } catch { }
             }, 1000);
           }
 
@@ -790,7 +947,7 @@ const Player = ({route}: Props): React.JSX.Element => {
       'auto';
 
     if (selectedStream?.type === 'local') {
-      return {icon: 'video-settings' as const, label: 'Local'};
+      return { icon: 'video-settings' as const, label: 'Local' };
     }
 
     return {
@@ -844,7 +1001,7 @@ const Player = ({route}: Props): React.JSX.Element => {
         setSelectedStream(
           streamData && streamData.length > 0
             ? streamData[0]
-            : {server: '', link: '', type: ''},
+            : { server: '', link: '', type: '' },
         );
         setShowControls(true);
         return;
@@ -949,7 +1106,7 @@ const Player = ({route}: Props): React.JSX.Element => {
       (progress, duration) => {
         remoteCastPositionRef.current = progress;
         if (duration > 0) {
-          handleProgress({currentTime: progress, seekableDuration: duration});
+          handleProgress({ currentTime: progress, seekableDuration: duration });
         }
       },
       1,
@@ -1039,11 +1196,11 @@ const Player = ({route}: Props): React.JSX.Element => {
               title: route.params?.primaryTitle,
               subtitle: activeEpisode?.title || route.params?.secondaryTitle,
               images: route.params?.poster?.poster
-                ? [{url: route.params.poster.poster}]
+                ? [{ url: route.params.poster.poster }]
                 : undefined,
             },
             customData: selectedStream?.headers
-              ? {headers: selectedStream.headers}
+              ? { headers: selectedStream.headers }
               : undefined,
           },
         });
@@ -1084,17 +1241,28 @@ const Player = ({route}: Props): React.JSX.Element => {
     watchedDuration,
   ]);
 
-  // Exit fullscreen on back
+  // Enter landscape and fullscreen on mount & focus, and restore on unmount
   useFocusEffect(
     useCallback(() => {
-      // This code now runs every time the screen is focused
+      Orientation.lockToLandscape();
+      goFullScreen();
       reapplyFullscreenMode(isFullScreenRef.current);
 
       return () => {
+        Orientation.unlockAllOrientations();
         exitFullScreen();
       };
     }, []),
   );
+
+  useEffect(() => {
+    Orientation.lockToLandscape();
+    goFullScreen();
+    return () => {
+      Orientation.unlockAllOrientations();
+      exitFullScreen();
+    };
+  }, []);
 
   useEffect(() => {
     isFullScreenRef.current = isFullScreen;
@@ -1119,6 +1287,14 @@ const Player = ({route}: Props): React.JSX.Element => {
     const subscription = BackHandler.addEventListener(
       'hardwareBackPress',
       () => {
+        if (showEpisodeSidebar) {
+          setShowEpisodeSidebar(false);
+          return true;
+        }
+        if (showSettings) {
+          setShowSettings(false);
+          return true;
+        }
         exitFullScreen();
         navigation.goBack();
         return true;
@@ -1128,7 +1304,7 @@ const Player = ({route}: Props): React.JSX.Element => {
     return () => {
       subscription.remove();
     };
-  }, [navigation]);
+  }, [navigation, showEpisodeSidebar, showSettings]);
 
   // Reset track selections when stream changes
   useEffect(() => {
@@ -1161,9 +1337,24 @@ const Player = ({route}: Props): React.JSX.Element => {
     const audioTrackIndex = audioTracks.findIndex(
       track => track.language === lastAudioTrack,
     );
-    const textTrackIndex = textTracks.findIndex(
-      track => track.language === lastTextTrack,
+    let textTrackIndex = textTracks.findIndex(
+      track =>
+        track.language === lastTextTrack ||
+        track.title === lastTextTrack ||
+        track.language?.toLowerCase() === lastTextTrack?.toLowerCase(),
     );
+
+    if (textTrackIndex === -1 && textTracks.length > 0) {
+      const downloadedIndex = textTracks.findIndex(
+        track =>
+          track.title?.includes('(Downloaded)') ||
+          track.uri?.startsWith('file://') ||
+          track.uri?.startsWith('content://'),
+      );
+      if (downloadedIndex !== -1) {
+        textTrackIndex = downloadedIndex;
+      }
+    }
 
     if (audioTrackIndex !== -1) {
       setSelectedAudioTrack({
@@ -1204,8 +1395,8 @@ const Player = ({route}: Props): React.JSX.Element => {
   useEffect(() => {
     // Loading animations
     if (streamLoading || isResolvingStream) {
-      loadingOpacity.value = withTiming(1, {duration: 800});
-      loadingScale.value = withTiming(1, {duration: 800});
+      loadingOpacity.value = withTiming(1, { duration: 800 });
+      loadingScale.value = withTiming(1, { duration: 800 });
     }
   }, [isResolvingStream, streamLoading]);
 
@@ -1223,20 +1414,20 @@ const Player = ({route}: Props): React.JSX.Element => {
 
   useEffect(() => {
     // 2x speed text visibility
-    textVisibility.value = withTiming(isTextVisible ? 1 : 0, {duration: 250});
+    textVisibility.value = withTiming(isTextVisible ? 1 : 0, { duration: 250 });
 
     // Speed icon blinking animation
     if (isTextVisible) {
       speedIconOpacity.value = withRepeat(
         withSequence(
-          withTiming(1, {duration: 250}),
-          withTiming(0, {duration: 150}),
-          withTiming(1, {duration: 150}),
+          withTiming(1, { duration: 250 }),
+          withTiming(0, { duration: 150 }),
+          withTiming(1, { duration: 150 }),
         ),
         -1,
       );
     } else {
-      speedIconOpacity.value = withTiming(1, {duration: 150});
+      speedIconOpacity.value = withTiming(1, { duration: 150 });
     }
   }, [isTextVisible]);
 
@@ -1252,7 +1443,7 @@ const Player = ({route}: Props): React.JSX.Element => {
 
   useEffect(() => {
     // Toast visibility
-    toastOpacity.value = withTiming(showToast ? 1 : 0, {duration: 250});
+    toastOpacity.value = withTiming(showToast ? 1 : 0, { duration: 250 });
   }, [showToast]);
 
   useEffect(() => {
@@ -1264,6 +1455,47 @@ const Player = ({route}: Props): React.JSX.Element => {
       duration: 250,
     });
   }, [showSettings]);
+
+  useEffect(() => {
+    // Episode sidebar visibility
+    sidebarTranslateX.value = withTiming(showEpisodeSidebar ? 0 : 400, {
+      duration: 250,
+    });
+    sidebarBackdropOpacity.value = withTiming(showEpisodeSidebar ? 1 : 0, {
+      duration: 250,
+    });
+  }, [showEpisodeSidebar]);
+
+  useEffect(() => {
+    if (showEpisodeSidebar && route.params?.episodeList?.length) {
+      const activeIdx = route.params.episodeList.findIndex(
+        ep =>
+          (activeEpisode?.id && ep?.id && activeEpisode.id === ep.id) ||
+          (activeEpisode?.link && ep?.link && activeEpisode.link === ep.link) ||
+          (activeEpisode?.sourceLink &&
+            ep?.sourceLink &&
+            activeEpisode.sourceLink === ep.sourceLink) ||
+          activeEpisode === ep,
+      );
+      if (activeIdx >= 0) {
+        const timer = setTimeout(() => {
+          try {
+            episodeListRef.current?.scrollToIndex({
+              index: activeIdx,
+              animated: true,
+              viewPosition: 0.3,
+            });
+          } catch {
+            episodeListRef.current?.scrollToOffset({
+              offset: Math.max(0, activeIdx * 70 - 40),
+              animated: true,
+            });
+          }
+        }, 120);
+        return () => clearTimeout(timer);
+      }
+    }
+  }, [showEpisodeSidebar, activeEpisode, route.params?.episodeList]);
 
   useEffect(() => {
     // Handle fullscreen toggle
@@ -1295,7 +1527,7 @@ const Player = ({route}: Props): React.JSX.Element => {
           cacheSizeMB: 0,
         },
         shouldCache: true,
-        ...(selectedStream?.type === 'm3u8' && {type: 'm3u8'}),
+        ...(selectedStream?.type === 'm3u8' && { type: 'm3u8' }),
         headers: selectedStream?.headers,
         metadata: {
           title: route.params?.primaryTitle,
@@ -1314,7 +1546,6 @@ const Player = ({route}: Props): React.JSX.Element => {
           resumeAppliedRef.current = true;
         }
         playerRef?.current?.resume();
-        setPlaybackRate(1.0);
       },
       videoRef: playerRef,
       rate: playbackRate,
@@ -1352,10 +1583,27 @@ const Player = ({route}: Props): React.JSX.Element => {
       selectedAudioTrack,
       onAudioTracks: (e: any) => processAudioTracks(e.audioTracks),
       selectedTextTrack,
-      onTextTracks: (e: any) => setTextTracks(e.textTracks),
+      onTextTracks: (e: any) => {
+        const tracks = e.textTracks || [];
+        setTextTracks(tracks);
+        if (selectedTextTrackIndex === 1000 && tracks.length > 0) {
+          const downloadedTrack = tracks.find(
+            (t: any) =>
+              t.title?.toLowerCase().includes('downloaded') ||
+              t.title?.toLowerCase().includes('local'),
+          );
+          if (downloadedTrack) {
+            setSelectedTextTrack({
+              type: SelectedTrackType.INDEX,
+              value: downloadedTrack.index,
+            });
+            setSelectedTextTrackIndex(downloadedTrack.index);
+          }
+        }
+      },
       onVideoTracks: (e: any) => processVideoTracks(e.videoTracks),
       selectedVideoTrack,
-      style: {flex: 1, zIndex: 100},
+      style: { flex: 1, zIndex: 100 },
       controlAnimationTiming: 357,
       controlTimeoutDelay: 10000,
       hideAllControlls: isPlayerLocked,
@@ -1400,8 +1648,9 @@ const Player = ({route}: Props): React.JSX.Element => {
   if (streamLoading && !isCasting && selectedStream?.type !== 'local') {
     return (
       <SafeAreaView
-        edges={{right: 'off', top: 'off', left: 'off', bottom: 'off'}}
+        edges={{ right: 'off', top: 'off', left: 'off', bottom: 'off' }}
         className="bg-black flex-1 justify-center items-center">
+        <SystemBars hidden={true} />
         <StatusBar translucent={true} hidden={true} />
         <OrientationLocker orientation={LANDSCAPE} />
         {/* create ripple effect */}
@@ -1429,6 +1678,7 @@ const Player = ({route}: Props): React.JSX.Element => {
   if (streamError && !isCasting && selectedStream?.type !== 'local') {
     return (
       <SafeAreaView className="bg-black flex-1 justify-center items-center">
+        <SystemBars hidden={true} />
         <StatusBar translucent={true} hidden={true} />
         <OrientationLocker orientation={LANDSCAPE} />
         <Text className="text-red-500 text-lg text-center mb-4">
@@ -1452,6 +1702,7 @@ const Player = ({route}: Props): React.JSX.Element => {
         bottom: 'off',
       }}
       className="bg-black flex-1 relative">
+      <SystemBars hidden={isFullScreen} />
       <StatusBar translucent={true} hidden={true} />
       <OrientationLocker orientation={LANDSCAPE} />
 
@@ -1562,17 +1813,55 @@ const Player = ({route}: Props): React.JSX.Element => {
               <CastButton
                 accessibilityLabel="Cast video"
                 tintColor="hsl(0, 0%, 70%)"
-                style={{width: 24, height: 24}}
+                style={{ width: 24, height: 24 }}
               />
             </View>
           )}
         </Animated.View>
       )}
 
+      {/* Episode Sidebar Toggle Button (Center Right) */}
+      {!isCasting &&
+        !streamLoading &&
+        !isPlayerLocked &&
+        showEpisodeSidebarSetting &&
+        hasMultipleEpisodes && (
+          <Animated.View
+            style={[
+              controlsOpacityStyle,
+              {
+                position: 'absolute',
+                right: 2,
+                top: '50%',
+                transform: [{ translateY: -20 }],
+                zIndex: 60,
+              },
+            ]}
+            pointerEvents={
+              showControls && !showEpisodeSidebar && !showSettings
+                ? 'auto'
+                : 'none'
+            }>
+            <TouchableOpacity
+              onPress={() => {
+                setShowEpisodeSidebar(true);
+              }}
+              hitSlop={{ top: 16, bottom: 16, left: 16, right: 16 }}
+              className="p-2 rounded-full justify-center items-center">
+              <MaterialIcons
+                activeOpacity={0.6}
+                name="chevron-left"
+                size={28}
+                color={BOTTOM_CONTROL_ICON_COLOR}
+              />
+            </TouchableOpacity>
+          </Animated.View>
+        )}
+
       {/* Bottom controls */}
       {!isCasting && !isPlayerLocked && (
         <Animated.View
-          style={[controlsStyle, {left: '10%', right: '10%', bottom: 20}]}
+          style={[controlsStyle, { left: '10%', right: '10%', bottom: 15 }]}
           className="absolute flex-row items-center">
           {/* Audio controls */}
           <TouchableOpacity
@@ -1631,7 +1920,7 @@ const Player = ({route}: Props): React.JSX.Element => {
             <Text
               className="text-white text-sm"
               style={BOTTOM_CONTROL_LABEL_STYLE}>
-              {playbackRate === 1 ? '1.0' : playbackRate}
+              {playbackRate === 1 ? '1.0' : playbackRate}x
             </Text>
           </TouchableOpacity>
 
@@ -1702,8 +1991,8 @@ const Player = ({route}: Props): React.JSX.Element => {
           {route.params?.episodeList?.indexOf(activeEpisode) <
             route.params?.episodeList?.length - 1 &&
             videoPositionRef.current.position /
-              videoPositionRef.current.duration >
-              0.8 && (
+            videoPositionRef.current.duration >
+            0.8 && (
               <TouchableOpacity
                 className="min-w-0 flex-1 flex-row items-center justify-center"
                 onPress={handleNextEpisode}>
@@ -1736,7 +2025,7 @@ const Player = ({route}: Props): React.JSX.Element => {
       {/* Settings Modal */}
       {!isCasting && !streamLoading && !isPlayerLocked && showSettings && (
         <Animated.View
-          style={[settingsStyle, {backgroundColor: 'rgba(0,0,0,0.48)'}]}
+          style={[settingsStyle, { backgroundColor: 'rgba(0,0,0,0.48)' }]}
           className="absolute opacity-0 top-0 left-0 w-full h-full justify-end items-center"
           onTouchEnd={() => setShowSettings(false)}>
           <View
@@ -1859,7 +2148,7 @@ const Player = ({route}: Props): React.JSX.Element => {
                     />
                   </>
                 }
-                renderItem={({item: track}) => (
+                renderItem={({ item: track }) => (
                   <PlayerMenuRow
                     title={track.language || 'Unknown'}
                     detail={[track.type, track.title]
@@ -1890,7 +2179,7 @@ const Player = ({route}: Props): React.JSX.Element => {
               <View className="flex flex-row w-full h-full p-1 px-4">
                 <ScrollView
                   className="border-r border-white/10"
-                  contentContainerStyle={{paddingRight: 8}}>
+                  contentContainerStyle={{ paddingRight: 8 }}>
                   <Text className="mb-2 w-full text-center text-white text-lg font-extrabold">
                     Server
                   </Text>
@@ -1929,7 +2218,7 @@ const Player = ({route}: Props): React.JSX.Element => {
                   </View>
                 </ScrollView>
 
-                <ScrollView contentContainerStyle={{paddingLeft: 8}}>
+                <ScrollView contentContainerStyle={{ paddingLeft: 8 }}>
                   <Text className="mb-2 w-full text-center text-white text-lg font-extrabold">
                     Quality
                   </Text>
@@ -1985,6 +2274,173 @@ const Player = ({route}: Props): React.JSX.Element => {
           </View>
         </Animated.View>
       )}
+
+      {/* Episode Sidebar Drawer */}
+      {!isCasting &&
+        !streamLoading &&
+        !isPlayerLocked &&
+        hasMultipleEpisodes && (
+          <>
+            {/* Backdrop */}
+            <Animated.View
+              style={[
+                sidebarBackdropStyle,
+                {
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  backgroundColor: 'rgba(0, 0, 0, 0.6)',
+                  zIndex: 90,
+                },
+              ]}
+              pointerEvents={showEpisodeSidebar ? 'auto' : 'none'}
+              onTouchEnd={() => setShowEpisodeSidebar(false)}
+            />
+
+            {/* Drawer Container */}
+            <Animated.View
+              style={[
+                sidebarDrawerStyle,
+                {
+                  position: 'absolute',
+                  top: 0,
+                  right: 0,
+                  bottom: 0,
+                  width: 360,
+                  maxWidth: '80%',
+                  backgroundColor: 'rgba(14, 14, 14, 0.96)',
+                  borderLeftWidth: 1,
+                  borderColor: 'rgba(255, 255, 255, 0.12)',
+                  zIndex: 100,
+                  elevation: 24,
+                  shadowColor: '#000',
+                  shadowOpacity: 0.5,
+                  shadowRadius: 20,
+                },
+              ]}
+              pointerEvents={showEpisodeSidebar ? 'auto' : 'none'}>
+              {/* Header */}
+              <View
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  paddingHorizontal: 16,
+                  paddingVertical: 14,
+                  borderBottomWidth: 1,
+                  borderBottomColor: 'rgba(255, 255, 255, 0.08)',
+                }}>
+                <View
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 8,
+                  }}>
+                  <MaterialCommunityIcons
+                    name="playlist-play"
+                    size={24}
+                    color={primary}
+                  />
+                  <Text
+                    style={{
+                      color: '#FFFFFF',
+                      fontSize: 16,
+                      fontWeight: '700',
+                    }}>
+                    Episodes
+                  </Text>
+                  <View
+                    style={{
+                      backgroundColor: 'rgba(255, 255, 255, 0.12)',
+                      paddingHorizontal: 8,
+                      paddingVertical: 2,
+                      borderRadius: 12,
+                    }}>
+                    <Text
+                      style={{
+                        color: 'rgba(255, 255, 255, 0.7)',
+                        fontSize: 12,
+                        fontWeight: '600',
+                      }}>
+                      {route.params?.episodeList?.length || 0}
+                    </Text>
+                  </View>
+                </View>
+                <TouchableOpacity
+                  onPress={() => setShowEpisodeSidebar(false)}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  style={{
+                    padding: 4,
+                    borderRadius: 20,
+                    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+                  }}>
+                  <MaterialIcons name="close" size={20} color="#FFFFFF" />
+                </TouchableOpacity>
+              </View>
+
+              {/* Episode List */}
+              <FlatList
+                ref={episodeListRef}
+                data={route.params?.episodeList || []}
+                keyExtractor={(item, index) =>
+                  item?.id || item?.link || item?.sourceLink || String(index)
+                }
+                initialNumToRender={10}
+                maxToRenderPerBatch={10}
+                windowSize={5}
+                contentContainerStyle={{
+                  paddingVertical: 8,
+                  paddingHorizontal: 12,
+                }}
+                getItemLayout={(_data, index) => ({
+                  length: 70,
+                  offset: 70 * index,
+                  index,
+                })}
+                renderItem={({ item: ep, index }) => {
+                  const isActive =
+                    (activeEpisode?.id &&
+                      ep?.id &&
+                      activeEpisode.id === ep.id) ||
+                    (activeEpisode?.link &&
+                      ep?.link &&
+                      activeEpisode.link === ep.link) ||
+                    (activeEpisode?.sourceLink &&
+                      ep?.sourceLink &&
+                      activeEpisode.sourceLink === ep.sourceLink) ||
+                    activeEpisode === ep;
+                  const epNum = index + 1;
+                  const epTitle = ep?.title || `Episode ${epNum}`;
+                  const epDesc = ep?.description?.trim();
+                  const rawImage =
+                    ep?.image || ep?.poster || (ep as any)?.still_path;
+                  const imageUri = getValidImageUri(rawImage);
+
+                  return (
+                    <SidebarEpisodeRow
+                      episode={ep}
+                      index={index}
+                      title={epTitle}
+                      description={epDesc}
+                      imageUri={imageUri}
+                      isActive={isActive}
+                      primaryColor={primary}
+                      onSelect={() => {
+                        if (!isActive) {
+                          setActiveEpisode(ep);
+                          hasSetInitialTracksRef.current = false;
+                        }
+                        setShowEpisodeSidebar(false);
+                      }}
+                    />
+                  );
+                }}
+              />
+            </Animated.View>
+          </>
+        )}
     </SafeAreaView>
   );
 };

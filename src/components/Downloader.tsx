@@ -1,36 +1,37 @@
-import React, {useEffect, useState} from 'react';
-import {View, TouchableOpacity} from 'react-native';
-import {ifExists} from '../lib/file/ifExists';
+import React, { useEffect, useState } from 'react';
+import { View, TouchableOpacity } from 'react-native';
+import { ifExists } from '../lib/file/ifExists';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import Octicons from '@expo/vector-icons/Octicons';
-import {Stream} from '../lib/providers/types';
-import Svg, {Circle, Path} from 'react-native-svg';
+import { Stream } from '../lib/providers/types';
+import Svg, { Circle, Path } from 'react-native-svg';
 import ReactNativeHapticFeedback from 'react-native-haptic-feedback';
 import useContentStore from '../lib/zustand/contentStore';
 import * as IntentLauncher from 'expo-intent-launcher';
-import {cancelDownload} from '../lib/downloadManager';
-import {downloadManager} from '../lib/downloader';
+import { cancelDownload } from '../lib/downloadManager';
+import { downloadManager } from '../lib/downloader';
 import DownloadBottomSheet from './DownloadBottomSheet';
-import {settingsStorage} from '../lib/storage';
-import {providerManager} from '../lib/services/ProviderManager';
-import {deleteDownloadedFileByBaseName} from '../lib/downloadLocation';
-import {deleteDownloadOutput} from '../lib/downloadDestination';
+import { settingsStorage } from '../lib/storage';
+import { providerManager } from '../lib/services/ProviderManager';
+import { deleteDownloadedFileByBaseName } from '../lib/downloadLocation';
+import { deleteDownloadOutput } from '../lib/downloadDestination';
 import {
   createDownloadDirectoryName,
   createDownloadSeasonDirectoryName,
+  createSubtitleFileName,
+  isSubtitleDownloadItem,
 } from '../lib/downloadId';
 import useDownloadsStore, {
   CURRENT_DOWNLOAD_STATUSES,
 } from '../lib/zustand/downloadsStore';
-import {createSubtitleFileName} from '../lib/downloadId';
 import {
   selectDownloadLocation,
   validateDownloadLocationAccess,
 } from '../lib/downloadLocation';
 import DownloadLocationDialog from './DownloadLocationDialog';
-import {useM3Colors} from '../theme/M3PaletteContext';
-import {LEGACY_TERTIARY_BACKGROUND} from '../theme/seeds';
-import {showAppDialog} from '../lib/zustand/appDialogStore';
+import { useM3Colors } from '../theme/M3PaletteContext';
+import { LEGACY_TERTIARY_BACKGROUND } from '../theme/seeds';
+import { showAppDialog } from '../lib/zustand/appDialogStore';
 
 const DOWNLOAD_PROGRESS_SIZE = 42;
 const DOWNLOAD_PROGRESS_RADIUS = 18;
@@ -49,8 +50,7 @@ const createProgressPiePath = (progress: number) => {
 
   return [
     `M ${DOWNLOAD_PROGRESS_CENTER} ${DOWNLOAD_PROGRESS_CENTER}`,
-    `L ${DOWNLOAD_PROGRESS_CENTER} ${
-      DOWNLOAD_PROGRESS_CENTER - DOWNLOAD_PROGRESS_RADIUS
+    `L ${DOWNLOAD_PROGRESS_CENTER} ${DOWNLOAD_PROGRESS_CENTER - DOWNLOAD_PROGRESS_RADIUS
     }`,
     `A ${DOWNLOAD_PROGRESS_RADIUS} ${DOWNLOAD_PROGRESS_RADIUS} 0 ${largeArcFlag} 1 ${endX} ${endY}`,
     'Z',
@@ -83,7 +83,7 @@ const DownloadProgress = ({
       <Svg
         height={DOWNLOAD_PROGRESS_SIZE}
         width={DOWNLOAD_PROGRESS_SIZE}
-        style={{position: 'absolute'}}>
+        style={{ position: 'absolute' }}>
         <Circle
           cx={DOWNLOAD_PROGRESS_CENTER}
           cy={DOWNLOAD_PROGRESS_CENTER}
@@ -120,13 +120,15 @@ type PendingDownload = {
   background?: string;
   synopsis?: string;
   provider?: string;
+  server?: string;
+  isSubtitle?: boolean;
   infoUrl?: string;
   sourceLink?: string;
   url: string;
   fileName: string;
   fileType: string;
   headers?: Record<string, string>;
-  subtitles?: Array<{url: string; language: string; format?: string}>;
+  subtitles?: Array<{ url: string; language: string; format?: string }>;
   deleteDownload: () => void;
 };
 
@@ -166,14 +168,30 @@ const DownloadComponent = ({
   const colors = useM3Colors();
   const primary = colors.primary;
   const provider = useContentStore(state => state.provider);
-  const download = useDownloadsStore(
+
+  const videoDownload = useDownloadsStore(
     state =>
-      state.downloads[downloadId] ||
+      (state.downloads[downloadId] &&
+        !isSubtitleDownloadItem(state.downloads[downloadId])
+        ? state.downloads[downloadId]
+        : null) ||
       Object.values(state.downloads).find(
-        item => item.infoUrl === infoUrl && item.sourceLink === link,
+        item =>
+          !isSubtitleDownloadItem(item) &&
+          item.infoUrl === infoUrl &&
+          item.sourceLink === link,
       ),
   );
-  const storedDownloadId = download?.id || downloadId;
+
+  const subDownloads = useDownloadsStore(state =>
+    Object.values(state.downloads).filter(
+      item =>
+        isSubtitleDownloadItem(item) &&
+        (item.id.startsWith(`${downloadId}_subtitle_`) ||
+          (item.infoUrl === infoUrl && item.sourceLink === link)),
+    ),
+  );
+
   const removeDownload = useDownloadsStore(state => state.removeDownload);
   const [legacyDownloadedFile, setLegacyDownloadedFile] = useState<
     string | boolean
@@ -187,11 +205,37 @@ const DownloadComponent = ({
     useState<PendingDownload | null>(null);
   const [locationDialogVisible, setLocationDialogVisible] = useState(false);
   const [selectingLocation, setSelectingLocation] = useState(false);
-  const downloadActive = Boolean(
-    download && CURRENT_DOWNLOAD_STATUSES.has(download.status),
+
+  const isVideoActive = Boolean(
+    videoDownload && CURRENT_DOWNLOAD_STATUSES.has(videoDownload.status),
   );
-  const alreadyDownloaded =
-    download?.status === 'completed' || Boolean(legacyDownloadedFile);
+  const activeSubDownload = subDownloads.find(sub =>
+    CURRENT_DOWNLOAD_STATUSES.has(sub.status),
+  );
+  const downloadActive = isVideoActive || Boolean(activeSubDownload);
+  const currentActiveDownload =
+    videoDownload && isVideoActive ? videoDownload : activeSubDownload;
+
+  const isVideoDownloaded =
+    videoDownload?.status === 'completed' || Boolean(legacyDownloadedFile);
+  const hasDownloadedSubs = subDownloads.some(
+    sub => sub.status === 'completed',
+  );
+
+  const downloadedSubsList = subDownloads
+    .filter(s => s.status === 'completed')
+    .map(s => {
+      let subTitle = s.episodeName || s.title;
+      if (s.id.includes('_subtitle_')) {
+        const parts = s.id.split('_subtitle_');
+        if (parts[1]) subTitle = parts[1];
+      }
+      return {
+        id: s.id,
+        title: subTitle,
+        filePath: s.filePath,
+      };
+    });
 
   const startDownloadWithLocation = async (request: PendingDownload) => {
     const currentLocation = settingsStorage.getDownloadLocationConfig();
@@ -224,7 +268,7 @@ const DownloadComponent = ({
   };
 
   useEffect(() => {
-    if (download) {
+    if (videoDownload) {
       return;
     }
     const checkIfDownloaded = async () => {
@@ -232,74 +276,115 @@ const DownloadComponent = ({
       setLegacyDownloadedFile(exists);
     };
     checkIfDownloaded();
-  }, [download, fileName]);
+  }, [videoDownload, fileName]);
 
-  // handle download deletion
-  const deleteDownload = async () => {
+  // handle video download deletion
+  const deleteVideoDownload = async () => {
     try {
-      const deleted = download?.filePath
-        ? await deleteDownloadOutput(download.filePath, {
-            downloadLocation: download.downloadLocation,
-            outputDirectoryNames: [
-              createDownloadDirectoryName(download.showName || download.title),
-              ...[createDownloadSeasonDirectoryName(download.seasonTitle)].filter(
-                (name): name is string => Boolean(name),
-              ),
-            ],
-          })
+      const target = videoDownload;
+      const deleted = target?.filePath
+        ? await deleteDownloadOutput(target.filePath, {
+          downloadLocation: target.downloadLocation,
+          outputDirectoryNames: [
+            createDownloadDirectoryName(target.showName || target.title),
+            ...[createDownloadSeasonDirectoryName(target.seasonTitle)].filter(
+              (name): name is string => Boolean(name),
+            ),
+          ],
+        })
         : await deleteDownloadedFileByBaseName(
-            settingsStorage.getDownloadLocationConfig(),
-            fileName,
-          );
+          settingsStorage.getDownloadLocationConfig(),
+          fileName,
+        );
 
       if (deleted) {
-        removeDownload(storedDownloadId);
+        removeDownload(target?.id || downloadId);
         setLegacyDownloadedFile(false);
       }
     } catch (error) {
-      console.error(error);
+      console.error('Error deleting video download:', error);
     }
   };
 
-  // choose server
-  useEffect(() => {
-    const controller = new AbortController();
-    if (!downloadModal && !longPressModal) {
+  // handle subtitle download deletion
+  const deleteSubtitleDownload = async (subTitle: string) => {
+    try {
+      const subItem = subDownloads.find(
+        s =>
+          s.id === `${downloadId}_subtitle_${subTitle}` ||
+          s.title.includes(subTitle),
+      );
+      if (!subItem) {
+        return;
+      }
+
+      const deleted = subItem.filePath
+        ? await deleteDownloadOutput(subItem.filePath, {
+          downloadLocation: subItem.downloadLocation,
+          outputDirectoryNames: [
+            createDownloadDirectoryName(subItem.showName || subItem.title),
+            ...[createDownloadSeasonDirectoryName(subItem.seasonTitle)].filter(
+              (name): name is string => Boolean(name),
+            ),
+          ],
+        })
+        : await deleteDownloadedFileByBaseName(
+          settingsStorage.getDownloadLocationConfig(),
+          createSubtitleFileName(fileName, subTitle),
+        );
+
+      if (deleted) {
+        removeDownload(subItem.id);
+      }
+    } catch (error) {
+      console.error('Error deleting subtitle download:', error);
+    }
+  };
+
+  const isSubDownloaded = (subTitle: string): boolean => {
+    return subDownloads.some(
+      s =>
+        (s.id === `${downloadId}_subtitle_${subTitle}` ||
+          s.title.includes(subTitle)) &&
+        s.status === 'completed',
+    );
+  };
+
+  const fetchAndOpenSheet = async (isLongPress = false) => {
+    if (isLongPress ||
+      settingsStorage.getBool('alwaysExternalDownloader') === true
+    ) {
+      setLongPressModal(true);
+    } else {
+      setDownloadModal(true);
+    }
+
+    if (serverLoading || servers.length > 0) {
       return;
     }
-    const getServer = async () => {
-      setServerLoading(true);
-      setServerError(null);
-      try {
-        const availableServers = await providerManager.getStream({
-          link,
-          type,
-          signal: controller.signal,
-          providerValue: providerValue || provider.value,
-        });
-        const filteredServers = availableServers;
-        // .filter(
-        //   server =>
-        //     !manifest[
-        //       providerValue || provider.value
-        //     ].nonDownloadableServer?.includes(server.server),
-        // );
-        setServers(filteredServers);
-      } catch (error: any) {
-        console.error('Error fetching servers:', error);
-        const errorMessage = error?.message || 'Failed to fetch servers';
-        setServerError(errorMessage);
-        setServers([]);
-      } finally {
-        setServerLoading(false);
+    setServerLoading(true);
+    setServerError(null);
+    try {
+      const availableServers = await providerManager.getStream({
+        link,
+        type,
+        signal: new AbortController().signal,
+        providerValue: providerValue || provider.value,
+      });
+      const validServers = availableServers || [];
+      setServers(validServers);
+      if (validServers.length === 0) {
+        setServerError('No downloadable streams found');
       }
-    };
-    getServer();
-
-    return () => {
-      controller.abort();
-    };
-  }, [downloadModal, longPressModal]);
+    } catch (error: any) {
+      console.error('Error fetching servers:', error);
+      const errorMessage = error?.message || 'Failed to fetch servers';
+      setServerError(errorMessage);
+      setServers([]);
+    } finally {
+      setServerLoading(false);
+    }
+  };
 
   // on holdPress external downloader
   const longPressDownload = async (targetLink: string, targetType?: string) => {
@@ -315,36 +400,21 @@ const DownloadComponent = ({
     }
   };
 
-  const showDeleteConfirmation = () => {
-    showAppDialog({
-      title: 'Delete download?',
-      message: 'This removes the downloaded file from your device.',
-      variant: 'warning',
-      actions: [
-        {label: 'Cancel'},
-        {
-          label: 'Delete',
-          variant: 'destructive',
-          onPress: deleteDownload,
-        },
-      ],
-    });
-  };
-
   const showCancelConfirmation = () => {
+    const activeId = currentActiveDownload?.id || downloadId;
     showAppDialog({
       title: 'Cancel download?',
       message:
         'The current download will stop and its partial file will be removed.',
       variant: 'warning',
       actions: [
-        {label: 'Keep downloading'},
+        { label: 'Keep downloading' },
         {
           label: 'Cancel download',
           variant: 'destructive',
           onPress: async () => {
             try {
-              await cancelDownload(storedDownloadId);
+              await cancelDownload(activeId);
             } catch (error) {
               console.log('Error cancelling download', error);
             }
@@ -357,43 +427,32 @@ const DownloadComponent = ({
   return (
     <>
       <View
+        collapsable={false}
         className="h-12 w-12 flex-row items-center justify-center rounded-full"
-        style={{backgroundColor: LEGACY_TERTIARY_BACKGROUND}}>
+        style={{ backgroundColor: LEGACY_TERTIARY_BACKGROUND }}>
         {downloadActive ? (
           <TouchableOpacity
             accessibilityRole="button"
             accessibilityLabel={
-              download?.totalBytes
+              currentActiveDownload?.totalBytes
                 ? `Download ${Math.round(
-                    (download.downloadedBytes / download.totalBytes) * 100,
-                  )} percent complete. Tap to cancel.`
+                  (currentActiveDownload.downloadedBytes /
+                    currentActiveDownload.totalBytes) *
+                  100,
+                )} percent complete. Tap to cancel.`
                 : 'Download in progress. Tap to cancel.'
             }
             onPress={showCancelConfirmation}
             className="h-12 w-12 items-center justify-center">
             <DownloadProgress
-              downloadedBytes={download?.downloadedBytes ?? 0}
-              totalBytes={download?.totalBytes ?? 0}
+              downloadedBytes={currentActiveDownload?.downloadedBytes ?? 0}
+              totalBytes={currentActiveDownload?.totalBytes ?? 0}
               color={primary}
             />
           </TouchableOpacity>
-        ) : alreadyDownloaded ? (
+        ) : isVideoDownloaded || hasDownloadedSubs ? (
           <TouchableOpacity
-            onPress={showDeleteConfirmation}
-            className="h-12 w-12 items-center justify-center">
-            <MaterialIcons name="delete-outline" size={26} color={primary} />
-          </TouchableOpacity>
-        ) : (
-          <TouchableOpacity
-            onPress={() => {
-              if (
-                settingsStorage.getBool('alwaysExternalDownloader') === true
-              ) {
-                setLongPressModal(true);
-              } else {
-                setDownloadModal(true);
-              }
-            }}
+            onPress={() => fetchAndOpenSheet(false)}
             onLongPress={() => {
               if (settingsStorage.getBool('hapticFeedback') !== false) {
                 ReactNativeHapticFeedback.trigger('effectHeavyClick', {
@@ -401,10 +460,29 @@ const DownloadComponent = ({
                   ignoreAndroidSystemSettings: false,
                 });
               }
-              setLongPressModal(true);
+              fetchAndOpenSheet(true);
             }}
             className="h-12 w-12 items-center justify-center">
-            <Octicons name="download" size={24} color={primary} />
+            <MaterialIcons name="check-circle" size={24} color={primary} />
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity
+            onPress={() => fetchAndOpenSheet(false)}
+            onLongPress={() => {
+              if (settingsStorage.getBool('hapticFeedback') !== false) {
+                ReactNativeHapticFeedback.trigger('effectHeavyClick', {
+                  enableVibrateFallback: true,
+                  ignoreAndroidSystemSettings: false,
+                });
+              }
+              fetchAndOpenSheet(true);
+            }}
+            className="h-12 w-12 items-center justify-center">
+            <Octicons
+              name="download"
+              size={24}
+              color={primary}
+            />
           </TouchableOpacity>
         )}
       </View>
@@ -415,7 +493,13 @@ const DownloadComponent = ({
         data={servers}
         loading={serverLoading}
         error={serverError}
-        title="Select Server To Download"
+        title=""
+        videoDownloaded={isVideoDownloaded}
+        downloadedServer={videoDownload?.server}
+        onDeleteVideo={deleteVideoDownload}
+        downloadedSubtitles={downloadedSubsList}
+        isSubDownloaded={isSubDownloaded}
+        onDeleteSub={deleteSubtitleDownload}
         onPressVideo={(server: Stream) => {
           startDownloadWithLocation({
             downloadId,
@@ -429,6 +513,7 @@ const DownloadComponent = ({
             background,
             synopsis,
             provider: providerValue || provider.value,
+            server: server.server,
             infoUrl,
             sourceLink: link,
             url: server.link,
@@ -440,10 +525,10 @@ const DownloadComponent = ({
               language: subtitle.language || 'Unknown',
               format: subtitle.type === 'text/vtt' ? 'vtt' : 'srt',
             })),
-            deleteDownload: deleteDownload,
+            deleteDownload: deleteVideoDownload,
           });
         }}
-        onPressSubs={(sub: {link: string; type: string; title: string}) => {
+        onPressSubs={(sub: { link: string; type: string; title: string }) => {
           startDownloadWithLocation({
             downloadId: `${downloadId}_subtitle_${sub.title}`,
             title: title + ' ' + sub.title + ' Subtitle ',
@@ -456,12 +541,13 @@ const DownloadComponent = ({
             background,
             synopsis,
             provider: providerValue || provider.value,
+            isSubtitle: true,
             infoUrl,
             sourceLink: link,
             url: sub.link,
             fileName: createSubtitleFileName(fileName, sub.title),
             fileType: sub.type,
-            deleteDownload: () => {},
+            deleteDownload: () => deleteSubtitleDownload(sub.title),
           });
         }}
       />
@@ -488,10 +574,16 @@ const DownloadComponent = ({
         loading={serverLoading}
         error={serverError}
         title="Select Server To Open"
+        videoDownloaded={isVideoDownloaded}
+        downloadedServer={videoDownload?.server}
+        onDeleteVideo={deleteVideoDownload}
+        downloadedSubtitles={downloadedSubsList}
+        isSubDownloaded={isSubDownloaded}
+        onDeleteSub={deleteSubtitleDownload}
         onPressVideo={(server: Stream) => {
           longPressDownload(server.link);
         }}
-        onPressSubs={(sub: {link: string; type: string; title: string}) => {
+        onPressSubs={(sub: { link: string; type: string; title: string }) => {
           longPressDownload(sub.link, 'text/vtt');
         }}
       />

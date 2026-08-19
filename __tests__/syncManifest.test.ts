@@ -307,25 +307,76 @@ describe('Vega sync manifest', () => {
     );
   });
 
-  it('keeps a newer tombstone from resurrecting a download', () => {
-    const completed = manifest('mobile', {
-      downloads: {
-        episode: {
-          id: 'episode',
-          title: 'Episode',
-          type: 'series',
-          relativePath: 'show/episode.mp4',
-          totalBytes: 100,
-          completedAt: 10,
-          updatedAt: 10,
+  it('keeps subtitles separate from videos for the same episode', () => {
+    const video = {
+      id: 'Show_SSeason 1_E1',
+      title: 'Show Episode 1',
+      showName: 'Show',
+      episodeName: 'Episode 1',
+      seasonTitle: 'Season 1',
+      type: 'series' as const,
+      imdbId: 'tt1234',
+      relativePath: 'show/episode_1.mp4',
+      totalBytes: 1000,
+      completedAt: 10,
+      updatedAt: 10,
+    };
+    const subtitle = {
+      id: 'Show_SSeason 1_E1_subtitle_English',
+      title: 'Show Episode 1 English Subtitle',
+      showName: 'Show',
+      episodeName: 'Episode 1',
+      seasonTitle: 'Season 1',
+      type: 'series' as const,
+      isSubtitle: true,
+      imdbId: 'tt1234',
+      relativePath: 'show/episode_1-english.srt',
+      totalBytes: 20,
+      completedAt: 20,
+      updatedAt: 20,
+    };
+
+    expect(getDownloadMediaKey(video)).not.toBe(getDownloadMediaKey(subtitle));
+
+    const merged = mergeSyncManifests([
+      manifest('mobile', {
+        downloads: {
+          [video.id]: video,
+          [subtitle.id]: subtitle,
         },
+      }),
+    ]);
+
+    expect(Object.keys(merged.downloads).length).toBe(2);
+    expect(Object.values(merged.downloads).some(d => d.id === video.id)).toBe(
+      true,
+    );
+    expect(
+      Object.values(merged.downloads).some(d => d.id === subtitle.id),
+    ).toBe(true);
+  });
+
+  it('keeps a newer tombstone from resurrecting a download', () => {
+    const episode = {
+      id: 'mobile-id',
+      title: 'Episode',
+      type: 'series' as const,
+      relativePath: 'show/episode.mp4',
+      totalBytes: 100,
+      completedAt: 10,
+      updatedAt: 10,
+    };
+    const completed = manifest('desktop', {
+      downloads: {
+        [episode.id]: episode,
       },
     });
-    const deleted = manifest('desktop', {
+    const deleted = manifest('mobile', {
       tombstones: {
-        [getTombstoneKey('download', 'episode')]: {
+        [getTombstoneKey('download', 'mobile-id')]: {
           kind: 'download',
-          id: 'episode',
+          id: 'mobile-id',
+          mediaKey: getDownloadMediaKey(episode),
           deletedAt: 20,
         },
       },
@@ -441,6 +492,6 @@ describe('Vega sync manifest', () => {
       manifest('mobile', {downloads: {episode}}),
     ]);
 
-    expect(Object.keys(merged.downloads)).toEqual(['series:tt1234:7:e1']);
+    expect(Object.keys(merged.downloads)).toEqual(['series:tt1234:7:i0']);
   });
 });

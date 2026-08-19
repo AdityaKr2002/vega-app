@@ -156,14 +156,31 @@ const reconcileRecord = async (record: DownloadItem): Promise<void> => {
 };
 
 export const reconcileCompletedDownloadOutputs = async (): Promise<void> => {
-  const completedRecords = Object.values(
-    useDownloadsStore.getState().downloads,
-  ).filter(record => record.status === 'completed');
+  const allRecords = Object.values(useDownloadsStore.getState().downloads);
 
   await Promise.all(
-    completedRecords.map(async record => {
-      if (!(await downloadOutputExists(record.filePath))) {
-        useDownloadsStore.getState().markMissing(record.id);
+    allRecords.map(async record => {
+      const targetPath = record.filePath || record.finalDocumentUri;
+      if (record.status === 'completed') {
+        if (!targetPath) {
+          useDownloadsStore.getState().markMissing(record.id);
+          return;
+        }
+        const exists = await downloadOutputExists(targetPath);
+        if (!exists) {
+          useDownloadsStore.getState().markMissing(record.id);
+        }
+      } else if (record.status === 'missing') {
+        if (targetPath) {
+          const exists = await downloadOutputExists(targetPath);
+          if (exists) {
+            useDownloadsStore.getState().markCompleted(record.id, {
+              filePath: targetPath,
+              finalDocumentUri: record.finalDocumentUri || targetPath,
+              totalBytes: record.totalBytes,
+            });
+          }
+        }
       }
     }),
   );

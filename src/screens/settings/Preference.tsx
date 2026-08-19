@@ -46,6 +46,10 @@ const Preferences = () => {
     settingsStorage.hideSeekButtons(),
   );
 
+  const [showEpisodeSidebar, setShowEpisodeSidebar] = useState<boolean>(
+    settingsStorage.showPlayerEpisodeSidebar(),
+  );
+
   const [_enable2xGesture, _setEnable2xGesture] = useState<boolean>(
     settingsStorage.isEnable2xGestureEnabled(),
   );
@@ -220,6 +224,15 @@ const Preferences = () => {
             onValueChange={next => {
               settingsStorage.setHideSeekButtons(next);
               setHideSeekButtons(next);
+            }}
+          />
+          <SettingsSwitchRow
+            title="Episode list button"
+            description="Show button on the right edge to quickly open the episode list sidebar"
+            value={showEpisodeSidebar}
+            onValueChange={next => {
+              settingsStorage.setShowPlayerEpisodeSidebar(next);
+              setShowEpisodeSidebar(next);
             }}
           />
           <SettingsSwitchRow

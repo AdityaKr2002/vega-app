@@ -144,7 +144,8 @@ export const useContentDetails = (link: string, providerValue: string) => {
   return {
     info,
     meta,
-    isLoading: infoLoading || metaLoading,
+    isLoading: infoLoading,
+    isMetaLoading: metaLoading,
     isRefetching: infoFetching || metaFetching,
     isSynopsisLoading: shouldShowSynopsisSkeleton({
       enhancedSynopsis: meta?.description,

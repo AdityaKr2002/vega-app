@@ -11,6 +11,11 @@ const hasIosGooglePlist = fs.existsSync(
 );
 const tmdbApiKey =
   process.env.TMDB_API_KEY || process.env.EXPO_PUBLIC_TMDB_API_KEY || '';
+const proxyApiUrl =
+  process.env.PROXY_API_URL ||
+  process.env.EXPO_PUBLIC_PROXY_API_URL ||
+  process.env.META_PROXY_URL ||
+  '';
 
 module.exports = () => {
   const IS_PLAYSTORE = process.env.APP_VARIANT === 'playstore';
@@ -51,15 +56,7 @@ module.exports = () => {
         expandedController: true,
       },
     ],
-    [
-      'react-native-edge-to-edge',
-      {
-        android: {
-          parentTheme: 'Default',
-          enforceNavigationBarContrast: false,
-        },
-      },
-    ],
+    'react-native-edge-to-edge',
     './plugins/with-dynamic-launcher-splash.js',
     [
       'react-native-bootsplash',
@@ -80,7 +77,7 @@ module.exports = () => {
           ],
           enableProguardInReleaseBuilds: true,
           splits: {
-            abi: {enable: true, universalApk: true},
+            abi: { enable: true, universalApk: true },
           },
           buildVariants: {
             release: {
@@ -94,7 +91,7 @@ module.exports = () => {
                 },
               },
             },
-            debug: {minifyEnabled: false, debuggable: true},
+            debug: { minifyEnabled: false, debuggable: true },
           },
         },
         ios: {},
@@ -117,21 +114,21 @@ module.exports = () => {
       displayName: 'Vega',
       jsEngine: 'hermes',
       newArchEnabled: true,
-      autolinking: {exclude: ['expo-splash-screen']},
+      autolinking: { exclude: ['expo-splash-screen'] },
       plugins,
       slug: 'vega',
-      version: '4.0.4',
+      version: '4.0.5',
       userInterfaceStyle: 'dark',
       experiments: {
         reactCompiler: true,
       },
       android: {
         ...(!IS_PLAYSTORE && hasAndroidGoogleServices
-          ? {googleServicesFile: androidGoogleServicesFile}
+          ? { googleServicesFile: androidGoogleServicesFile }
           : {}),
         minSdkVersion: 28,
         package: PACKAGE_NAME,
-        versionCode: 190,
+        versionCode: 191,
         permissions: [
           'FOREGROUND_SERVICE',
           'FOREGROUND_SERVICE_DATA_SYNC',
@@ -147,15 +144,15 @@ module.exports = () => {
           'android.permission.WRITE_EXTERNAL_STORAGE',
           ...(IS_PLAYSTORE
             ? [
-                'android.permission.REQUEST_INSTALL_PACKAGES',
-                'com.google.android.gms.permission.AD_ID',
-              ]
+              'android.permission.REQUEST_INSTALL_PACKAGES',
+              'com.google.android.gms.permission.AD_ID',
+            ]
             : []),
         ],
         queries: [
-          {action: 'VIEW', data: {scheme: 'http'}},
-          {action: 'VIEW', data: {scheme: 'https'}},
-          {action: 'VIEW', data: {scheme: 'vlc'}},
+          { action: 'VIEW', data: { scheme: 'http' } },
+          { action: 'VIEW', data: { scheme: 'https' } },
+          { action: 'VIEW', data: { scheme: 'vlc' } },
         ],
         allowBackup: true,
         adaptiveIcon: {
@@ -167,7 +164,7 @@ module.exports = () => {
       },
       ios: {
         ...(!IS_PLAYSTORE && hasIosGooglePlist
-          ? {googleServicesFile: iosGoogleServicesFile}
+          ? { googleServicesFile: iosGoogleServicesFile }
           : {}),
       },
       platforms: ['ios', 'android'],
@@ -178,6 +175,7 @@ module.exports = () => {
         hasFirebase: HAS_FIREBASE,
         isPlayStore: IS_PLAYSTORE,
         tmdbApiKey,
+        proxyApiUrl,
       },
     },
   };

@@ -110,7 +110,7 @@ describe('download destination service', () => {
     });
 
     expect(first.stagingDirectory).not.toBe(second.stagingDirectory);
-    expect(first.stagingPath).toContain('Show_SSeason_1_E1');
+    expect(first.stagingPath).toContain('Show_SSeason 1_E1');
   });
 
   it('creates an HTTP target directly inside the selected SAF hierarchy', async () => {

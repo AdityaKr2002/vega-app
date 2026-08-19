@@ -6,6 +6,10 @@ import {settingsStorage} from '../storage';
 import {ifExists} from '../file/ifExists';
 import {Stream} from '../providers/types';
 import {getEpisodeIdentity} from '../utils/episodeIdentity';
+import useDownloadsStore, {
+  isSubtitleDownloadItem,
+} from '../zustand/downloadsStore';
+import {TextTrackType} from 'react-native-video';
 
 interface UseStreamOptions {
   activeEpisode: any;
@@ -13,6 +17,101 @@ interface UseStreamOptions {
   provider: string;
   enabled?: boolean;
 }
+
+export const getDownloadedSubtitlesForMedia = (
+  activeEpisode: any,
+  routeParams: any,
+) => {
+  const allDownloads = Object.values(useDownloadsStore.getState().downloads);
+
+  const downloadedSubs = allDownloads.filter(item => {
+    if (item.status !== 'completed' || !item.filePath) {
+      return false;
+    }
+    const isSub =
+      item.isSubtitle ||
+      isSubtitleDownloadItem(item) ||
+      item.displayFileName?.endsWith('.vtt') ||
+      item.displayFileName?.endsWith('.srt') ||
+      item.filePath?.endsWith('.vtt') ||
+      item.filePath?.endsWith('.srt');
+
+    if (!isSub) {
+      return false;
+    }
+
+    const episodeSourceLink = activeEpisode?.sourceLink || activeEpisode?.link;
+    if (episodeSourceLink && item.sourceLink === episodeSourceLink) {
+      return true;
+    }
+
+    const infoUrl = routeParams?.infoUrl || routeParams?.link;
+    if (infoUrl && item.infoUrl === infoUrl) {
+      if (
+        !activeEpisode?.title ||
+        item.episodeName === activeEpisode.title ||
+        item.title?.includes(activeEpisode.title)
+      ) {
+        return true;
+      }
+    }
+
+    const primaryTitle = routeParams?.primaryTitle || routeParams?.title;
+    if (
+      primaryTitle &&
+      (item.showName === primaryTitle || item.title?.startsWith(primaryTitle))
+    ) {
+      if (
+        !activeEpisode?.title ||
+        item.episodeName === activeEpisode.title ||
+        item.title?.includes(activeEpisode.title)
+      ) {
+        return true;
+      }
+    }
+
+    if (routeParams?.directUrl) {
+      const videoBase = routeParams.directUrl.substring(
+        0,
+        routeParams.directUrl.lastIndexOf('.'),
+      );
+      if (videoBase && item.filePath.startsWith(videoBase)) {
+        return true;
+      }
+    }
+
+    return false;
+  });
+
+  return downloadedSubs.map(sub => {
+    const isVtt =
+      sub.videoType === 'vtt' ||
+      sub.filePath?.endsWith('.vtt') ||
+      sub.displayFileName?.endsWith('.vtt');
+    const uri =
+      sub.filePath.startsWith('file://') ||
+      sub.filePath.startsWith('content://')
+        ? sub.filePath
+        : `file://${sub.filePath}`;
+
+    let title = sub.episodeName || sub.title;
+    let language = 'en';
+    const match =
+      sub.title.match(/subtitle\s+([a-zA-Z]+)/i) ||
+      sub.id.match(/_subtitle_(.+)$/);
+    if (match) {
+      title = match[1];
+      language = match[1];
+    }
+
+    return {
+      type: isVtt ? TextTrackType.VTT : TextTrackType.SUBRIP,
+      language,
+      title: `${title} (Downloaded)`,
+      uri,
+    };
+  });
+};
 
 export const useStream = ({
   activeEpisode,
@@ -128,17 +227,34 @@ export const useStream = ({
         const stillExists = streamData.find(s => s.link === current.link);
         return stillExists ? current : streamData[0];
       });
-
-      // Extract external subtitles
-      const subs: any[] = [];
-      streamData.forEach(track => {
-        if (track?.subtitles?.length && track.subtitles.length > 0) {
-          subs.push(...track.subtitles);
-        }
-      });
-      setExternalSubs(subs);
     }
   }, [streamData]);
+
+  // Extract downloaded and online external subtitles
+  useEffect(() => {
+    const downloadedSubs = getDownloadedSubtitlesForMedia(
+      activeEpisode,
+      routeParams,
+    );
+
+    const onlineSubs: any[] = [];
+    if (streamData && streamData.length > 0) {
+      streamData.forEach(track => {
+        if (track?.subtitles?.length && track.subtitles.length > 0) {
+          onlineSubs.push(...track.subtitles);
+        }
+      });
+    }
+
+    const mergedSubs = [...downloadedSubs];
+    onlineSubs.forEach(online => {
+      if (!mergedSubs.some(existing => existing.uri === online.uri)) {
+        mergedSubs.push(online);
+      }
+    });
+
+    setExternalSubs(mergedSubs);
+  }, [streamData, activeEpisodeKey, routeParams]);
 
   // Handle errors
   useEffect(() => {

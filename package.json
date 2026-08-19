@@ -1,6 +1,6 @@
 {
   "name": "vega",
-  "version": "4.0.4",
+  "version": "4.0.5",
   "private": true,
   "scripts": {
     "android": "npm run build:sandbox && expo run:android",
@@ -17,7 +17,6 @@
     "postinstall": "patch-package"
   },
   "dependencies": {
-    "@8man/react-native-media-console": "^2.2.4-alpha.43",
     "@dr.pogodin/react-native-fs": "^2.34.0",
     "@expo/metro-runtime": "~57.0.8",
     "@expo/ui": "~57.0.9",

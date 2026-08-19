@@ -55,10 +55,9 @@ export default function Info({route, navigation}: Props): React.JSX.Element {
   const [refreshing, setRefreshing] = useState(false);
   const [refreshVersion, setRefreshVersion] = useState(0);
   const [imageAccent, setImageAccent] = useState<string>();
-  const [accentReady, setAccentReady] = useState(
-    () => !settingsStorage.isDynamicInfoAccentEnabled(),
+  const [initialAccentReady, setInitialAccentReady] = useState(
+    () => !settingsStorage.isDynamicInfoAccentEnabled() || !route.params.poster,
   );
-  const accentSource = useRef(route.params.poster);
   const imageAccentRequest = useRef(0);
   const [statusBarScrimVisible, setStatusBarScrimVisible] = useState(false);
   const dynamicInfoAccentEnabled = settingsStorage.isDynamicInfoAccentEnabled();
@@ -79,35 +78,39 @@ export default function Info({route, navigation}: Props): React.JSX.Element {
     route.params.poster ||
     info?.image ||
     'https://placehold.jp/24/363636/ffffff/500x750.png?text=Vega';
-  const accentPoster = route.params.poster || meta?.poster || info?.image;
+  const accentBackground =
+    meta?.background || info?.image || route.params.poster;
   const backgroundImage =
     meta?.background ||
     info?.image ||
     'https://placehold.jp/24/363636/ffffff/900x1200.png?text=Vega';
+
   useEffect(() => {
     if (!dynamicInfoAccentEnabled) {
       imageAccentRequest.current += 1;
       setImageAccent(undefined);
-      setAccentReady(true);
+      setInitialAccentReady(true);
       return;
     }
-    const poster = accentSource.current || accentPoster;
-    if (!poster) {
+    const bg = accentBackground;
+    if (!bg) {
+      setInitialAccentReady(true);
       return;
     }
-    accentSource.current = poster;
-    setAccentReady(false);
     const request = ++imageAccentRequest.current;
-    extractImageAccent(poster, `detail-poster-accent-v1:${poster}`).then(
+    extractImageAccent(bg, `detail-bg-accent-v1:${bg}`).then(
       extractedColor => {
         if (request !== imageAccentRequest.current) {
           return;
         }
-        setImageAccent(extractedColor);
-        setAccentReady(true);
+        if (extractedColor) {
+          setImageAccent(extractedColor);
+        }
+        setInitialAccentReady(true);
       },
     );
-  }, [accentPoster, dynamicInfoAccentEnabled]);
+  }, [accentBackground, dynamicInfoAccentEnabled]);
+
   const detailColors = useMemo<MaterialColors>(() => {
     if (!imageAccent) {
       return colors;
@@ -145,6 +148,7 @@ export default function Info({route, navigation}: Props): React.JSX.Element {
       outlineVariant: tintedSurface('#5A5A5A', 0.18),
     };
   }, [colors, imageAccent]);
+
   const webUrl = info?.webUrl?.trim();
   const filteredLinkList = useMemo(() => {
     if (!info?.linkList) {
@@ -248,7 +252,9 @@ export default function Info({route, navigation}: Props): React.JSX.Element {
     );
   }
 
-  if (!accentReady) {
+  const isContentLoading =
+    !info || (dynamicInfoAccentEnabled && !initialAccentReady);
+  if (isContentLoading) {
     return (
       <View style={{backgroundColor: '#000000', flex: 1}}>
         <StatusBar style="light" />
@@ -273,7 +279,7 @@ export default function Info({route, navigation}: Props): React.JSX.Element {
                   backgroundImage={backgroundImage}
                   genres={meta?.genres}
                   inLibrary={inLibrary}
-                  isLoading={isLoading}
+                  isLoading={isLoading && !info}
                   logo={displayLogo}
                   onBack={navigation.goBack}
                   onOpenStory={
@@ -301,7 +307,7 @@ export default function Info({route, navigation}: Props): React.JSX.Element {
                   year={meta?.year}
                 />
                 <View style={{paddingHorizontal: 18, paddingTop: 24}}>
-                  {isLoading ? (
+                  {isLoading && !info ? (
                     <View style={{gap: 12}}>
                       <SkeletonLoader show height={28} width={120} />
                       <SkeletonLoader show height={72} width="100%" />

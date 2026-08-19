@@ -6,21 +6,51 @@ import {settingsStorage} from '../storage';
 export type TmdbMediaType = 'movie' | 'tv';
 
 export interface TmdbStoryCastMember {
-  id: number;
+  id: number | string;
   name: string;
   character?: string;
   profilePath?: string;
 }
 
 export interface TmdbStoryCollectionItem {
-  id: number;
+  id: number | string;
   title: string;
   subtitle?: string;
   imagePath?: string;
 }
 
+export interface StoryVideo {
+  id: string;
+  name?: string;
+  url?: string;
+  thumbnail?: string;
+  youtubeKey?: string;
+}
+
+export interface RatingHistogramEntry {
+  rating: number;
+  voteCount: number;
+}
+
+export interface FeaturedReview {
+  author?: string;
+  summary?: string;
+  text?: string;
+  rating?: number;
+  date?: string;
+}
+
+export interface RelatedTitle {
+  id: string;
+  title: string;
+  image?: string;
+  rating?: number;
+  voteCount?: number;
+  mediaType: TmdbMediaType;
+}
+
 export interface TmdbStoryData {
-  id: number;
+  id: number | string;
   mediaType: TmdbMediaType;
   title: string;
   tagline?: string;
@@ -30,6 +60,9 @@ export interface TmdbStoryData {
   posterPath?: string;
   trailerKey?: string;
   trailerName?: string;
+  trailerUrl?: string;
+  trailerThumbnail?: string;
+  trailers?: StoryVideo[];
   releaseDate?: string;
   runtime?: number;
   genres: string[];
@@ -37,6 +70,7 @@ export interface TmdbStoryData {
   voteCount?: number;
   popularity?: number;
   trendingRank?: number;
+  meterRank?: number;
   certification?: string;
   status?: string;
   originalLanguage?: string;
@@ -48,6 +82,19 @@ export interface TmdbStoryData {
   keywords: string[];
   collectionTitle?: string;
   collectionItems: TmdbStoryCollectionItem[];
+  metascore?: number;
+  productionBudget?: number;
+  openingWeekendGross?: number;
+  domesticGross?: number;
+  worldwideGross?: number;
+  ratingsHistogram?: RatingHistogramEntry[];
+  featuredReview?: FeaturedReview;
+  relatedTitles?: RelatedTitle[];
+  watchlistCount?: string;
+  awardsText?: string;
+  totalSeasons?: number;
+  totalEpisodes?: number;
+  upcomingSeason?: string;
 }
 
 interface UseTmdbStoryOptions {
@@ -63,6 +110,13 @@ interface TmdbFindResult {
 
 const TMDB_API_URL = 'https://api.themoviedb.org/3';
 
+export const getProxyApiUrl = (): string =>
+  String(
+    Constants.expoConfig?.extra?.proxyApiUrl ||
+      process.env.EXPO_PUBLIC_PROXY_API_URL ||
+      '',
+  ).trim();
+
 export const getTmdbApiKey = (): string =>
   settingsStorage.getTmdbApiKey() ||
   String(Constants.expoConfig?.extra?.tmdbApiKey || '').trim();
@@ -73,7 +127,7 @@ const getPreferredMediaType = (type?: string): TmdbMediaType =>
     : 'movie';
 
 const getImagePath = (path?: string | null): string | undefined =>
-  path || undefined;
+  path ? (path.startsWith('http') ? path : `https://image.tmdb.org/t/p/w780${path}`) : undefined;
 
 const getMovieCertification = (details: any): string | undefined => {
   const releases = details.release_dates?.results ?? [];
@@ -90,6 +144,250 @@ const getTvCertification = (details: any): string | undefined => {
     ratings.find((item: any) => item.iso_3166_1 === 'US') ?? ratings[0];
   return country?.rating?.trim();
 };
+
+function parseProxyResponse(json: any): TmdbStoryData | null {
+  if (!json?.success) return null;
+
+  const raw = json.raw;
+  const aboveTheFold = raw?.aboveTheFoldData;
+  const mainColumn = raw?.mainColumnData;
+
+  const isTv = json.type === 'tvSeries' || json.type === 'tvMiniSeries' || json.isSeries === true;
+  const mediaType: TmdbMediaType = isTv ? 'tv' : 'movie';
+
+  const primaryVideos = (aboveTheFold?.primaryVideos?.edges?.map((e: any) => e.node) ?? aboveTheFold?.primaryVideos ?? []) as any[];
+  const trailersList: StoryVideo[] = [];
+  primaryVideos.forEach((v: any, index: number) => {
+    const playUrl = v.playbackURLs?.find((p: any) =>
+      p.url?.endsWith('.mp4') || p.mimeType?.includes('mp4') || p.videoMimeType?.includes('mp4')
+    )?.url ?? v.playbackURLs?.[0]?.url;
+    if (playUrl) {
+      trailersList.push({
+        id: v.id || `video-${index}`,
+        name: v.name?.value,
+        url: playUrl,
+        thumbnail: v.thumbnail?.url,
+      });
+    }
+  });
+
+  const trailer = aboveTheFold?.primaryVideos?.edges?.[0]?.node ?? aboveTheFold?.primaryVideos?.[0];
+  const trailerPlayback = trailer?.playbackURLs?.find((p: any) =>
+    p.url?.endsWith('.mp4') || p.mimeType?.includes('mp4') || p.videoMimeType?.includes('mp4')
+  ) ?? trailer?.playbackURLs?.[0];
+
+  if (trailersList.length === 0 && (trailerPlayback?.url || trailer?.name?.value)) {
+    trailersList.push({
+      id: 'primary-trailer',
+      name: trailer?.name?.value,
+      url: trailerPlayback?.url,
+      thumbnail: trailer?.thumbnail?.url,
+    });
+  }
+
+  const histogram = mainColumn?.aggregateRatingsBreakdown?.histogram?.histogramValues;
+  const meterRanking = aboveTheFold?.meterRanking;
+  const engagementStats = aboveTheFold?.engagementStatistics;
+  const awards = mainColumn?.prestigiousAwardSummary;
+
+  const rawCastV2 = mainColumn?.castV2;
+  const castCredits: any[] = Array.isArray(rawCastV2)
+    ? rawCastV2.flatMap((group: any) => group.credits ?? [])
+    : (rawCastV2?.credits ?? rawCastV2?.edges ?? []);
+
+  const cast: TmdbStoryCastMember[] = castCredits.slice(0, 24).map((credit: any) => {
+    const person = credit.name ?? credit.node?.name ?? credit;
+    const character = credit.creditedRoles?.[0]?.characters?.[0]?.name
+      ?? credit.characters?.[0]
+      ?? credit.character;
+    return {
+      id: person.id,
+      name: person.nameText ?? person.name,
+      character: character || undefined,
+      profilePath: person.primaryImage?.url || undefined,
+    };
+  });
+
+  if (cast.length === 0) {
+    (json.cast ?? []).slice(0, 24).forEach((person: any) => {
+      cast.push({
+        id: person.id,
+        name: person.name,
+        character: person.characters?.[0] || undefined,
+        profilePath: undefined,
+      });
+    });
+  }
+
+  const featuredReviews = aboveTheFold?.featuredReviews?.edges ?? (Array.isArray(aboveTheFold?.featuredReviews) ? aboveTheFold.featuredReviews : []);
+  const review = featuredReviews[0]?.node ?? featuredReviews[0];
+  const featuredReview = review ? {
+    author: review.author?.nickName || review.author?.displayName || undefined,
+    summary: review.summary?.originalText || undefined,
+    text: review.text?.originalText || undefined,
+    rating: review.authorRating || undefined,
+    date: review.submissionDate || undefined,
+  } : undefined;
+
+  const principalCredits = mainColumn?.principalCredits ?? [];
+  const creatorGroup = principalCredits.find((c: any) =>
+    ['creator', 'director', 'writer'].includes(c.category?.id)
+  );
+  const creatorsFromPrincipal = (creatorGroup?.credits ?? [])
+    .map((c: any) => c.name?.nameText || c.name?.name)
+    .filter(Boolean);
+
+  const legacyDirectors = json.credits?.director ?? json.credits?.creator ?? [];
+  const creators = (creatorsFromPrincipal.length > 0
+    ? creatorsFromPrincipal
+    : legacyDirectors.map((d: any) => d.name)
+  ).filter(Boolean);
+
+  const stars = json.credits?.stars ?? [];
+
+  if (cast.length === 0 && stars.length > 0) {
+    stars.forEach((s: any) => {
+      cast.push({ id: s.id, name: s.name, profilePath: undefined });
+    });
+  }
+
+  const episodes = mainColumn?.episodes;
+  const currentYear = new Date().getFullYear();
+  const years = (episodes?.years ?? []).map((y: any) => y.year).filter(Boolean);
+  const futureYears = years.filter((y: number) => y > currentYear);
+  const spotlightSeason = parseInt(episodes?.episodeSpotlight?.[0]?.series?.displayableEpisodeNumber?.displayableSeason?.season, 10);
+  const totalRawSeasons = episodes?.seasons?.length ?? episodes?.displayableSeasons?.length ?? 0;
+
+  let totalSeasons: number | undefined;
+  let upcomingSeason: string | undefined;
+
+  if (isTv) {
+    if (json.type === 'tvMiniSeries') {
+      totalSeasons = 1;
+    } else if (spotlightSeason && spotlightSeason > 0 && spotlightSeason <= totalRawSeasons) {
+      totalSeasons = spotlightSeason;
+      if (totalRawSeasons > spotlightSeason && futureYears.length > 0) {
+        const nextSeasonNum = spotlightSeason + 1;
+        const nextYear = futureYears[0];
+        upcomingSeason = `Season ${nextSeasonNum} (${nextYear})`;
+      }
+    } else if (futureYears.length > 0 && totalRawSeasons > 1) {
+      const futureSeasonsCount = futureYears.length;
+      totalSeasons = Math.max(1, totalRawSeasons - futureSeasonsCount);
+      const nextSeasonNum = totalSeasons + 1;
+      const nextYear = futureYears[0];
+      upcomingSeason = `Season ${nextSeasonNum} (${nextYear})`;
+    } else {
+      totalSeasons = totalRawSeasons || undefined;
+    }
+  }
+  const totalEpisodes = episodes?.totalEpisodes?.total || episodes?.episodes?.total || undefined;
+
+  let awardsText: string | undefined;
+  if (awards) {
+    const parts: string[] = [];
+    if (awards.wins) parts.push(`${awards.wins} wins`);
+    if (awards.nominations) parts.push(`${awards.nominations} nominations`);
+    if (awards.award?.text) parts.push(awards.award.text);
+    awardsText = parts.join(' · ') || undefined;
+  }
+
+  const collectionItems: TmdbStoryCollectionItem[] = [];
+
+  return {
+    id: json.id,
+    mediaType,
+    title: json.title || json.originalTitle || '',
+    tagline: undefined,
+    overview: json.plot || undefined,
+    backdropPaths: (mainColumn?.titleMainImages ?? [])
+      .filter((img: any) => img.url && img.width && img.height && img.width / img.height >= 1.25)
+      .map((img: any) => img.url),
+    posterPath: json.poster?.url || undefined,
+    trailerKey: undefined,
+    trailerName: trailersList[0]?.name || undefined,
+    trailerUrl: trailersList[0]?.url || undefined,
+    trailerThumbnail: trailersList[0]?.thumbnail || undefined,
+    trailers: trailersList,
+    releaseDate: json.releaseDate || undefined,
+    runtime: json.runtimeSeconds ? Math.round(json.runtimeSeconds / 60) : undefined,
+    genres: json.genres ?? [],
+    rating:
+      typeof json.rating === 'number'
+        ? json.rating
+        : json.rating
+          ? parseFloat(String(json.rating)) || undefined
+          : undefined,
+    voteCount: json.voteCount || undefined,
+    popularity: undefined,
+    trendingRank: undefined,
+    meterRank: meterRanking?.currentRank || undefined,
+    certification: json.certificate || undefined,
+    status: aboveTheFold?.productionStatus?.currentProductionStage?.text || undefined,
+    originalLanguage: undefined,
+    cast,
+    creators: creators.slice(0, 5),
+    companies: [],
+    countries: [],
+    networks: [],
+    keywords: json.keywords ?? [],
+    collectionTitle: isTv ? 'Seasons' : undefined,
+    collectionItems,
+    metascore: json.metascore || undefined,
+    productionBudget: mainColumn?.productionBudget?.budget?.amount || undefined,
+    openingWeekendGross: mainColumn?.openingWeekendGross?.gross?.total?.amount || undefined,
+    domesticGross: mainColumn?.lifetimeGross?.total?.amount || undefined,
+    worldwideGross: mainColumn?.worldwideGross?.total?.amount || undefined,
+    ratingsHistogram: histogram
+      ? histogram.map((h: any) => ({ rating: h.rating, voteCount: h.voteCount }))
+      : undefined,
+    featuredReview,
+    relatedTitles: json.raw.mainColumnData?.moreLikeThisTitles
+      ? json.raw.mainColumnData.moreLikeThisTitles.map((t: any) => {
+          const rawRating = t.ratingsSummary?.aggregateRating;
+          const parsedRating =
+            typeof rawRating === 'number'
+              ? rawRating
+              : rawRating
+                ? parseFloat(String(rawRating))
+                : undefined;
+          return {
+            id: t.id,
+            title: t.titleText || t.originalTitleText,
+            image: t.primaryImage?.url || undefined,
+            rating:
+              parsedRating !== undefined && !isNaN(parsedRating)
+                ? parsedRating
+                : undefined,
+            voteCount: t.ratingsSummary?.voteCount || undefined,
+            mediaType: t.titleType?.id === 'tvSeries' ? 'tv' : 'movie',
+          };
+        })
+      : undefined,
+    watchlistCount: engagementStats?.watchlistStatistics?.displayableCount || undefined,
+    awardsText,
+    totalSeasons,
+    totalEpisodes,
+    upcomingSeason,
+  };
+}
+
+async function fetchProxyStory(imdbId: string, signal?: AbortSignal): Promise<TmdbStoryData | null> {
+  const proxyUrl = getProxyApiUrl();
+  if (!proxyUrl) return null;
+
+  try {
+    const response = await axios.get(proxyUrl, {
+      params: { url: imdbId },
+      signal,
+      timeout: 15000,
+    });
+    return parseProxyResponse(response.data);
+  } catch (e) {
+    console.warn('[Story] Proxy API failed, will try TMDB fallback:', e);
+    return null;
+  }
+}
 
 const resolveTmdbIdentity = async ({
   apiKey,
@@ -157,7 +455,7 @@ const normalizeStoryData = ({
 }): TmdbStoryData => {
   const isTv = mediaType === 'tv';
   const creditData = isTv ? details.aggregate_credits : details.credits;
-  const cast = (creditData?.cast ?? []).slice(0, 16).map(
+  const cast = (creditData?.cast ?? []).slice(0, 24).map(
     (person: any): TmdbStoryCastMember => ({
       id: person.id,
       name: person.name,
@@ -177,17 +475,7 @@ const normalizeStoryData = ({
     ? (details.keywords?.results ?? [])
     : (details.keywords?.keywords ?? []);
   const collectionItems: TmdbStoryCollectionItem[] = isTv
-    ? (details.seasons ?? [])
-        .filter((season: any) => season.season_number > 0)
-        .map((season: any) => ({
-          id: season.id,
-          title: season.name,
-          subtitle:
-            season.episode_count != null
-              ? `${season.episode_count} episodes`
-              : undefined,
-          imagePath: getImagePath(season.poster_path),
-        }))
+    ? []
     : (collection?.parts ?? []).map((movie: any) => ({
         id: movie.id,
         title: movie.title,
@@ -207,6 +495,13 @@ const normalizeStoryData = ({
   const youtubeVideos = (details.videos?.results ?? []).filter(
     (video: any) => video.site === 'YouTube' && video.key,
   );
+  const tmdbTrailers: StoryVideo[] = youtubeVideos
+    .filter((v: any) => v.type === 'Trailer' || v.type === 'Teaser' || v.type === 'Clip')
+    .map((v: any) => ({
+      id: v.id || v.key,
+      name: v.name,
+      youtubeKey: v.key,
+    }));
   const trailer =
     youtubeVideos.find(
       (video: any) => video.type === 'Trailer' && video.official,
@@ -215,10 +510,22 @@ const normalizeStoryData = ({
     youtubeVideos.find((video: any) => video.type === 'Teaser') ??
     youtubeVideos[0];
 
+  const tmdbReviews = details.reviews?.results ?? [];
+  const review = tmdbReviews[0];
+  const featuredReview = review
+    ? {
+        author: review.author || review.author_details?.username || undefined,
+        summary: undefined,
+        text: review.content || undefined,
+        rating: review.author_details?.rating || undefined,
+        date: review.created_at || undefined,
+      }
+    : undefined;
+
   return {
     id: details.id,
     mediaType,
-    title: isTv ? details.name : details.title,
+    title: isTv ? (details.name || '') : (details.title || ''),
     tagline: details.tagline || undefined,
     overview: details.overview || undefined,
     backdropPath: getImagePath(details.backdrop_path),
@@ -226,6 +533,7 @@ const normalizeStoryData = ({
     posterPath: getImagePath(details.poster_path),
     trailerKey: trailer?.key,
     trailerName: trailer?.name,
+    trailers: tmdbTrailers,
     releaseDate: isTv ? details.first_air_date : details.release_date,
     runtime: isTv ? details.episode_run_time?.[0] : details.runtime,
     genres: (details.genres ?? []).map((genre: any) => genre.name),
@@ -253,6 +561,9 @@ const normalizeStoryData = ({
     collectionTitle:
       collection?.name || details.belongs_to_collection?.name || undefined,
     collectionItems,
+    featuredReview,
+    totalSeasons: details.number_of_seasons || (details.seasons ? details.seasons.filter((s: any) => s.season_number > 0).length : undefined),
+    totalEpisodes: details.number_of_episodes,
   };
 };
 
@@ -278,8 +589,8 @@ const fetchTmdbStory = async ({
   });
   const appendToResponse =
     identity.mediaType === 'tv'
-      ? 'aggregate_credits,content_ratings,keywords,external_ids,images,videos'
-      : 'credits,release_dates,keywords,external_ids,images,videos';
+      ? 'aggregate_credits,content_ratings,keywords,external_ids,images,videos,reviews'
+      : 'credits,release_dates,keywords,external_ids,images,videos,reviews';
   const detailsResponse = await axios.get(
     `${TMDB_API_URL}/${identity.mediaType}/${identity.id}`,
     {
@@ -331,6 +642,35 @@ const fetchTmdbStory = async ({
   });
 };
 
+export const fetchStoryData = async (
+  options: Omit<UseTmdbStoryOptions, 'enabled'> & { signal?: AbortSignal },
+): Promise<TmdbStoryData> => {
+  const userTmdbKey = settingsStorage.getTmdbApiKey();
+  const hasCustomTmdbKey = Boolean(userTmdbKey);
+  const proxyApiUrl = getProxyApiUrl();
+
+  // If user explicitly configured custom TMDB key, use TMDB directly
+  if (hasCustomTmdbKey) {
+    return fetchTmdbStory(options);
+  }
+
+  // If proxy API URL is present in env, try proxy API first
+  if (proxyApiUrl && options.imdbId) {
+    const proxyResult = await fetchProxyStory(options.imdbId, options.signal);
+    if (proxyResult) {
+      return proxyResult;
+    }
+  }
+
+  // Fallback to TMDB if proxy is not configured in env or if proxy failed / no imdbId
+  const envKey = String(Constants.expoConfig?.extra?.tmdbApiKey || '').trim();
+  if (envKey || userTmdbKey) {
+    return fetchTmdbStory(options);
+  }
+
+  throw new Error('Could not fetch metadata. No proxy available and no TMDB API key configured.');
+};
+
 export const useTmdbStory = ({
   enabled,
   imdbId,
@@ -347,7 +687,7 @@ export const useTmdbStory = ({
       type || '',
       apiKeyRevision,
     ],
-    queryFn: ({signal}) => fetchTmdbStory({imdbId, signal, tmdbId, type}),
+    queryFn: ({signal}) => fetchStoryData({imdbId, signal, tmdbId, type}),
     enabled: enabled && Boolean(tmdbId || imdbId),
     staleTime: 24 * 60 * 60 * 1000,
     gcTime: 48 * 60 * 60 * 1000,

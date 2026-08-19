@@ -1,5 +1,6 @@
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
-import React, {useState} from 'react';
+import {useFocusEffect} from '@react-navigation/native';
+import React, {useCallback, useState} from 'react';
 import {Pressable, TextInput, ToastAndroid, View} from 'react-native';
 import AppText from '../../../components/ui/Text';
 import SettingsSection from '../../../components/ui/SettingsSection';
@@ -8,20 +9,32 @@ import {useM3Colors} from '../../../theme/M3PaletteContext';
 
 const TmdbApiKeyPreference = () => {
   const colors = useM3Colors();
-  const initialKey = settingsStorage.getTmdbApiKey();
-  const [savedKey, setSavedKey] = useState(initialKey);
-  const [inputKey, setInputKey] = useState(initialKey);
+  const [savedKey, setSavedKey] = useState(() => settingsStorage.getTmdbApiKey());
+  const [inputKey, setInputKey] = useState(() => settingsStorage.getTmdbApiKey());
   const [showKey, setShowKey] = useState(false);
-  const normalizedInput = inputKey.trim();
-  const canSave = Boolean(normalizedInput) && normalizedInput !== savedKey;
 
-  const saveKey = () => {
-    if (!normalizedInput) {
+  // Sync state from storage whenever screen gains focus
+  useFocusEffect(
+    useCallback(() => {
+      const currentStoredKey = settingsStorage.getTmdbApiKey();
+      setSavedKey(currentStoredKey);
+      setInputKey(currentStoredKey);
+    }, []),
+  );
+
+  const normalizedInput = inputKey.trim();
+  const isDirty = normalizedInput !== savedKey;
+  const canSave = isDirty && Boolean(normalizedInput);
+
+  const saveKey = (overrideValue?: string) => {
+    const keyToSave = (overrideValue !== undefined ? overrideValue : inputKey).trim();
+    if (!keyToSave) {
+      clearKey();
       return;
     }
-    settingsStorage.setTmdbApiKey(normalizedInput);
-    setInputKey(normalizedInput);
-    setSavedKey(normalizedInput);
+    settingsStorage.setTmdbApiKey(keyToSave);
+    setInputKey(keyToSave);
+    setSavedKey(keyToSave);
     ToastAndroid.show('Custom TMDB API key saved', ToastAndroid.SHORT);
   };
 
@@ -29,7 +42,13 @@ const TmdbApiKeyPreference = () => {
     settingsStorage.setTmdbApiKey('');
     setInputKey('');
     setSavedKey('');
-    ToastAndroid.show('Using the default TMDB API key', ToastAndroid.SHORT);
+    ToastAndroid.show('Using bundled default key', ToastAndroid.SHORT);
+  };
+
+  const handleBlur = () => {
+    if (normalizedInput && normalizedInput !== savedKey) {
+      saveKey(normalizedInput);
+    }
   };
 
   return (
@@ -63,10 +82,12 @@ const TmdbApiKeyPreference = () => {
             autoCapitalize="none"
             autoCorrect={false}
             importantForAutofill="no"
+            onBlur={handleBlur}
             onChangeText={setInputKey}
-            onSubmitEditing={saveKey}
+            onSubmitEditing={() => saveKey()}
             placeholder="Enter TMDB API v3 key"
             placeholderTextColor={colors.onSurfaceVariant}
+            returnKeyType="done"
             secureTextEntry={!showKey}
             selectionColor={colors.primary}
             style={{
@@ -101,7 +122,7 @@ const TmdbApiKeyPreference = () => {
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Clear custom TMDB API key"
-            disabled={!savedKey}
+            disabled={!savedKey && !inputKey}
             onPress={clearKey}
             style={({pressed}) => ({
               alignItems: 'center',
@@ -110,7 +131,7 @@ const TmdbApiKeyPreference = () => {
               flex: 1,
               height: 48,
               justifyContent: 'center',
-              opacity: !savedKey ? 0.38 : pressed ? 0.72 : 1,
+              opacity: !savedKey && !inputKey ? 0.38 : pressed ? 0.72 : 1,
             })}>
             <AppText
               role="labelLargeEmphasized"
@@ -122,7 +143,7 @@ const TmdbApiKeyPreference = () => {
             accessibilityRole="button"
             accessibilityLabel="Save custom TMDB API key"
             disabled={!canSave}
-            onPress={saveKey}
+            onPress={() => saveKey()}
             style={({pressed}) => ({
               alignItems: 'center',
               backgroundColor: colors.primary,
@@ -140,14 +161,46 @@ const TmdbApiKeyPreference = () => {
           </Pressable>
         </View>
 
-        <AppText
-          role="labelSmall"
+        <View
           style={{
-            color: savedKey ? colors.primary : colors.onSurfaceVariant,
+            alignItems: 'center',
+            flexDirection: 'row',
+            gap: 6,
             marginTop: 12,
           }}>
-          {savedKey ? 'Custom key active' : 'Using bundled default key'}
-        </AppText>
+          <MaterialCommunityIcons
+            name={
+              savedKey
+                ? 'check-circle-outline'
+                : isDirty
+                  ? 'alert-circle-outline'
+                  : 'information-outline'
+            }
+            size={16}
+            color={
+              savedKey
+                ? '#22c55e'
+                : isDirty
+                  ? colors.primary
+                  : colors.onSurfaceVariant
+            }
+          />
+          <AppText
+            role="labelSmall"
+            style={{
+              color: savedKey
+                ? '#22c55e'
+                : isDirty
+                  ? colors.primary
+                  : colors.onSurfaceVariant,
+            }}>
+            {savedKey
+              ? `Custom key active (${savedKey.slice(0, 4)}...${savedKey.slice(-4)})`
+              : isDirty
+                ? 'Unsaved changes — tap Save to apply'
+                : 'Using bundled default key'}
+          </AppText>
+        </View>
       </View>
     </SettingsSection>
   );

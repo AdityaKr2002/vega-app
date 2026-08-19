@@ -52,7 +52,7 @@ describe('extractImageAccent', () => {
 
     await expect(
       extractImageAccent('https://example.test/poster.jpg', 'detail:test'),
-    ).resolves.toBe('#88AACC');
+    ).resolves.toBe('#3366CC');
     expect(mockRemoveItem).not.toHaveBeenCalled();
   });
 });

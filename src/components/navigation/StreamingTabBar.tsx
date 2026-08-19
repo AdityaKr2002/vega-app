@@ -32,10 +32,7 @@ const StreamingTabBar = ({
   const {width: windowWidth} = useWindowDimensions();
   const isNavigationRail = windowWidth > 768;
   const showLabels = settingsStorage.showTabBarLabels();
-  const bottomBarPadding =
-    Platform.OS === 'android'
-      ? Math.min(Math.max(insets.bottom, 8), 20)
-      : Math.max(insets.bottom, 8);
+  const bottomBarPadding = Math.max(insets.bottom, 8);
 
   return (
     <View

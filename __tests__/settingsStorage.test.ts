@@ -42,6 +42,7 @@ describe('settings defaults', () => {
     expect(settingsStorage.isSwipeGestureEnabled()).toBe(true);
     expect(settingsStorage.isTelemetryOptIn()).toBe(true);
     expect(settingsStorage.isDohEnabled()).toBe(true);
+    expect(settingsStorage.showPlayerEpisodeSidebar()).toBe(true);
   });
 
   it('keeps intentional default-off preferences disabled', () => {

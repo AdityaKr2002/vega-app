@@ -56,7 +56,7 @@ jest.mock('react-native', () => ({
     SafCopyModule: {
       copyFileToUri: async (from: string, uri: string) =>
         mockSafFiles.set(uri, mockFiles.get(from) || 0),
-      getUriSize: async (uri: string) => mockSafFiles.get(uri) || 0,
+      getUriSize: async (uri: string) => mockSafFiles.get(uri) ?? -1,
     },
   },
 }));
@@ -273,7 +273,7 @@ describe('download startup reconciliation', () => {
     expect(useDownloadsStore.getState().downloads.movie_direct_0).toMatchObject(
       {
         status: 'completed',
-        filePath: 'content://downloads/tree/movie/Movie.mp4',
+        filePath: 'content://downloads/tree/Movie/Movie.mp4',
       },
     );
   });

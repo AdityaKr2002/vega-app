@@ -37,7 +37,7 @@ const WafWebViewDialog = () => {
   // Set while waiting for a fresh HTML capture before resolving.
   const pendingResolveRef = useRef(false);
   const fallbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const initialCookiesRef = useRef<Record<string, string>>({});
+  const initialCookiesRef = useRef<Set<string>>(new Set());
   const webViewReadyRef = useRef(false);
 
   const userAgent =
@@ -50,7 +50,7 @@ const WafWebViewDialog = () => {
     htmlRef.current = '';
     setLoading(true);
     webViewReadyRef.current = false;
-    initialCookiesRef.current = {};
+    initialCookiesRef.current = new Set();
     let cancelled = false;
 
     // Snapshot existing cookies so we only auto-resolve on NEW/UPDATED ones
@@ -58,7 +58,7 @@ const WafWebViewDialog = () => {
       (async () => {
         const cookieMap = await getCookies(request.url);
         if (!cancelled) {
-          initialCookiesRef.current = cookieMap;
+          initialCookiesRef.current = new Set(Object.keys(cookieMap).filter(k => cookieMap[k] !== ''));
           webViewReadyRef.current = true;
         }
       })();
@@ -154,7 +154,7 @@ const WafWebViewDialog = () => {
       const cookieMap = await getCookies(url);
       if (
         cookieMap[cookieName] &&
-        cookieMap[cookieName] !== initialCookiesRef.current[cookieName]
+        !initialCookiesRef.current.has(cookieName)
       ) {
         resolveWithPage();
       }
@@ -274,3 +274,4 @@ const WafWebViewDialog = () => {
 };
 
 export default WafWebViewDialog;
+

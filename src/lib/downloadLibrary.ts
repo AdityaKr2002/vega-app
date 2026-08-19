@@ -1,4 +1,5 @@
 import type {DownloadItem} from './zustand/downloadsStore';
+import {isSubtitleDownloadItem} from './downloadId';
 
 export interface DownloadedMediaGroup {
   id: string;
@@ -54,7 +55,9 @@ export const groupCompletedDownloads = (
 ): DownloadedMediaGroup[] => {
   const groups = new Map<string, DownloadedMediaGroup>();
 
-  items.forEach(item => {
+  items
+    .filter(item => !isSubtitleDownloadItem(item))
+    .forEach(item => {
     const groupId = getMediaGroupId(item);
     const existing = groups.get(groupId);
     if (existing) {

@@ -18,13 +18,15 @@ describe('download identity and filenames', () => {
   it('keeps identity separate from safe physical filenames', () => {
     const id = createSeriesDownloadId('Pokémon', 'Season 1', 0);
     expect(id).toBe('Pokémon_SSeason 1_E1');
-    expect(createDownloadFileName(id)).toBe('Pokemon_SSeason_1_E1');
-    expect(sanitizeDownloadFileName('Épisode 1: A/B?')).toBe('Episode_1_A_B');
+    expect(createDownloadFileName(id)).toBe('Pokemon_SSeason 1_E1');
+    expect(sanitizeDownloadFileName('Épisode 1: (A/B) [Dubbed]?')).toBe(
+      'Episode 1 (A B) [Dubbed]',
+    );
   });
 
   it('sanitizes subtitle names', () => {
-    expect(createSubtitleFileName('Movie Name', 'English / Signs')).toBe(
-      'Movie_Name-English_Signs',
+    expect(createSubtitleFileName('Movie Name', 'English (Signs)')).toBe(
+      'Movie Name - English (Signs)',
     );
     expect(sanitizeDownloadFileName('***')).toBe('download');
   });

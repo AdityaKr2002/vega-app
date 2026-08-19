@@ -22,15 +22,15 @@ import * as SystemUI from 'expo-system-ui';
 // import DisableProviders from './screens/settings/DisableProviders';
 import About, {checkForUpdate} from './screens/settings/About';
 import BootSplash from 'react-native-bootsplash';
+import {SystemBars} from 'react-native-edge-to-edge';
 import {enableFreeze, enableScreens} from 'react-native-screens';
 import Preferences from './screens/settings/Preference';
 import Appearance from './screens/settings/Appearance';
 import {M3ThemeProvider} from './theme/M3ThemeProvider';
-import {AppState, LogBox, useWindowDimensions} from 'react-native';
+import {AppState, LogBox, useWindowDimensions, View} from 'react-native';
 import {EpisodeLink} from './lib/providers/types';
 import {
   SafeAreaProvider,
-  SafeAreaView,
   useSafeAreaInsets,
 } from 'react-native-safe-area-context';
 import Downloads from './screens/downloads/Downloads';
@@ -191,8 +191,6 @@ const App = () => {
     isFirebaseNativeReady();
 
   // const showTabBarLables = settingsStorage.showTabBarLabels();
-
-  SystemUI.setBackgroundColorAsync('black');
 
   useEffect(() => {
     let reconciled = false;
@@ -548,19 +546,12 @@ const App = () => {
 
   return (
     <SafeAreaProvider>
+      <SystemBars style="light" />
       <M3ThemeProvider>
         <AppDialogHost />
         <GlobalErrorBoundary>
           <QueryClientProvider client={queryClient}>
-            <SafeAreaView
-              edges={{
-                right: 'off',
-                top: 'off',
-                left: 'off',
-                bottom: 'additive',
-              }}
-              className="flex-1"
-              style={{backgroundColor: 'black'}}>
+            <View className="flex-1 bg-black">
               <NavigationContainer
                 ref={navigationRef}
                 onReady={async () => {
@@ -640,7 +631,12 @@ const App = () => {
                   <Stack.Screen
                     name="Player"
                     component={Player}
-                    options={{orientation: 'landscape'}}
+                    options={{
+                      orientation: 'landscape',
+                      statusBarHidden: true,
+                      navigationBarHidden: true,
+                      autoHideHomeIndicator: true,
+                    }}
                   />
                 </Stack.Navigator>
               </NavigationContainer>
@@ -651,7 +647,7 @@ const App = () => {
                 mounted for the app lifetime: every provider call is dispatched
                 into it. */}
               <ProviderSandboxHost />
-            </SafeAreaView>
+            </View>
           </QueryClientProvider>
         </GlobalErrorBoundary>
       </M3ThemeProvider>

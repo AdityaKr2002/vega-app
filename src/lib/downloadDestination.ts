@@ -229,14 +229,9 @@ export const deleteDownloadOutput = async (
   }
 
   if (filePath.startsWith('content://')) {
-    const info = await FileSystem.getInfoAsync(filePath).catch(() => ({
-      exists: false,
-    }));
-    if (info.exists) {
-      await FileSystem.StorageAccessFramework.deleteAsync(filePath).catch(
-        () => undefined,
-      );
-    }
+    await FileSystem.StorageAccessFramework.deleteAsync(filePath).catch(
+      () => undefined,
+    );
     const location = options?.downloadLocation;
     if (location && isSafDownloadLocation(location)) {
       try {
@@ -281,6 +276,14 @@ export const downloadOutputExists = async (
     return false;
   }
   if (filePath.startsWith('content://')) {
+    try {
+      const nativeSize = await getSafCopyModule()?.getUriSize?.(filePath);
+      if (typeof nativeSize === 'number') {
+        return nativeSize >= 0;
+      }
+    } catch {
+      return false;
+    }
     return FileSystem.getInfoAsync(filePath)
       .then(info => info.exists)
       .catch(() => false);

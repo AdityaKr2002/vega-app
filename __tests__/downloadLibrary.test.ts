@@ -149,6 +149,28 @@ describe('downloaded library grouping', () => {
     ]);
   });
 
+  it('excludes subtitle download items from groups', () => {
+    const groups = groupCompletedDownloads([
+      createItem({
+        id: 'Show_SSeason 1_E1',
+        showName: 'Show',
+        episodeName: 'Episode 1',
+      }),
+      createItem({
+        id: 'Show_SSeason 1_E1_subtitle_English',
+        showName: 'Show',
+        episodeName: 'Episode 1',
+        title: 'Show Episode 1 English Subtitle',
+        isSubtitle: true,
+        videoType: 'vtt',
+      }),
+    ]);
+
+    expect(groups).toHaveLength(1);
+    expect(groups[0].items).toHaveLength(1);
+    expect(groups[0].items[0].id).toBe('Show_SSeason 1_E1');
+  });
+
   it('sorts episodes using the stable download ID', () => {
     const sorted = sortDownloadedEpisodes([
       createItem({id: 'Show_SSeason 2_E1', seasonTitle: 'Season 2'}),
