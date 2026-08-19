@@ -1,0 +1,478 @@
+import { MaterialCommunityIcons } from '@expo/vector-icons';
+import React, { useCallback, useEffect, useState } from 'react';
+import {
+  ActivityIndicator,
+  Image,
+  Modal,
+  Pressable,
+  ScrollView,
+  TextInput,
+  ToastAndroid,
+  View,
+} from 'react-native';
+import { providerManager } from '../../../lib/services/ProviderManager';
+import { providerKvStorage } from '../../../lib/storage/StorageService';
+import type { ProviderExtension } from '../../../lib/storage/extensionStorage';
+import type { SettingsField, SelectOption } from '../../../lib/providers/types';
+import { useM3Colors } from '../../../theme/M3PaletteContext';
+import AppText from '../../../components/ui/Text';
+import SettingsSwitchRow from '../../../components/ui/SettingsSwitchRow';
+import DropdownField from '../../../components/ui/DropdownField';
+
+interface ProviderSettingsModalProps {
+  visible: boolean;
+  provider: ProviderExtension | null;
+  onClose: () => void;
+}
+
+export const ProviderSettingsModal: React.FC<ProviderSettingsModalProps> = ({
+  visible,
+  provider,
+  onClose,
+}) => {
+  const colors = useM3Colors();
+  const [fields, setFields] = useState<SettingsField[]>([]);
+  const [values, setValues] = useState<Record<string, unknown>>({});
+  const [loading, setLoading] = useState(false);
+
+  const loadSchemaAndValues = useCallback(async () => {
+    if (!provider) return;
+    setLoading(true);
+    try {
+      const schema = await providerManager.getSettingsSchema({
+        providerValue: provider.value,
+        sourceAuthor: provider.source?.author,
+      });
+      setFields(schema);
+
+      const initialValues: Record<string, unknown> = {};
+      for (const field of schema) {
+        const storedRaw = providerKvStorage.getString(field.key);
+        if (storedRaw !== undefined && storedRaw !== null) {
+          try {
+            initialValues[field.key] = JSON.parse(storedRaw);
+          } catch {
+            initialValues[field.key] = storedRaw;
+          }
+        } else if (field.defaultValue !== undefined) {
+          initialValues[field.key] = field.defaultValue;
+        }
+      }
+      setValues(initialValues);
+    } catch (err) {
+      console.error('Failed to load settings schema:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, [provider]);
+
+  useEffect(() => {
+    if (visible && provider) {
+      loadSchemaAndValues();
+    } else {
+      setFields([]);
+      setValues({});
+    }
+  }, [visible, provider, loadSchemaAndValues]);
+
+  const handleChange = (key: string, val: unknown) => {
+    setValues(prev => ({ ...prev, [key]: val }));
+  };
+
+  const handleSave = () => {
+    for (const [key, value] of Object.entries(values)) {
+      if (value === undefined || value === null || value === '') {
+        providerKvStorage.delete(key);
+      } else {
+        providerKvStorage.setString(key, JSON.stringify(value));
+      }
+    }
+    onClose();
+  };
+
+  if (!visible || !provider) {
+    return null;
+  }
+
+  return (
+    <Modal
+      visible={visible}
+      animationType="fade"
+      transparent
+      onRequestClose={onClose}>
+      <View className="flex-1 justify-end bg-black/60">
+        <View
+          className="max-h-[85%] rounded-t-3xl p-5"
+          style={{ backgroundColor: colors.surfaceContainer }}>
+          {/* Header */}
+          <View className="mb-4 flex-row items-center justify-between pb-3 border-b"
+            style={{ borderColor: colors.outlineVariant }}>
+            <View className="flex-row items-center gap-3">
+              <View
+                className="h-11 w-11 items-center justify-center overflow-hidden rounded-2xl"
+                style={{ backgroundColor: colors.surfaceContainerHighest }}>
+                {provider.icon ? (
+                  <Image
+                    source={{ uri: provider.icon }}
+                    className="h-full w-full"
+                    resizeMode="cover"
+                  />
+                ) : (
+                  <MaterialCommunityIcons
+                    name="cog-outline"
+                    size={24}
+                    color={colors.primary}
+                  />
+                )}
+              </View>
+              <View>
+                <AppText role="titleMedium" style={{ color: colors.onSurface }}>
+                  {provider.display_name} Settings
+                </AppText>
+                <AppText role="bodySmall" style={{ color: colors.onSurfaceVariant }}>
+                  Configure provider options
+                </AppText>
+              </View>
+            </View>
+            <Pressable
+              onPress={onClose}
+              android_ripple={{ color: colors.onSurfaceVariant, borderless: true, radius: 18 }}
+              className="h-9 w-9 items-center justify-center rounded-full"
+              style={{ backgroundColor: colors.surfaceContainerHighest }}>
+              <MaterialCommunityIcons
+                name="close"
+                size={20}
+                color={colors.onSurfaceVariant}
+              />
+            </Pressable>
+          </View>
+
+          {/* Body */}
+          {loading ? (
+            <View className="items-center justify-center py-12">
+              <ActivityIndicator size="large" color={colors.primary} />
+              <AppText
+                role="bodyMedium"
+                style={{ color: colors.onSurfaceVariant, marginTop: 12 }}>
+                Loading settings...
+              </AppText>
+            </View>
+          ) : fields.length === 0 ? (
+            <View className="items-center justify-center py-10">
+              <MaterialCommunityIcons
+                name="tune-vertical"
+                size={40}
+                color={colors.onSurfaceVariant}
+              />
+              <AppText
+                role="bodyMedium"
+                style={{ color: colors.onSurfaceVariant, marginTop: 8 }}>
+                No configurable settings for this provider.
+              </AppText>
+            </View>
+          ) : (
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={{ paddingBottom: 20 }}>
+              <View className="gap-4">
+                {fields.map(field => {
+                  const currentValue = values[field.key];
+
+                  if (field.type === 'toggle') {
+                    return (
+                      <View
+                        key={field.key}
+                        className="rounded-2xl overflow-hidden"
+                        style={{
+                          backgroundColor: colors.surfaceContainerHigh,
+                          borderColor: colors.outlineVariant,
+                          borderWidth: 1,
+                        }}>
+                        <SettingsSwitchRow
+                          title={field.label}
+                          description={field.description}
+                          value={Boolean(currentValue)}
+                          onValueChange={val => handleChange(field.key, val)}
+                          divider={false}
+                        />
+                      </View>
+                    );
+                  }
+
+                  if (field.type === 'select') {
+                    const selectedOption = field.options.find(
+                      opt => opt.value === currentValue,
+                    );
+
+                    return (
+                      <View
+                        key={field.key}
+                        className="rounded-2xl p-4"
+                        style={{
+                          backgroundColor: colors.surfaceContainerHigh,
+                          borderColor: colors.outlineVariant,
+                          borderWidth: 1,
+                        }}>
+                        <AppText
+                          role="bodyLargeEmphasized"
+                          style={{ color: colors.onSurface }}>
+                          {field.label}
+                        </AppText>
+                        {field.description ? (
+                          <AppText
+                            role="bodySmall"
+                            style={{
+                              color: colors.onSurfaceVariant,
+                              marginTop: 2,
+                              marginBottom: 10,
+                            }}>
+                            {field.description}
+                          </AppText>
+                        ) : (
+                          <View style={{ height: 10 }} />
+                        )}
+
+                        <DropdownField
+                          options={field.options}
+                          value={selectedOption}
+                          getKey={opt => opt.value}
+                          getLabel={opt => opt.label}
+                          onChange={opt => handleChange(field.key, opt.value)}
+                        />
+                      </View>
+                    );
+                  }
+
+                  if (field.type === 'multiselect') {
+                    const selectedList: string[] = Array.isArray(currentValue)
+                      ? (currentValue as string[])
+                      : [];
+
+                    const toggleOption = (optValue: string) => {
+                      const exists = selectedList.includes(optValue);
+                      const updated = exists
+                        ? selectedList.filter(v => v !== optValue)
+                        : [...selectedList, optValue];
+                      handleChange(field.key, updated);
+                    };
+
+                    return (
+                      <View
+                        key={field.key}
+                        className="rounded-2xl p-4"
+                        style={{
+                          backgroundColor: colors.surfaceContainerHigh,
+                          borderColor: colors.outlineVariant,
+                          borderWidth: 1,
+                        }}>
+                        <AppText
+                          role="bodyLargeEmphasized"
+                          style={{ color: colors.onSurface }}>
+                          {field.label}
+                        </AppText>
+                        {field.description ? (
+                          <AppText
+                            role="bodySmall"
+                            style={{ color: colors.onSurfaceVariant, marginTop: 2 }}>
+                            {field.description}
+                          </AppText>
+                        ) : null}
+
+                        <View
+                          className="mt-3 rounded-xl border overflow-hidden p-1 gap-1"
+                          style={{
+                            backgroundColor: colors.surfaceContainerLowest,
+                            borderColor: colors.outlineVariant,
+                          }}>
+                          {field.options.map((opt: SelectOption) => {
+                            const isSelected = selectedList.includes(opt.value);
+                            return (
+                              <Pressable
+                                key={opt.value}
+                                onPress={() => toggleOption(opt.value)}
+                                className="flex-row items-center justify-between px-3 py-2.5 rounded-lg"
+                                style={({ pressed }) => ({
+                                  backgroundColor: isSelected
+                                    ? colors.primaryContainer
+                                    : pressed
+                                      ? colors.surfaceContainerHighest
+                                      : 'transparent',
+                                })}>
+                                <AppText
+                                  role="bodyMedium"
+                                  style={{
+                                    color: isSelected
+                                      ? colors.onPrimaryContainer
+                                      : colors.onSurface,
+                                    fontWeight: isSelected ? '700' : '400',
+                                  }}>
+                                  {opt.label}
+                                </AppText>
+                                <MaterialCommunityIcons
+                                  name={
+                                    isSelected
+                                      ? 'checkbox-marked'
+                                      : 'checkbox-blank-outline'
+                                  }
+                                  size={20}
+                                  color={
+                                    isSelected
+                                      ? colors.onPrimaryContainer
+                                      : colors.onSurfaceVariant
+                                  }
+                                />
+                              </Pressable>
+                            );
+                          })}
+                        </View>
+                      </View>
+                    );
+                  }
+
+                  if (field.type === 'number') {
+                    return (
+                      <View
+                        key={field.key}
+                        className="rounded-2xl p-4"
+                        style={{
+                          backgroundColor: colors.surfaceContainerHigh,
+                          borderColor: colors.outlineVariant,
+                          borderWidth: 1,
+                        }}>
+                        <AppText
+                          role="bodyLargeEmphasized"
+                          style={{ color: colors.onSurface }}>
+                          {field.label}
+                        </AppText>
+                        {field.description ? (
+                          <AppText
+                            role="bodySmall"
+                            style={{ color: colors.onSurfaceVariant, marginTop: 2 }}>
+                            {field.description}
+                          </AppText>
+                        ) : null}
+                        <TextInput
+                          value={
+                            currentValue !== undefined ? String(currentValue) : ''
+                          }
+                          onChangeText={text => {
+                            const num = Number(text);
+                            handleChange(
+                              field.key,
+                              isNaN(num) ? undefined : num,
+                            );
+                          }}
+                          keyboardType="numeric"
+                          className="mt-3 h-12 px-3.5 rounded-xl border text-sm"
+                          style={{
+                            backgroundColor: colors.surfaceContainerHighest,
+                            borderColor: colors.outlineVariant,
+                            color: colors.onSurface,
+                          }}
+                        />
+                      </View>
+                    );
+                  }
+
+                  // Default: text
+                  return (
+                    <View
+                      key={field.key}
+                      className="rounded-2xl p-4"
+                      style={{
+                        backgroundColor: colors.surfaceContainerHigh,
+                        borderColor: colors.outlineVariant,
+                        borderWidth: 1,
+                      }}>
+                      <AppText
+                        role="bodyLargeEmphasized"
+                        style={{ color: colors.onSurface }}>
+                        {field.label}
+                      </AppText>
+                      {field.description ? (
+                        <AppText
+                          role="bodySmall"
+                          style={{ color: colors.onSurfaceVariant, marginTop: 2 }}>
+                          {field.description}
+                        </AppText>
+                      ) : null}
+                      <TextInput
+                        value={typeof currentValue === 'string' ? currentValue : ''}
+                        onChangeText={text => handleChange(field.key, text)}
+                        placeholder={field.placeholder}
+                        placeholderTextColor={colors.onSurfaceVariant}
+                        className="mt-3 h-12 px-3.5 rounded-xl border text-sm"
+                        style={{
+                          backgroundColor: colors.surfaceContainerHighest,
+                          borderColor: colors.outlineVariant,
+                          color: colors.onSurface,
+                        }}
+                      />
+                    </View>
+                  );
+                })}
+              </View>
+            </ScrollView>
+          )}
+
+          {/* Footer Actions */}
+          <View className="mt-3 flex-row gap-3 pt-3 border-t"
+            style={{ borderColor: colors.outlineVariant }}>
+            <View
+              className="h-12 flex-1 overflow-hidden"
+              style={{
+                backgroundColor: colors.surfaceContainerHighest,
+                borderRadius: 16,
+              }}>
+              <Pressable
+                onPress={onClose}
+                android_ripple={{ color: colors.onSurfaceVariant, borderless: false }}
+                className="h-full w-full items-center justify-center">
+                <AppText role="labelLarge" style={{ color: colors.onSurface }}>
+                  Cancel
+                </AppText>
+              </Pressable>
+            </View>
+            <View
+              className="h-12 flex-1 overflow-hidden"
+              style={{
+                backgroundColor:
+                  loading || fields.length === 0
+                    ? colors.surfaceContainerHighest
+                    : colors.primary,
+                borderRadius: 16,
+              }}>
+              <Pressable
+                disabled={loading || fields.length === 0}
+                onPress={handleSave}
+                android_ripple={{
+                  color:
+                    loading || fields.length === 0
+                      ? colors.onSurfaceVariant
+                      : colors.onPrimary,
+                  borderless: false,
+                }}
+                className="h-full w-full items-center justify-center"
+                style={({ pressed }) => ({
+                  opacity: pressed ? 0.8 : 1,
+                })}>
+                <AppText
+                  role="labelLarge"
+                  style={{
+                    color:
+                      loading || fields.length === 0
+                        ? colors.onSurfaceVariant
+                        : colors.onPrimary,
+                  }}>
+                  Save Changes
+                </AppText>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+};
+
+export default ProviderSettingsModal;

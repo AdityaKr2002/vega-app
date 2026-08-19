@@ -1,4 +1,13 @@
-export type RpcOperation = 'fetch' | 'getBaseUrl' | 'openWebView' | 'crypto';
+export type RpcOperation =
+  | 'fetch'
+  | 'getBaseUrl'
+  | 'openWebView'
+  | 'crypto'
+  | 'kvGet'
+  | 'kvSet'
+  | 'kvDelete'
+  | 'kvKeys'
+  | 'kvClear';
 
 export type SerializedBody =
   | {kind: 'none'}

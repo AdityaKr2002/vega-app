@@ -6,6 +6,64 @@ import {bytesToBase64} from './base64';
 import {providerFetch} from './providerFetch';
 import type {RpcOperation, SerializedRequest} from './protocol';
 import {validateProviderUrl} from './urlGuard';
+import {providerKvStorage} from '../storage/StorageService';
+
+const MAX_KV_KEY_LENGTH = 256;
+const MAX_KV_VALUE_BYTES = 1_000_000;
+
+const validateKvKey = (key: unknown): string => {
+  if (typeof key !== 'string' || !key.trim() || key.length > MAX_KV_KEY_LENGTH) {
+    throw new Error(
+      `Invalid KV key: must be a non-empty string <= ${MAX_KV_KEY_LENGTH} characters`,
+    );
+  }
+  return key;
+};
+
+const handleKvGet = async (args: any): Promise<unknown> => {
+  const key = validateKvKey(args?.key);
+  const raw = providerKvStorage.getString(key);
+  if (raw === undefined || raw === null) {
+    return undefined;
+  }
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return undefined;
+  }
+};
+
+const handleKvSet = async (args: any): Promise<void> => {
+  const key = validateKvKey(args?.key);
+  const value = args?.value;
+  if (value === undefined) {
+    providerKvStorage.delete(key);
+    return;
+  }
+  const serialized = JSON.stringify(value);
+  if (serialized === undefined) {
+    throw new Error('KV value must be JSON-serializable');
+  }
+  if (serialized.length > MAX_KV_VALUE_BYTES) {
+    throw new Error(`KV value exceeds limit of ${MAX_KV_VALUE_BYTES} bytes`);
+  }
+  providerKvStorage.setString(key, serialized);
+};
+
+const handleKvDelete = async (args: any): Promise<boolean> => {
+  const key = validateKvKey(args?.key);
+  const exists = providerKvStorage.contains(key);
+  providerKvStorage.delete(key);
+  return exists;
+};
+
+const handleKvKeys = async (): Promise<string[]> => {
+  return providerKvStorage.getKeys();
+};
+
+const handleKvClear = async (): Promise<void> => {
+  providerKvStorage.clearAll();
+};
 
 const digestAlgorithms: Record<string, Crypto.CryptoDigestAlgorithm> = {
   MD5: Crypto.CryptoDigestAlgorithm.MD5,
@@ -84,6 +142,21 @@ export const handleProviderRpc = async (
 
     case 'crypto':
       return handleCrypto(args);
+
+    case 'kvGet':
+      return handleKvGet(args);
+
+    case 'kvSet':
+      return handleKvSet(args);
+
+    case 'kvDelete':
+      return handleKvDelete(args);
+
+    case 'kvKeys':
+      return handleKvKeys();
+
+    case 'kvClear':
+      return handleKvClear();
 
     default:
       throw new Error(`Unsupported provider operation: ${operation}`);

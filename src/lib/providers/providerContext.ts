@@ -35,4 +35,11 @@ export const providerContext: ProviderContext = {
   Crypto,
   cheerio,
   openWebView,
+  kvStore: {
+    get: async () => undefined,
+    set: async () => {},
+    delete: async () => false,
+    keys: async () => [],
+    clear: async () => {},
+  },
 };

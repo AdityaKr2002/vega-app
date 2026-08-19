@@ -1,4 +1,4 @@
-import React, {useState, useEffect} from 'react';
+import React, {useState, useEffect, useMemo, useCallback} from 'react';
 import {
   View,
   Pressable,
@@ -36,6 +36,7 @@ import AppDialog, {
 import ProviderTestProgressDialog, {
   ProviderTestStepState,
 } from '../../components/ProviderTestProgressDialog';
+import ProviderSettingsModal from './components/ProviderSettingsModal';
 import type {ProviderDiagnosticProgress} from '../../lib/services/providerDiagnostics';
 import AppText from '../../components/ui/Text';
 import {useM3Colors} from '../../theme/M3PaletteContext';
@@ -94,6 +95,8 @@ const Extensions = ({navigation}: Props) => {
   const [providerTest, setProviderTest] = useState<ProviderTestState | null>(
     null,
   );
+  const [settingsProvider, setSettingsProvider] =
+    useState<ProviderExtension | null>(null);
   const [providerTestStatuses, setProviderTestStatuses] = useState<
     Record<string, ProviderTestStatus>
   >({});
@@ -431,55 +434,89 @@ const Extensions = ({navigation}: Props) => {
   const handleRefresh = async () => {
     await refreshProviders(activeSourceAuthor);
   };
-  const renderProviderCard = ({item}: {item: ProviderExtension}) => {
-    if (!item || !item.value) {
-      return null;
-    }
-    const itemKey = `${item.source?.author || ''}:${item.value}`;
-    const isActive =
-      activeExtensionProvider?.value === item.value &&
-      activeExtensionProvider?.source?.author === item.source?.author;
-    const isInstalled = (installedProviders || []).some(installedProvider =>
-      isSameProvider(installedProvider, item),
+  const currentData = useMemo(() => {
+    return Array.from(
+      [...(availableProviders || []), ...(installedProviders || [])]
+        .filter(item => item && item.value)
+        .reduce((providers, item) => {
+          const key = `${item.source?.author || ''}:${item.value}`;
+          const existing = providers.get(key);
+          const cachedModule = extensionStorage.getProviderModules(
+            item.value,
+            item.source?.author,
+          );
+          const hasSettings = Boolean(
+            item.hasSettings ||
+            existing?.hasSettings ||
+            cachedModule?.modules?.settings ||
+            item.value === 'torrentio' ||
+            item.value === '1cinevood' ||
+            item.value === 'example',
+          );
+          providers.set(key, {
+            ...(existing || {}),
+            ...item,
+            hasSettings,
+          });
+          return providers;
+        }, new Map<string, ProviderExtension>())
+        .values(),
     );
-    const isInstalling = installingProvider === itemKey;
-    const isUpdating = updatingProvider === itemKey;
-    const updateInfo = updateInfos.find(
-      info =>
-        info.provider.value === item.value &&
-        info.provider.source?.author === item.source?.author,
-    );
-    const hasUpdate = updateInfo?.hasUpdate || false;
+  }, [availableProviders, installedProviders]);
 
-    return (
-      <ProviderCard
-        provider={item}
-        itemKey={itemKey}
-        installed={isInstalled}
-        active={isActive}
-        installing={isInstalling}
-        updating={isUpdating}
-        testStatus={providerTestStatuses[itemKey] || 'untested'}
-        hasUpdate={hasUpdate}
-        primary={primary}
-        onActivate={() => handleSetActiveProvider(item)}
-        onInstall={() => handleInstallProvider(item)}
-        onUpdate={() => updateInfo && handleUpdateProvider(updateInfo.provider)}
-        onTest={() => handleTestProvider(item)}
-        onUninstall={() => handleUninstallProvider(item)}
-      />
-    );
-  };
-  const currentData = Array.from(
-    [...(availableProviders || []), ...(installedProviders || [])]
-      .filter(item => item && item.value)
-      .reduce((providers, item) => {
-        const key = `${item.source?.author || ''}:${item.value}`;
-        const existing = providers.get(key);
-        providers.set(key, existing ? {...item, ...existing} : item);
-        return providers;
-      }, new Map<string, ProviderExtension>())
-      .values(),
+  const renderProviderCard = useCallback(
+    ({item}: {item: ProviderExtension}) => {
+      if (!item || !item.value) {
+        return null;
+      }
+      const itemKey = `${item.source?.author || ''}:${item.value}`;
+      const isActive =
+        activeExtensionProvider?.value === item.value &&
+        activeExtensionProvider?.source?.author === item.source?.author;
+      const isInstalled = (installedProviders || []).some(installedProvider =>
+        isSameProvider(installedProvider, item),
+      );
+      const isInstalling = installingProvider === itemKey;
+      const isUpdating = updatingProvider === itemKey;
+      const updateInfo = updateInfos.find(
+        info =>
+          info.provider.value === item.value &&
+          info.provider.source?.author === item.source?.author,
+      );
+      const hasUpdate = updateInfo?.hasUpdate || false;
+
+      return (
+        <ProviderCard
+          provider={item}
+          itemKey={itemKey}
+          installed={isInstalled}
+          active={isActive}
+          installing={isInstalling}
+          updating={isUpdating}
+          testStatus={providerTestStatuses[itemKey] || 'untested'}
+          hasUpdate={hasUpdate}
+          hasSettings={item.hasSettings}
+          primary={primary}
+          onActivate={() => handleSetActiveProvider(item)}
+          onInstall={() => handleInstallProvider(item)}
+          onUpdate={() =>
+            updateInfo && handleUpdateProvider(updateInfo.provider)
+          }
+          onTest={() => handleTestProvider(item)}
+          onUninstall={() => handleUninstallProvider(item)}
+          onOpenSettings={() => setSettingsProvider(item)}
+        />
+      );
+    },
+    [
+      activeExtensionProvider,
+      installedProviders,
+      installingProvider,
+      updatingProvider,
+      updateInfos,
+      providerTestStatuses,
+      primary,
+    ],
   );
 
   return (
@@ -604,6 +641,11 @@ const Extensions = ({navigation}: Props) => {
         resultMessage={providerTest?.resultMessage}
         primary={primary}
         onClose={() => setProviderTest(null)}
+      />
+      <ProviderSettingsModal
+        visible={settingsProvider !== null}
+        provider={settingsProvider}
+        onClose={() => setSettingsProvider(null)}
       />
     </View>
   );

@@ -1,7 +1,9 @@
 import {ToastAndroid} from 'react-native';
+import axios from 'axios';
 import {headers as commonHeaders} from '../providers/headers';
-import {Catalog, EpisodeLink, Info, Post, Stream} from '../providers/types';
+import {Catalog, EpisodeLink, Info, Post, Stream, SettingsField} from '../providers/types';
 import {extensionManager} from './ExtensionManager';
+import {extensionStorage} from '../storage/extensionStorage';
 import {MAX_STATE_BYTES} from '../sandbox/protocol';
 import {sandboxBridge, setSandboxStateHandler} from '../sandbox/sandboxBridge';
 
@@ -22,6 +24,7 @@ const getErrorMessage = (error: unknown, fallback: string): string => {
 
 export class ProviderManager {
   private readonly providerState = new Map<string, Record<string, unknown>>();
+  private readonly settingsSchemaCache = new Map<string, SettingsField[]>();
 
   constructor() {
     setSandboxStateHandler((providerValue, state) => {
@@ -35,6 +38,11 @@ export class ProviderManager {
 
   clearProviderState(providerValue: string): void {
     this.providerState.delete(providerValue);
+    for (const key of Array.from(this.settingsSchemaCache.keys())) {
+      if (key.endsWith(`:${providerValue}`)) {
+        this.settingsSchemaCache.delete(key);
+      }
+    }
   }
 
   private getProviderState(providerValue: string): Record<string, unknown> {
@@ -65,7 +73,7 @@ export class ProviderManager {
 
   private getModule(
     providerValue: string,
-    key: 'catalog' | 'posts' | 'meta' | 'stream' | 'episodes',
+    key: 'catalog' | 'posts' | 'meta' | 'stream' | 'episodes' | 'settings',
   ): string | undefined {
     return extensionManager.getProviderModules(providerValue)?.modules[key];
   }
@@ -323,6 +331,81 @@ export class ProviderManager {
       );
       ToastAndroid.show(errorMessage, ToastAndroid.LONG);
       throw new Error(errorMessage);
+    }
+  };
+
+  getSettingsSchema = async ({
+    providerValue,
+    sourceAuthor,
+  }: {
+    providerValue: string;
+    sourceAuthor?: string;
+  }): Promise<SettingsField[]> => {
+    const cacheKey = `${sourceAuthor || ''}:${providerValue}`;
+    const cached = this.settingsSchemaCache.get(cacheKey);
+    if (cached) {
+      return cached;
+    }
+
+    let settingsModule =
+      extensionManager.getProviderModules(providerValue, sourceAuthor)?.modules
+        ?.settings;
+
+    if (!settingsModule) {
+      // Fallback: try on-demand fetch of settings.js
+      const activeSource =
+        extensionStorage
+          .getProviderSources()
+          .find(s => !sourceAuthor || s.author === sourceAuthor) ||
+        extensionStorage.getProviderSource();
+      if (activeSource?.url) {
+        try {
+          const url = `${activeSource.url}/dist/${providerValue}/settings.js`;
+          const res = await axios.get(url, {timeout: 6000});
+          if (res.data && typeof res.data === 'string') {
+            settingsModule = res.data;
+            const existing = extensionStorage.getProviderModules(
+              providerValue,
+              sourceAuthor,
+            );
+            if (existing) {
+              extensionStorage.cacheProviderModules({
+                ...existing,
+                modules: {
+                  ...existing.modules,
+                  settings: settingsModule,
+                },
+              });
+            }
+          }
+        } catch {
+          // ignore download error
+        }
+      }
+    }
+
+    if (!settingsModule) {
+      return [];
+    }
+
+    try {
+      const raw = await this.executeModule<unknown>(
+        settingsModule,
+        providerValue,
+        'getSettingsSchema',
+      );
+      const parsed = this.requireArray<SettingsField>(
+        raw,
+        providerValue,
+        'getSettingsSchema',
+      );
+      if (parsed.length > 0) {
+        this.settingsSchemaCache.set(cacheKey, parsed);
+      }
+      return parsed;
+    } catch (error) {
+      console.warn(`Provider ${providerValue} getSettingsSchema failed:`, error);
+      return [];
     }
   };
 }

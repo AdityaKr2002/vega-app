@@ -18,6 +18,7 @@ export interface IStorageService {
   delete(key: string): void;
   contains(key: string): boolean;
   clearAll(): void;
+  getKeys(): Promise<string[]>;
 }
 
 /**
@@ -110,15 +111,30 @@ export class StorageService implements IStorageService {
   clearAll(): void {
     this.storage.clearStore();
   }
+
+  // Get all keys
+  async getKeys(): Promise<string[]> {
+    if (this.storage?.indexer?.getKeys) {
+      try {
+        const keys = await this.storage.indexer.getKeys();
+        return Array.isArray(keys) ? keys : [];
+      } catch {
+        return [];
+      }
+    }
+    return [];
+  }
 }
 
 // Create and export default instances
 export const mainStorage: IStorageService = new StorageService();
 export const cacheStorage: IStorageService = new StorageService('cache');
+export const providerKvStorage: IStorageService = new StorageService('provider_kv');
 
 export const clearAllMMKVStorage = (): void => {
   cacheStorage.clearAll();
   mainStorage.clearAll();
+  providerKvStorage.clearAll();
 };
 
 export const createZustandStorage = (

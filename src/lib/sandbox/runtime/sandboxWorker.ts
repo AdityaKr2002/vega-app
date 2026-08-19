@@ -215,6 +215,19 @@ const Crypto = createCryptoShim(rpc);
 
 let providerGlobal: Record<string, unknown> = {};
 
+const kvStore = Object.freeze({
+  get: <T = unknown>(key: string): Promise<T | undefined> =>
+    rpc<T | undefined>('kvGet', {key}),
+  set: (key: string, value: unknown): Promise<void> =>
+    rpc<void>('kvSet', {key, value}),
+  delete: (key: string): Promise<boolean> =>
+    rpc<boolean>('kvDelete', {key}),
+  keys: (): Promise<string[]> =>
+    rpc<string[]>('kvKeys', {}),
+  clear: (): Promise<void> =>
+    rpc<void>('kvClear', {}),
+});
+
 const providerContext = Object.freeze({
   axios,
   cheerio,
@@ -224,6 +237,7 @@ const providerContext = Object.freeze({
     rpc<string>('getBaseUrl', {providerValue}),
   openWebView: (url: string, options?: unknown) =>
     rpc('openWebView', {url, options}),
+  kvStore,
 });
 
 const executeProvider = async (

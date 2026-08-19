@@ -1,6 +1,12 @@
 import {MaterialCommunityIcons} from '@expo/vector-icons';
 import React from 'react';
-import {ActivityIndicator, Image, Pressable, Text, View} from 'react-native';
+import {
+  ActivityIndicator,
+  Image,
+  Pressable,
+  Text,
+  View,
+} from 'react-native';
 import type {ProviderExtension} from '../../../lib/storage/extensionStorage';
 import {useM3Colors} from '../../../theme/M3PaletteContext';
 
@@ -15,12 +21,14 @@ interface ProviderCardProps {
   updating: boolean;
   testStatus: ProviderTestStatus;
   hasUpdate: boolean;
+  hasSettings?: boolean;
   primary: string;
   onActivate: () => void;
   onInstall: () => void;
   onUpdate: () => void;
   onTest: () => void;
   onUninstall: () => void;
+  onOpenSettings?: () => void;
 }
 
 const ProviderStatusBadge = ({
@@ -125,12 +133,14 @@ const ProviderCard = ({
   updating,
   testStatus,
   hasUpdate,
+  hasSettings,
   primary,
   onActivate,
   onInstall,
   onUpdate,
   onTest,
   onUninstall,
+  onOpenSettings,
 }: ProviderCardProps) => {
   const colors = useM3Colors();
 
@@ -146,6 +156,7 @@ const ProviderCard = ({
       <Pressable
         disabled={!installed}
         onPress={onActivate}
+        android_ripple={{color: colors.onSurfaceVariant, borderless: false}}
         className="flex-row items-start p-4"
         style={({pressed}) => ({opacity: pressed ? 0.78 : 1})}>
         <View
@@ -201,6 +212,7 @@ const ProviderCard = ({
                 accessibilityLabel={`Update ${provider.display_name}`}
                 disabled={updating}
                 onPress={onUpdate}
+                android_ripple={{color: colors.onPrimary, borderless: true, radius: 18}}
                 className="h-9 w-9 items-center justify-center"
                 style={{
                   backgroundColor: colors.primary,
@@ -229,77 +241,128 @@ const ProviderCard = ({
 
       {installed ? (
         <View className="flex-row gap-2 p-3">
-          <Pressable
-            testID={`test-provider-${itemKey}`}
-            accessibilityLabel={`Test ${provider.display_name}`}
-            disabled={testStatus === 'testing'}
-            onPress={onTest}
-            className="h-12 flex-1 flex-row items-center justify-center"
-            style={({pressed}) => ({
-              backgroundColor: pressed
-                ? colors.surfaceBright
-                : colors.surfaceContainerHighest,
+          <View
+            className="h-12 min-w-0 flex-1 overflow-hidden"
+            style={{
+              backgroundColor: colors.surfaceContainerHighest,
               borderRadius: 16,
-            })}>
-            {testStatus === 'testing' ? (
-              <ActivityIndicator size="small" color={primary} />
-            ) : (
-              <MaterialCommunityIcons name="flask" size={21} color={primary} />
-            )}
-            <Text
-              className="ml-2 text-sm font-bold"
-              style={{color: colors.onSurface}}>
-              {testStatus === 'testing' ? 'Testing' : 'Test'}
-            </Text>
-          </Pressable>
+            }}>
+            <Pressable
+              testID={`test-provider-${itemKey}`}
+              accessibilityLabel={`Test ${provider.display_name}`}
+              disabled={testStatus === 'testing'}
+              onPress={onTest}
+              android_ripple={{color: colors.onSurfaceVariant, borderless: false}}
+              className="h-full w-full flex-row items-center justify-center px-1"
+              style={({pressed}) => ({
+                backgroundColor: pressed ? colors.surfaceBright : 'transparent',
+              })}>
+              {testStatus === 'testing' ? (
+                <ActivityIndicator size="small" color={primary} />
+              ) : (
+                <MaterialCommunityIcons name="flask" size={18} color={primary} />
+              )}
+              <Text
+                numberOfLines={1}
+                className="ml-1 text-xs font-bold"
+                style={{color: colors.onSurface}}>
+                {testStatus === 'testing' ? 'Testing' : 'Test'}
+              </Text>
+            </Pressable>
+          </View>
 
-          <Pressable
-            testID={`uninstall-provider-${itemKey}`}
-            accessibilityLabel={`Uninstall ${provider.display_name}`}
-            onPress={onUninstall}
-            className="h-12 flex-1 flex-row items-center justify-center"
-            style={({pressed}) => ({
-              backgroundColor: colors.errorContainer,
+          {hasSettings && onOpenSettings && (
+            <View
+              className="h-12 min-w-0 flex-1 overflow-hidden"
+              style={{
+                backgroundColor: colors.surfaceContainerHighest,
+                borderRadius: 16,
+              }}>
+              <Pressable
+                testID={`settings-provider-${itemKey}`}
+                accessibilityLabel={`Settings for ${provider.display_name}`}
+                onPress={onOpenSettings}
+                android_ripple={{color: colors.onSurfaceVariant, borderless: false}}
+                className="h-full w-full flex-row items-center justify-center px-1"
+                style={({pressed}) => ({
+                  backgroundColor: pressed ? colors.surfaceBright : 'transparent',
+                })}>
+                <MaterialCommunityIcons
+                  name="cog-outline"
+                  size={18}
+                  color={primary}
+                />
+                <Text
+                  numberOfLines={1}
+                  className="ml-1 text-xs font-bold"
+                  style={{color: colors.onSurface}}>
+                  Settings
+                </Text>
+              </Pressable>
+            </View>
+          )}
+
+          <View
+            className="h-12 min-w-0 flex-1 overflow-hidden"
+            style={{
+              backgroundColor: colors.surfaceContainerHighest,
               borderRadius: 16,
-              opacity: pressed ? 0.75 : 1,
-            })}>
-            <MaterialCommunityIcons
-              name="delete-outline"
-              size={20}
-              color={colors.onErrorContainer}
-            />
-            <Text
-              className="ml-2 text-sm font-bold"
-              style={{color: colors.onErrorContainer}}>
-              Uninstall
-            </Text>
-          </Pressable>
+            }}>
+            <Pressable
+              testID={`uninstall-provider-${itemKey}`}
+              accessibilityLabel={`Uninstall ${provider.display_name}`}
+              onPress={onUninstall}
+              android_ripple={{color: colors.onSurfaceVariant, borderless: false}}
+              className="h-full w-full flex-row items-center justify-center px-1"
+              style={({pressed}) => ({
+                backgroundColor: pressed ? colors.surfaceBright : 'transparent',
+              })}>
+              <MaterialCommunityIcons
+                name="delete-outline"
+                size={18}
+                color={colors.onErrorContainer}
+              />
+              <Text
+                numberOfLines={1}
+                className="ml-1 text-xs font-bold"
+                style={{color: colors.onErrorContainer}}>
+                Uninstall
+              </Text>
+            </Pressable>
+          </View>
         </View>
       ) : (
-        <Pressable
-          testID={`install-provider-${itemKey}`}
-          disabled={installing}
-          onPress={onInstall}
-          className="m-3 h-12 flex-row items-center justify-center"
+        <View
+          className="m-3 h-12 overflow-hidden"
           style={{
             backgroundColor: colors.primary,
             borderRadius: 16,
           }}>
-          {installing ? (
-            <ActivityIndicator size="small" color={colors.onPrimary} />
-          ) : (
-            <MaterialCommunityIcons
-              name="download"
-              size={20}
-              color={colors.onPrimary}
-            />
-          )}
-          <Text
-            className="ml-2 text-sm font-bold"
-            style={{color: colors.onPrimary}}>
-            {installing ? 'Installing' : 'Install'}
-          </Text>
-        </Pressable>
+          <Pressable
+            testID={`install-provider-${itemKey}`}
+            disabled={installing}
+            onPress={onInstall}
+            android_ripple={{color: colors.onPrimary, borderless: false}}
+            className="h-full w-full flex-row items-center justify-center"
+            style={({pressed}) => ({
+              opacity: pressed ? 0.75 : 1,
+            })}>
+            {installing ? (
+              <ActivityIndicator size="small" color={colors.onPrimary} />
+            ) : (
+              <MaterialCommunityIcons
+                name="download"
+                size={20}
+                color={colors.onPrimary}
+              />
+            )}
+            <Text
+              className="ml-2 text-sm font-bold"
+              style={{color: colors.onPrimary}}>
+              {installing ? 'Installing' : 'Install'}
+            </Text>
+          </Pressable>
+        </View>
       )}
     </View>
   );

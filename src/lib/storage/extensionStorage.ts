@@ -21,6 +21,7 @@ export interface ProviderExtension {
   disabled: boolean;
   type: 'global' | 'english' | 'india' | 'italy' | 'anime' | 'drama';
   installed: boolean;
+  hasSettings?: boolean;
   installedAt?: number;
   lastUpdated?: number;
 }
@@ -38,6 +39,7 @@ export interface ProviderModule {
     stream?: string;
     catalog?: string;
     episodes?: string;
+    settings?: string;
   };
   cachedAt: number;
 }
@@ -251,6 +253,7 @@ export class ExtensionStorage {
       // Update existing provider
       existing.version = provider.version;
       existing.source = provider.source;
+      existing.hasSettings = provider.hasSettings ?? existing.hasSettings;
       existing.lastUpdated = Date.now();
     } else {
       // Add new provider
