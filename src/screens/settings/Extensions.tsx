@@ -447,11 +447,7 @@ const Extensions = ({navigation}: Props) => {
           );
           const hasSettings = Boolean(
             item.hasSettings ||
-            existing?.hasSettings ||
-            cachedModule?.modules?.settings ||
-            item.value === 'torrentio' ||
-            item.value === '1cinevood' ||
-            item.value === 'example',
+            cachedModule?.modules?.settings,
           );
           providers.set(key, {
             ...(existing || {}),
