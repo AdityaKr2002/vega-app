@@ -38,7 +38,7 @@ https://github.com/vega-org/vega-desktop
 
 ##
 <!--  ![Screenshots](https://github.com/user-attachments/assets/b86af756-e66e-4ae7-b2af-61b25cfd8d4e) -->
-<img width="2712" height="1220" alt="Screenshot_2025-03-20-18-36-18-593_com vega" src="https://github.com/user-attachments/assets/3befd3ef-81b1-417c-a250-42bbfbae58d6" />
+<img width="2712" height="1220" alt="Screenshot_2026-08-11-20-07-17-817_com vega" src="https://github.com/user-attachments/assets/e7de4085-fcb1-4504-92e3-a4f011adc879" />
 
 
 ___
