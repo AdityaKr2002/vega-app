@@ -174,8 +174,8 @@ export const openDownloadsScreen = (): void => {
 };
 
 const App = () => {
-  const {width: windowWidth} = useWindowDimensions();
-  const isLargeScreen = windowWidth > 768;
+  const {width: windowWidth, height: windowHeight} = useWindowDimensions();
+  const isLargeScreen = Math.min(windowWidth, windowHeight) >= 600;
   LogBox.ignoreLogs([
     'You have passed a style to FlashList',
     'new NativeEventEmitter()',

@@ -543,7 +543,7 @@ const DownloadComponent = ({
             }}
             className="h-12 w-12 items-center justify-center">
             {serverLoading ? (
-              <LoadingIndicator size={30} color={primary} />
+              <LoadingIndicator size={35} color={primary} />
             ) : (
               <MaterialIcons name="check-circle" size={24} color={primary} />
             )}
@@ -563,7 +563,7 @@ const DownloadComponent = ({
             }}
             className="h-12 w-12 items-center justify-center">
             {serverLoading ? (
-              <LoadingIndicator size={24} color={primary} />
+              <LoadingIndicator size={35} color={primary} />
             ) : (
               <Octicons
                 name="download"

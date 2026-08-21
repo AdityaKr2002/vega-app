@@ -1,20 +1,20 @@
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
-import {useNavigation} from '@react-navigation/native';
-import type {NativeStackNavigationProp} from '@react-navigation/native-stack';
-import React, {useCallback, useMemo, useState} from 'react';
-import {FlatList, TouchableOpacity, View} from 'react-native';
+import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import React, { useCallback, useMemo, useState } from 'react';
+import { FlatList, TouchableOpacity, View } from 'react-native';
 import ReactNativeHapticFeedback, {
   HapticFeedbackTypes,
 } from 'react-native-haptic-feedback';
-import type {HomeStackParamList} from '../App';
-import {useImageAccent} from '../lib/hooks/useImageAccent';
-import {settingsStorage} from '../lib/storage';
-import {showAppDialog} from '../lib/zustand/appDialogStore';
+import type { HomeStackParamList } from '../App';
+import { useImageAccent } from '../lib/hooks/useImageAccent';
+import { settingsStorage } from '../lib/storage';
+import { showAppDialog } from '../lib/zustand/appDialogStore';
 import useContinueWatchingStore, {
   type ContinueWatchingItem,
 } from '../lib/zustand/continueWatchingStore';
-import {useM3Colors} from '../theme/M3PaletteContext';
+import { useM3Colors } from '../theme/M3PaletteContext';
 import MediaPosterCard from './MediaPosterCard';
 import AppText from './ui/Text';
 
@@ -47,7 +47,7 @@ const ContinueWatchingCard = ({
       : 0;
 
   return (
-    <View style={{width: 124}}>
+    <View style={{ width: 124 }}>
       <MediaPosterCard
         title={item.title}
         subtitle={episodeTitle}
@@ -171,13 +171,12 @@ const ContinueWatching = () => {
     const count = selectedIds.size;
 
     showAppDialog({
-      title: `Clear from Continue Watching?`,
-      message: `Are you sure you want to remove ${count} ${
-        count === 1 ? 'title' : 'titles'
-      } from your continue watching history?`,
+      title: `Clear History?`,
+      message: `Are you sure you want to remove ${count} ${count === 1 ? 'title' : 'titles'
+        } from your continue watching history?`,
       variant: 'warning',
       actions: [
-        {label: 'Cancel'},
+        { label: 'Cancel' },
         {
           label: 'Clear',
           variant: 'destructive',
@@ -199,7 +198,7 @@ const ContinueWatching = () => {
   const isAllSelected = items.length > 0 && selectedIds.size === items.length;
 
   return (
-    <View style={{gap: 14, marginTop: 28}}>
+    <View style={{ gap: 14, marginTop: 28 }}>
       <View
         style={{
           alignItems: 'center',
@@ -219,7 +218,7 @@ const ContinueWatching = () => {
             <TouchableOpacity
               activeOpacity={0.7}
               onPress={handleExitSelection}
-              hitSlop={{top: 8, bottom: 8, left: 8, right: 8}}>
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
               <MaterialCommunityIcons
                 name="close"
                 size={22}
@@ -229,7 +228,7 @@ const ContinueWatching = () => {
             <AppText
               role="titleLargeEmphasized"
               numberOfLines={1}
-              style={{color: colors.onBackground, flex: 1}}>
+              style={{ color: colors.onBackground, flex: 1 }}>
               Continue watching
             </AppText>
           </View>
@@ -237,18 +236,18 @@ const ContinueWatching = () => {
           <AppText
             role="titleLargeEmphasized"
             numberOfLines={1}
-            style={{color: colors.onBackground, flex: 1}}>
+            style={{ color: colors.onBackground, flex: 1 }}>
             Continue watching
           </AppText>
         )}
 
         {/* Delete button where the see all button appears in slider */}
         {isSelectionMode ? (
-          <View style={{alignItems: 'center', flexDirection: 'row', gap: 6}}>
+          <View style={{ alignItems: 'center', flexDirection: 'row', gap: 6 }}>
             <TouchableOpacity
               activeOpacity={0.7}
               onPress={handleToggleSelectAll}
-              hitSlop={{top: 8, bottom: 8, left: 8, right: 8}}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               style={{
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -264,7 +263,7 @@ const ContinueWatching = () => {
               activeOpacity={0.75}
               disabled={selectedIds.size === 0}
               onPress={handleDeletePress}
-              hitSlop={{top: 8, bottom: 8, left: 8, right: 8}}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               style={{
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -288,9 +287,9 @@ const ContinueWatching = () => {
         data={items}
         keyExtractor={item => item.id}
         showsHorizontalScrollIndicator={false}
-        contentContainerStyle={{paddingHorizontal: 20}}
-        ItemSeparatorComponent={() => <View style={{width: 14}} />}
-        renderItem={({item}) => (
+        contentContainerStyle={{ paddingHorizontal: 20 }}
+        ItemSeparatorComponent={() => <View style={{ width: 14 }} />}
+        renderItem={({ item }) => (
           <ContinueWatchingCard
             item={item}
             selected={selectedIds.has(item.id)}
