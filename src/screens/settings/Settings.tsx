@@ -174,6 +174,8 @@ const Settings = ({navigation}: Props) => {
     <Animated.ScrollView
       className="h-full w-full bg-m3-background"
       showsVerticalScrollIndicator={false}
+      keyboardShouldPersistTaps="handled"
+      keyboardDismissMode="on-drag"
       bounces={true}
       overScrollMode="always"
       entering={FadeInUp.springify()}

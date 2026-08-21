@@ -243,6 +243,8 @@ const SearchSubtitles = ({
 
             <ScrollView
               className="mt-3 flex-1"
+              keyboardShouldPersistTaps="handled"
+              keyboardDismissMode="on-drag"
               contentContainerStyle={{flexGrow: 1, paddingBottom: 24}}>
             {loading ? (
               <View className="w-full h-full justify-center items-center">

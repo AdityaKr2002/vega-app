@@ -126,3 +126,32 @@ export const buildCookieString = (map: Record<string, string>): string =>
   Object.entries(map)
     .map(([name, value]) => `${name}=${value}`)
     .join('; ');
+
+// Sets cookie string into native CookieManager so OkHttpClient (RCTNetworking) sends them
+export const setCookieString = async (
+  url: string,
+  cookieString: string,
+): Promise<void> => {
+  const CookieManager = getCookieManager();
+  if (!CookieManager || !cookieString) return;
+  try {
+    const parts = cookieString.split(';').map(p => p.trim()).filter(Boolean);
+    for (const part of parts) {
+      const eqIdx = part.indexOf('=');
+      if (eqIdx > 0) {
+        const name = part.slice(0, eqIdx).trim();
+        const value = part.slice(eqIdx + 1).trim();
+        if (name && value) {
+          await CookieManager.set(url, {
+            name,
+            value,
+            path: '/',
+          });
+        }
+      }
+    }
+    await CookieManager.flush();
+  } catch (e) {
+    console.warn('[cookieManager] failed to set cookie string', e);
+  }
+};

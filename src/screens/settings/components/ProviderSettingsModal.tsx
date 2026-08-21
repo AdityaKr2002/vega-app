@@ -3,7 +3,10 @@ import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Image,
+  Keyboard,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   TextInput,
@@ -34,6 +37,27 @@ export const ProviderSettingsModal: React.FC<ProviderSettingsModalProps> = ({
   const [fields, setFields] = useState<SettingsField[]>([]);
   const [values, setValues] = useState<Record<string, unknown>>({});
   const [loading, setLoading] = useState(false);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+
+  useEffect(() => {
+    const showSub = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
+      e => {
+        setKeyboardHeight(e.endCoordinates.height);
+      },
+    );
+    const hideSub = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
+      () => {
+        setKeyboardHeight(0);
+      },
+    );
+
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
 
   const loadSchemaAndValues = useCallback(async () => {
     if (!provider) return;
@@ -100,7 +124,22 @@ export const ProviderSettingsModal: React.FC<ProviderSettingsModalProps> = ({
       animationType="fade"
       transparent
       onRequestClose={onClose}>
-      <View className="flex-1 justify-end bg-black/60">
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        className="flex-1 justify-end bg-black/60"
+        style={{
+          paddingBottom: Platform.OS === 'android' ? keyboardHeight : 0,
+        }}>
+        <Pressable
+          style={{ flex: 1 }}
+          onPress={() => {
+            if (keyboardHeight > 0) {
+              Keyboard.dismiss();
+            } else {
+              onClose();
+            }
+          }}
+        />
         <View
           className="max-h-[85%] rounded-t-3xl p-5"
           style={{ backgroundColor: colors.surfaceContainer }}>
@@ -401,11 +440,13 @@ export const ProviderSettingsModal: React.FC<ProviderSettingsModalProps> = ({
                         onChangeText={text => handleChange(field.key, text)}
                         placeholder={field.placeholder}
                         placeholderTextColor={colors.onSurfaceVariant}
-                        className="mt-3 h-12 px-3.5 rounded-xl border text-sm"
+                        multiline={true}
+                        className="mt-3 min-h-[48px] max-h-[100px] px-3.5 py-2.5 rounded-xl border text-sm"
                         style={{
                           backgroundColor: colors.surfaceContainerHighest,
                           borderColor: colors.outlineVariant,
                           color: colors.onSurface,
+                          textAlignVertical: 'top',
                         }}
                       />
                     </View>
@@ -470,7 +511,7 @@ export const ProviderSettingsModal: React.FC<ProviderSettingsModalProps> = ({
             </View>
           </View>
         </View>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 };

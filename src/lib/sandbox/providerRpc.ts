@@ -29,7 +29,7 @@ const handleKvGet = async (args: any): Promise<unknown> => {
   try {
     return JSON.parse(raw);
   } catch {
-    return undefined;
+    return raw;
   }
 };
 

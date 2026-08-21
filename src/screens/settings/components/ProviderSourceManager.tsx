@@ -1,5 +1,15 @@
 import React, {useEffect, useMemo, useState} from 'react';
-import {Linking, Pressable, ScrollView, TextInput, View} from 'react-native';
+import {
+  Keyboard,
+  KeyboardAvoidingView,
+  Linking,
+  Modal,
+  Platform,
+  Pressable,
+  ScrollView,
+  TextInput,
+  View,
+} from 'react-native';
 import {MaterialCommunityIcons, MaterialIcons} from '@expo/vector-icons';
 import {
   extensionStorage,
@@ -27,6 +37,27 @@ const ProviderSourceManager = ({primary, visible, onSourceChanged}: Props) => {
   const [inputValue, setInputValue] = useState('');
   const [invalidSourceDialog, setInvalidSourceDialog] = useState(false);
   const [sourceToRemove, setSourceToRemove] = useState<string>();
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+
+  useEffect(() => {
+    const showSub = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
+      e => {
+        setKeyboardHeight(e.endCoordinates.height);
+      },
+    );
+    const hideSub = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
+      () => {
+        setKeyboardHeight(0);
+      },
+    );
+
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
 
   const defaultSource = useMemo(() => {
     return sources.find(item => item.isDefault) || sources[0];
@@ -274,111 +305,141 @@ const ProviderSourceManager = ({primary, visible, onSourceChanged}: Props) => {
         </ScrollView>
       </MaterialDialogSurface>
 
-      <MaterialDialogSurface
+      <Modal
         visible={showAddDialog}
-        onDismiss={() => {
+        animationType="fade"
+        transparent
+        onRequestClose={() => {
           setShowAddDialog(false);
           setInputValue('');
         }}>
-        <View className="flex-row items-center justify-between mb-3">
-          <Text
-            className="text-base font-semibold w-fit"
-            style={{color: colors.onSurface}}
-            numberOfLines={1}>
-            Add Source
-          </Text>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Close add source dialog"
-            className="h-10 w-10 items-center justify-center"
-            style={{
-              backgroundColor: colors.surfaceContainerHighest,
-              borderRadius: 14,
-            }}
-            onPress={() => {
-              setShowAddDialog(false);
-              setInputValue('');
-            }}>
-            <MaterialCommunityIcons
-              name="close"
-              size={22}
-              color={colors.onSurfaceVariant}
-            />
-          </Pressable>
-        </View>
-        <Text className="text-sm font-medium" style={{color: colors.onSurface}}>
-          Enter url of your hosted provider source or GitHub author
-        </Text>
-        <Text
-          className="text-sm mt-[4px]"
-          style={{color: colors.onSurfaceVariant, lineHeight: 20}}>
-          How to create provider{' '}
-          <Text
-            accessibilityRole="link"
-            style={{color: '#38BDF8', fontSize: 14, lineHeight: 20}}
-            onPress={() => Linking.openURL(socialLinks.github + '#vega-app')}>
-            here
-          </Text>
-        </Text>
-        <Text
-          className="text-sm mt-[4px]"
-          style={{color: colors.onSurfaceVariant, lineHeight: 20}}>
-          or join Discord for support{' '}
-          <Text
-            accessibilityRole="link"
-            style={{color: '#38BDF8', fontSize: 14, lineHeight: 20}}
-            onPress={() => Linking.openURL(socialLinks.discord)}>
-            Discord
-          </Text>
-        </Text>
-        <TextInput
-          className="h-14 px-4 mt-4"
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          className="flex-1 justify-center items-center bg-black/60 px-4"
           style={{
-            backgroundColor: colors.surfaceContainerHighest,
-            borderColor: colors.outlineVariant,
-            borderRadius: 18,
-            borderWidth: 1,
-            color: colors.onSurface,
-          }}
-          placeholder="GitHub author or source URL"
-          placeholderTextColor={colors.onSurfaceVariant}
-          selectionColor={colors.primary}
-          value={inputValue}
-          onChangeText={setInputValue}
-          autoCapitalize="none"
-          autoCorrect={false}
-        />
-        <View className="flex-row gap-2 mt-3">
+            paddingBottom: Platform.OS === 'android' ? keyboardHeight : 0,
+          }}>
           <Pressable
-            className="h-12 flex-1 items-center justify-center"
-            style={{
-              backgroundColor: colors.surfaceContainerHighest,
-              borderRadius: 16,
-            }}
+            style={{position: 'absolute', top: 0, bottom: 0, left: 0, right: 0}}
             onPress={() => {
-              setShowAddDialog(false);
-              setInputValue('');
-            }}>
-            <Text className="font-medium" style={{color: colors.onSurface}}>
-              Cancel
-            </Text>
-          </Pressable>
-
-          <Pressable
-            className="h-12 flex-1 items-center justify-center"
-            style={{
-              backgroundColor: colors.primary,
-              borderRadius: 16,
+              if (keyboardHeight > 0) {
+                Keyboard.dismiss();
+              } else {
+                setShowAddDialog(false);
+                setInputValue('');
+              }
             }}
-            onPress={handleConfirmAdd}>
-            <Text
-              className="font-medium"
-              style={{color: readableOnColor(colors.primary)}}>
-              Confirm
+          />
+          <View
+            style={{
+              backgroundColor: colors.surfaceContainerHigh,
+              borderRadius: 28,
+              maxWidth: 420,
+              overflow: 'hidden',
+              padding: 24,
+              width: 340,
+            }}>
+            <View className="flex-row items-center justify-between mb-3">
+              <Text
+                className="text-base font-semibold w-fit"
+                style={{color: colors.onSurface}}
+                numberOfLines={1}>
+                Add Source
+              </Text>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Close add source dialog"
+                className="h-10 w-10 items-center justify-center"
+                style={{
+                  backgroundColor: colors.surfaceContainerHighest,
+                  borderRadius: 14,
+                }}
+                onPress={() => {
+                  setShowAddDialog(false);
+                  setInputValue('');
+                }}>
+                <MaterialCommunityIcons
+                  name="close"
+                  size={22}
+                  color={colors.onSurfaceVariant}
+                />
+              </Pressable>
+            </View>
+            <Text className="text-sm font-medium" style={{color: colors.onSurface}}>
+              Enter url of your hosted provider source or GitHub author
             </Text>
-          </Pressable>
-        </View>
-      </MaterialDialogSurface>
+            <Text
+              className="text-sm mt-[4px]"
+              style={{color: colors.onSurfaceVariant, lineHeight: 20}}>
+              How to create provider{' '}
+              <Text
+                accessibilityRole="link"
+                style={{color: '#38BDF8', fontSize: 14, lineHeight: 20}}
+                onPress={() => Linking.openURL(socialLinks.github + '#vega-app')}>
+                here
+              </Text>
+            </Text>
+            <Text
+              className="text-sm mt-[4px]"
+              style={{color: colors.onSurfaceVariant, lineHeight: 20}}>
+              or join Discord for support{' '}
+              <Text
+                accessibilityRole="link"
+                style={{color: '#38BDF8', fontSize: 14, lineHeight: 20}}
+                onPress={() => Linking.openURL(socialLinks.discord)}>
+                Discord
+              </Text>
+            </Text>
+            <TextInput
+              className="h-14 px-4 mt-4"
+              style={{
+                backgroundColor: colors.surfaceContainerHighest,
+                borderColor: colors.outlineVariant,
+                borderRadius: 18,
+                borderWidth: 1,
+                color: colors.onSurface,
+              }}
+              placeholder="GitHub author or source URL"
+              placeholderTextColor={colors.onSurfaceVariant}
+              selectionColor={colors.primary}
+              value={inputValue}
+              onChangeText={setInputValue}
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+            <View className="flex-row gap-2 mt-4">
+              <Pressable
+                className="h-12 flex-1 items-center justify-center"
+                style={{
+                  backgroundColor: colors.surfaceContainerHighest,
+                  borderRadius: 16,
+                }}
+                onPress={() => {
+                  setShowAddDialog(false);
+                  setInputValue('');
+                }}>
+                <Text className="font-medium" style={{color: colors.onSurface}}>
+                  Cancel
+                </Text>
+              </Pressable>
+
+              <Pressable
+                className="h-12 flex-1 items-center justify-center"
+                style={{
+                  backgroundColor: colors.primary,
+                  borderRadius: 16,
+                }}
+                onPress={handleConfirmAdd}>
+                <Text
+                  className="font-medium"
+                  style={{color: readableOnColor(colors.primary)}}>
+                  Confirm
+                </Text>
+              </Pressable>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
 
       <AppDialog
         visible={invalidSourceDialog}
