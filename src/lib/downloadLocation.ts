@@ -169,8 +169,12 @@ export const getDownloadFileName = (fileName: string, fileType: string) => {
 };
 
 export const getSafEntryName = (entryUri: string): string => {
-  const decodedUri = decodeURIComponent(entryUri);
-  return decodedUri.slice(decodedUri.lastIndexOf('/') + 1);
+  const decodedUri = decodeURIComponent(entryUri).replace(/\/+$/, '');
+  const lastSlash = decodedUri.lastIndexOf('/');
+  const afterSlash =
+    lastSlash !== -1 ? decodedUri.slice(lastSlash + 1) : decodedUri;
+  const lastColon = afterSlash.lastIndexOf(':');
+  return lastColon !== -1 ? afterSlash.slice(lastColon + 1) : afterSlash;
 };
 
 export const getOrCreateSafDirectory = async (

@@ -5,6 +5,7 @@ import {
   selectDownloadLocation,
 } from '../../../lib/downloadLocation';
 import {settingsStorage} from '../../../lib/storage';
+import {syncFromSharedFolder} from '../../../lib/sync/syncService';
 import IconButton from '../../../components/ui/IconButton';
 import SettingsRow from '../../../components/ui/SettingsRow';
 import SettingsSection from '../../../components/ui/SettingsSection';
@@ -28,6 +29,9 @@ const DownloadLocationPreference = ({
   ) => {
     settingsStorage.setDownloadLocation(location);
     setDownloadLocation(getDownloadLocationDisplayValue(location));
+    syncFromSharedFolder().catch(e =>
+      console.warn('[VegaSync] Folder change sync failed:', e),
+    );
     ToastAndroid.show('Download location updated', ToastAndroid.SHORT);
   };
 

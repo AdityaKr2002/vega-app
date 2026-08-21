@@ -1,8 +1,8 @@
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import type {CompositeScreenProps} from '@react-navigation/native';
-import type {NativeStackScreenProps} from '@react-navigation/native-stack';
-import React, {useEffect, useMemo, useState} from 'react';
+import type { CompositeScreenProps } from '@react-navigation/native';
+import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Image,
@@ -14,15 +14,15 @@ import {
   View,
 } from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
-import type {DownloadsStackParamList, RootStackParamList} from '../../App';
+import type { DownloadsStackParamList, RootStackParamList } from '../../App';
 import AppDialog from '../../components/AppDialog';
 import DropdownField from '../../components/ui/DropdownField';
 import {
   deleteDownloadOutput,
   downloadOutputExists,
 } from '../../lib/downloadDestination';
-import {formatDownloadBytes} from '../../lib/downloadFormatting';
-import {getDownloadedVideoThumbnail} from '../../lib/downloadThumbnailCache';
+import { formatDownloadBytes } from '../../lib/downloadFormatting';
+import { getDownloadedVideoThumbnail } from '../../lib/downloadThumbnailCache';
 import {
   createDownloadDirectoryName,
   createDownloadSeasonDirectoryName,
@@ -31,11 +31,11 @@ import {
   groupCompletedDownloads,
   sortDownloadedEpisodes,
 } from '../../lib/downloadLibrary';
-import type {DownloadItem} from '../../lib/zustand/downloadsStore';
+import type { DownloadItem } from '../../lib/zustand/downloadsStore';
 import useDownloadsStore, {
   selectCompletedDownloads,
 } from '../../lib/zustand/downloadsStore';
-import {useM3Colors} from '../../theme/M3PaletteContext';
+import { useM3Colors } from '../../theme/M3PaletteContext';
 
 type DownloadedDetailsProps = CompositeScreenProps<
   NativeStackScreenProps<DownloadsStackParamList, 'DownloadedDetails'>,
@@ -45,7 +45,7 @@ type DownloadedDetailsProps = CompositeScreenProps<
 const getSeasonTitle = (item: DownloadItem): string =>
   item.seasonTitle || 'Downloaded';
 
-const DownloadedItemThumbnail = ({item}: {item: DownloadItem}) => {
+const DownloadedItemThumbnail = ({ item }: { item: DownloadItem }) => {
   const colors = useM3Colors();
   const [thumbnailUri, setThumbnailUri] = useState<string | null>(null);
 
@@ -75,7 +75,7 @@ const DownloadedItemThumbnail = ({item}: {item: DownloadItem}) => {
       }}>
       {thumbnailUri ? (
         <Image
-          source={{uri: thumbnailUri}}
+          source={{ uri: thumbnailUri }}
           resizeMode="cover"
           style={{
             bottom: 0,
@@ -91,7 +91,7 @@ const DownloadedItemThumbnail = ({item}: {item: DownloadItem}) => {
   );
 };
 
-const DownloadedDetails = ({navigation, route}: DownloadedDetailsProps) => {
+const DownloadedDetails = ({ navigation, route }: DownloadedDetailsProps) => {
   const colors = useM3Colors();
   const primary = colors.primary;
   const completed = useDownloadsStore(selectCompletedDownloads);
@@ -111,7 +111,7 @@ const DownloadedDetails = ({navigation, route}: DownloadedDetailsProps) => {
     [group],
   );
   const seasonOptions = useMemo(
-    () => seasons.map(title => ({title})),
+    () => seasons.map(title => ({ title })),
     [seasons],
   );
   const [selectedSeason, setSelectedSeason] = useState<string | undefined>(
@@ -139,9 +139,9 @@ const DownloadedDetails = ({navigation, route}: DownloadedDetailsProps) => {
         </Text>
         <TouchableOpacity
           className="mt-5 px-6 py-3"
-          style={{backgroundColor: primary}}
+          style={{ backgroundColor: primary }}
           onPress={() => navigation.goBack()}>
-          <Text className="font-semibold" style={{color: colors.onPrimary}}>
+          <Text className="font-semibold" style={{ color: colors.onPrimary }}>
             Go back
           </Text>
         </TouchableOpacity>
@@ -171,7 +171,7 @@ const DownloadedDetails = ({navigation, route}: DownloadedDetailsProps) => {
         sourceLink: candidate.sourceLink,
       })),
       linkIndex: playableItems.findIndex(candidate => candidate.id === item.id),
-      type: '',
+      type: item.type || (playableItems.length > 1 ? 'series' : 'movie'),
       directUrl: item.filePath,
       primaryTitle: group.title,
       secondaryTitle: item.seasonTitle,
@@ -240,7 +240,7 @@ const DownloadedDetails = ({navigation, route}: DownloadedDetailsProps) => {
       <StatusBar translucent backgroundColor="transparent" />
       <View className="absolute h-[340px] w-full">
         <Image
-          source={{uri: backgroundImage}}
+          source={{ uri: backgroundImage }}
           className="h-[340px] w-full"
           resizeMode="cover"
         />
@@ -256,7 +256,7 @@ const DownloadedDetails = ({navigation, route}: DownloadedDetailsProps) => {
             accessibilityRole="button"
             accessibilityLabel="Go back"
             className="ml-5 mt-14 h-12 w-12 items-center justify-center"
-            style={({pressed}) => ({
+            style={({ pressed }) => ({
               backgroundColor: pressed
                 ? colors.secondaryContainer
                 : 'rgba(23,23,23,0.88)',
@@ -272,7 +272,7 @@ const DownloadedDetails = ({navigation, route}: DownloadedDetailsProps) => {
           <View className="absolute bottom-3 right-0 w-full px-5">
             <Text
               className="text-3xl font-bold capitalize"
-              style={{color: colors.onBackground}}>
+              style={{ color: colors.onBackground }}>
               {group.title}
             </Text>
             <View className="mt-3 flex-row items-center">
@@ -283,10 +283,9 @@ const DownloadedDetails = ({navigation, route}: DownloadedDetailsProps) => {
               />
               <Text
                 className="ml-2 text-sm font-medium"
-                style={{color: colors.onSurfaceVariant}}>
-                {`${group.items.length} download${
-                  group.items.length === 1 ? '' : 's'
-                }`}
+                style={{ color: colors.onSurfaceVariant }}>
+                {`${group.items.length} download${group.items.length === 1 ? '' : 's'
+                  }`}
                 {'  '}·{'  '}
                 {formatDownloadBytes(totalBytes)}
               </Text>
@@ -299,12 +298,12 @@ const DownloadedDetails = ({navigation, route}: DownloadedDetailsProps) => {
             <View className="mb-7">
               <Text
                 className="mb-2 text-xl font-bold"
-                style={{color: colors.onBackground}}>
+                style={{ color: colors.onBackground }}>
                 Synopsis
               </Text>
               <Text
                 className="text-base leading-6"
-                style={{color: colors.onSurfaceVariant}}>
+                style={{ color: colors.onSurfaceVariant }}>
                 {metadata.synopsis}
               </Text>
             </View>
@@ -324,7 +323,7 @@ const DownloadedDetails = ({navigation, route}: DownloadedDetailsProps) => {
 
           <Text
             className="mb-3 mt-7 text-xl font-bold"
-            style={{color: colors.onBackground}}>
+            style={{ color: colors.onBackground }}>
             Ready to watch
           </Text>
           {items.map((item, index) => (
@@ -335,7 +334,7 @@ const DownloadedDetails = ({navigation, route}: DownloadedDetailsProps) => {
                 accessibilityRole="button"
                 accessibilityLabel={`Play ${item.episodeName || item.title}`}
                 className="h-16 flex-1 flex-row items-center px-4"
-                style={({pressed}) => ({
+                style={({ pressed }) => ({
                   backgroundColor: pressed
                     ? colors.surfaceBright
                     : colors.surfaceContainerHigh,
@@ -348,13 +347,13 @@ const DownloadedDetails = ({navigation, route}: DownloadedDetailsProps) => {
                 <View className="ml-3 flex-1">
                   <Text
                     className="font-semibold"
-                    style={{color: colors.onSurface}}
+                    style={{ color: colors.onSurface }}
                     numberOfLines={1}>
                     {item.episodeName || item.title}
                   </Text>
                   <Text
                     className="mt-1 text-xs"
-                    style={{color: colors.onSurfaceVariant}}>
+                    style={{ color: colors.onSurfaceVariant }}>
                     {items.length > 1 ? `Episode ${index + 1}  ·  ` : ''}
                     {formatDownloadBytes(item.totalBytes)}
                   </Text>
@@ -370,7 +369,7 @@ const DownloadedDetails = ({navigation, route}: DownloadedDetailsProps) => {
                 accessibilityRole="button"
                 className="h-16 w-16 items-center justify-center"
                 disabled={deletingId !== null}
-                style={({pressed}) => ({
+                style={({ pressed }) => ({
                   backgroundColor: pressed
                     ? colors.error
                     : colors.errorContainer,
@@ -403,7 +402,7 @@ const DownloadedDetails = ({navigation, route}: DownloadedDetailsProps) => {
         primary={primary}
         variant="warning"
         actions={[
-          {label: 'Cancel'},
+          { label: 'Cancel' },
           {
             label: 'Delete',
             variant: 'destructive',

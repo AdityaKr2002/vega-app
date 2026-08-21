@@ -45,52 +45,44 @@ const DnsPreference = () => {
   };
 
   return (
-    <View>
-      <View
-        style={{
-          alignItems: 'center',
-          flexDirection: 'row',
-          paddingHorizontal: 16,
-          paddingVertical: 14,
-        }}>
+    <View className="p-4">
+      <View className="mb-3 flex-row items-center">
         <View
-          style={{
-            alignItems: 'center',
-            backgroundColor: colors.secondaryContainer,
-            borderRadius: 20,
-            height: 40,
-            justifyContent: 'center',
-            marginRight: 16,
-            width: 40,
-          }}>
+          className="mr-4 h-10 w-10 items-center justify-center rounded-full"
+          style={{backgroundColor: colors.secondaryContainer}}>
           <MaterialCommunityIcons
             name="shield-lock-outline"
             size={21}
             color={colors.onSecondaryContainer}
           />
         </View>
-        <View style={{flex: 1}}>
-          <AppText
-            role="bodyLarge"
-            style={{color: colors.onSurface, marginBottom: 8}}>
+        <View className="flex-1">
+          <AppText role="bodyLarge" className="text-m3-on-surface">
             DNS over HTTPS
           </AppText>
-          <DropdownField
-            options={DOH_PROVIDERS}
-            value={DOH_PROVIDERS.find(option => option.value === provider)}
-            getKey={option => option.value}
-            getLabel={option => option.label}
-            onChange={option => selectProvider(option.value)}
-          />
+          <AppText
+            role="bodySmall"
+            className="mt-0.5 text-m3-on-surface-variant">
+            Encrypt DNS queries with secure resolver
+          </AppText>
         </View>
       </View>
+
+      <DropdownField
+        options={DOH_PROVIDERS}
+        value={DOH_PROVIDERS.find(option => option.value === provider)}
+        getKey={option => option.value}
+        getLabel={option => option.label}
+        onChange={option => selectProvider(option.value)}
+      />
 
       {provider === 'custom' ? (
         <View
           style={{
             borderTopColor: colors.outlineVariant,
             borderTopWidth: 1,
-            padding: 16,
+            marginTop: 14,
+            paddingTop: 14,
           }}>
           <AppText
             role="labelMedium"
@@ -128,8 +120,8 @@ const DnsPreference = () => {
                 focusedTextColor: colors.onSurface,
                 unfocusedTextColor: colors.onSurface,
                 cursorColor: colors.primary,
-                focusedIndicatorColor: colors.primary,
-                unfocusedIndicatorColor: colors.outlineVariant,
+                focusedIndicatorColor: 'transparent',
+                unfocusedIndicatorColor: 'transparent',
                 focusedPlaceholderColor: colors.onSurfaceVariant,
                 unfocusedPlaceholderColor: colors.onSurfaceVariant,
               }}>

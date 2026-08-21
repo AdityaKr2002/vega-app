@@ -2,7 +2,7 @@ import {
   DevSettings,
   ToastAndroid,
   View,
-  Pressable,
+  TouchableOpacity,
   ScrollView,
 } from 'react-native';
 import React, {useCallback, useMemo} from 'react';
@@ -77,12 +77,10 @@ const Settings = ({navigation}: Props) => {
           overflow: 'hidden',
           width: 132,
         }}>
-        <Pressable
+        <TouchableOpacity
+          activeOpacity={0.65}
           onPress={() => handleProviderSelect(item)}
-          style={({pressed}) => ({
-            flex: 1,
-            opacity: pressed ? 0.72 : 1,
-          })}>
+          style={{flex: 1}}>
           <View className="flex-col items-center justify-center h-full p-3">
             <RenderProviderFlagIcon type={item.type} />
             <AppText
@@ -107,7 +105,7 @@ const Settings = ({navigation}: Props) => {
               </View>
             )}
           </View>
-        </Pressable>
+        </TouchableOpacity>
       </View>
     ),
     [colors, handleProviderSelect],
@@ -196,8 +194,11 @@ const Settings = ({navigation}: Props) => {
 
         {/* Content provider section */}
         <AnimatedSection delay={100}>
-          <View className="mb-6 flex-col gap-3">
-            <AppText role="labelLarge" style={{color: colors.onSurfaceVariant}}>
+          <View className="mb-6">
+            <AppText
+              role="labelLarge"
+              className="mb-3"
+              style={{color: colors.onSurfaceVariant}}>
               Content Provider
             </AppText>
             <View
@@ -228,16 +229,16 @@ const Settings = ({navigation}: Props) => {
                 )}
               </ScrollView>
             </View>
-            <SettingsSection title="Provider tools">
-              <SettingsRow
-                title="Provider Manager"
-                description="Install, update, and test provider extensions"
-                icon="puzzle-outline"
-                divider={false}
-                onPress={() => navigation.navigate('Extensions')}
-              />
-            </SettingsSection>
           </View>
+          <SettingsSection title="Provider tools">
+            <SettingsRow
+              title="Provider Manager"
+              description="Install, update, and test provider extensions"
+              icon="puzzle-outline"
+              divider={false}
+              onPress={() => navigation.navigate('Extensions')}
+            />
+          </SettingsSection>
         </AnimatedSection>
 
         {/* Network Section */}

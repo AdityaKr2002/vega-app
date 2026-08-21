@@ -3,6 +3,7 @@ import React from 'react';
 import {Image, Text, TouchableOpacity, View} from 'react-native';
 import {
   formatDownloadBytes,
+  formatDownloadProgressLabel,
   formatDownloadSpeed,
 } from '../../../lib/downloadFormatting';
 import type {
@@ -123,10 +124,13 @@ const CurrentDownloadRow = ({
               <Text
                 className="text-xs"
                 style={{color: colors.onSurfaceVariant}}>
-                {formatDownloadBytes(item.downloadedBytes)}
-                {item.totalBytes > 0
-                  ? ` / ${formatDownloadBytes(item.totalBytes)}`
-                  : ''}
+                {item.sourceType === 'hls' || item.videoType === 'm3u8'
+                  ? formatDownloadProgressLabel(item)
+                  : `${formatDownloadBytes(item.downloadedBytes)}${
+                      item.totalBytes > 0
+                        ? ` / ${formatDownloadBytes(item.totalBytes)}`
+                        : ''
+                    }`}
               </Text>
               {item.speed > 0 && (
                 <Text

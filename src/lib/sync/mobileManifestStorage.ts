@@ -11,10 +11,44 @@ const MANIFEST_MIME_TYPE = 'application/json';
 
 let manifestWriteQueue: Promise<void> = Promise.resolve();
 
+const normalizeName = (name: string) =>
+  name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/gi, ' ')
+    .trim();
+
 const findChild = async (directoryUri: string, name: string) => {
-  const entries =
-    await FileSystem.StorageAccessFramework.readDirectoryAsync(directoryUri);
-  return entries.find(entry => getSafEntryName(entry) === name);
+  try {
+    const entries =
+      await FileSystem.StorageAccessFramework.readDirectoryAsync(directoryUri);
+    // 1. Exact match
+    const exact = entries.find(entry => getSafEntryName(entry) === name);
+    if (exact) {
+      return exact;
+    }
+    // 2. Normalized match (ignores case, underscores, spaces, dashes)
+    const targetNorm = normalizeName(name);
+    const normalized = entries.find(
+      entry => normalizeName(getSafEntryName(entry)) === targetNorm,
+    );
+    if (normalized) {
+      return normalized;
+    }
+    // 3. Stem match without extension
+    const nameStem = name.includes('.')
+      ? name.slice(0, name.lastIndexOf('.'))
+      : name;
+    const stemNorm = normalizeName(nameStem);
+    return entries.find(entry => {
+      const entryName = getSafEntryName(entry);
+      const entryStem = entryName.includes('.')
+        ? entryName.slice(0, entryName.lastIndexOf('.'))
+        : entryName;
+      return normalizeName(entryStem) === stemNorm;
+    });
+  } catch (error) {
+    return undefined;
+  }
 };
 
 const getSyncDirectory = async (

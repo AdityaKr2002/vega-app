@@ -1,10 +1,12 @@
 import {SafeAreaView, RefreshControl, View} from 'react-native';
 import Slider from '../../components/Slider';
 import React, {useCallback, useEffect, useMemo, useState} from 'react';
+import {useFocusEffect} from '@react-navigation/native';
 import HeroOptimized from '../../components/Hero';
 import {mainStorage} from '../../lib/storage';
 import useContentStore from '../../lib/zustand/contentStore';
 import useHeroStore from '../../lib/zustand/herostore';
+import {syncFromSharedFolder} from '../../lib/sync/syncService';
 import {
   useHomePageData,
   getRandomHeroPost,
@@ -77,12 +79,25 @@ const Home = ({}: Props) => {
     }
   }, [heroPost, setHero]);
 
+  useFocusEffect(
+    useCallback(() => {
+      syncFromSharedFolder().catch(e =>
+        console.warn('[VegaSync] Home focus sync failed:', e),
+      );
+    }, []),
+  );
+
   // Optimized refresh handler
   const handleRefresh = useCallback(async () => {
     try {
       // Clear hero cache to get a new random hero on refresh
       clearHeroCache(provider?.value);
-      await refetch();
+      await Promise.allSettled([
+        refetch(),
+        syncFromSharedFolder().catch(e =>
+          console.warn('[VegaSync] Home refresh sync failed:', e),
+        ),
+      ]);
     } catch (refreshError) {
       console.error('Error refreshing home data:', refreshError);
     }

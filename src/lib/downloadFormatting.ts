@@ -13,3 +13,29 @@ export const formatDownloadBytes = (bytes: number): string => {
 
 export const formatDownloadSpeed = (bytesPerSecond: number): string =>
   `${formatDownloadBytes(bytesPerSecond)}/s`;
+
+export const formatDownloadProgressLabel = (item: {
+  sourceType?: string | null;
+  videoType?: string | null;
+  downloadedBytes: number;
+  totalBytes: number;
+}): string => {
+  const isHls = item.sourceType === 'hls' || item.videoType === 'm3u8';
+  if (item.totalBytes > 0) {
+    const percent = Math.min(
+      100,
+      Math.max(0, Math.round((item.downloadedBytes / item.totalBytes) * 100)),
+    );
+    if (isHls) {
+      return `${percent}%`;
+    }
+    const downloadedMB = Math.round(item.downloadedBytes / 1024 / 1024);
+    const totalMB = Math.round(item.totalBytes / 1024 / 1024);
+    if (downloadedMB === 0 && totalMB === 0) {
+      return `${percent}%`;
+    }
+    return `${downloadedMB} / ${totalMB} MB`;
+  }
+  return 'Downloading';
+};
+

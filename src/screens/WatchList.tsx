@@ -1,9 +1,10 @@
 import {View, Platform, Dimensions, FlatList} from 'react-native';
-import React from 'react';
-import {useNavigation} from '@react-navigation/native';
+import React, {useCallback} from 'react';
+import {useFocusEffect, useNavigation} from '@react-navigation/native';
 import {WatchListStackParamList} from '../App';
 import {NativeStackNavigationProp} from '@react-navigation/native-stack';
 import useWatchListStore from '../lib/zustand/watchListStore';
+import {syncFromSharedFolder} from '../lib/sync/syncService';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import {StatusBar} from 'expo-status-bar';
 import MediaPosterCard from '../components/MediaPosterCard';
@@ -16,6 +17,14 @@ const WatchList = () => {
   const navigation =
     useNavigation<NativeStackNavigationProp<WatchListStackParamList>>();
   const watchList = useWatchListStore(state => state.watchList);
+
+  useFocusEffect(
+    useCallback(() => {
+      syncFromSharedFolder().catch(e =>
+        console.warn('[VegaSync] WatchList sync failed:', e),
+      );
+    }, []),
+  );
 
   // Calculate how many items can fit per row
   const screenWidth = Dimensions.get('window').width;

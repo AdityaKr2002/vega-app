@@ -391,12 +391,24 @@ const SeasonList: React.FC<SeasonListProps> = ({
       const externalPlayer = settingsStorage.getBool('useExternalPlayer');
       const dwFile = await ifExists(file);
 
+      const downloadIndex = getOriginalLinkIndex(episodeList, link, linkIndex);
+      const downloadId = createSeriesDownloadId(
+        metaTitle,
+        seasonTitle,
+        downloadIndex,
+      );
+      const localDownload =
+        useDownloadsStore.getState().downloads[downloadId];
+      const localPath =
+        (localDownload?.status === 'completed' && localDownload?.filePath) ||
+        dwFile;
+
       if (externalPlayer) {
-        if (dwFile) {
+        if (localPath) {
           await IntentLauncher.startActivityAsync(
             'android.intent.action.VIEW',
             {
-              data: dwFile,
+              data: localPath,
               type: 'video/*',
             },
           );
@@ -546,29 +558,6 @@ const SeasonList: React.FC<SeasonListProps> = ({
         downloadIndex,
       );
       const handleEpisodePress = () => {
-        const localDownload =
-          useDownloadsStore.getState().downloads[downloadId];
-        if (localDownload?.status === 'completed') {
-          navigation.navigate('Player', {
-            episodeList: [
-              {
-                id: localDownload.id,
-                title: item.title,
-                link: localDownload.filePath,
-                sourceLink: localDownload.sourceLink,
-              },
-            ],
-            linkIndex: 0,
-            type: '',
-            directUrl: localDownload.filePath,
-            primaryTitle: metaTitle,
-            secondaryTitle: activeSeason.title,
-            poster,
-            providerValue,
-            infoUrl: localDownload.infoUrl || routeParams.link,
-          });
-          return;
-        }
         playHandler({
           linkIndex: index,
           type,
@@ -704,29 +693,6 @@ const SeasonList: React.FC<SeasonListProps> = ({
           ? item.title
           : 'Play';
       const handleEpisodePress = () => {
-        const localDownload =
-          useDownloadsStore.getState().downloads[downloadId];
-        if (localDownload?.status === 'completed') {
-          navigation.navigate('Player', {
-            episodeList: [
-              {
-                id: localDownload.id,
-                title: item.title,
-                link: localDownload.filePath,
-                sourceLink: localDownload.sourceLink,
-              },
-            ],
-            linkIndex: 0,
-            type: '',
-            directUrl: localDownload.filePath,
-            primaryTitle: metaTitle,
-            secondaryTitle: activeSeason.title,
-            poster,
-            providerValue,
-            infoUrl: localDownload.infoUrl || routeParams.link,
-          });
-          return;
-        }
         playHandler({
           linkIndex: index,
           type,

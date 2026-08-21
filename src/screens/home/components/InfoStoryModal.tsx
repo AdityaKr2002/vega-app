@@ -1,8 +1,8 @@
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
-import {Host, LoadingIndicator} from '@expo/ui/jetpack-compose';
-import {size as indicatorSize} from '@expo/ui/jetpack-compose/modifiers';
-import {StatusBar} from 'expo-status-bar';
-import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
+import { Host, LoadingIndicator } from '@expo/ui/jetpack-compose';
+import { size as indicatorSize } from '@expo/ui/jetpack-compose/modifiers';
+import { StatusBar } from 'expo-status-bar';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   FlatList,
   Image,
@@ -14,14 +14,14 @@ import {
   View,
   useWindowDimensions,
 } from 'react-native';
-import {SafeAreaView, useSafeAreaInsets} from 'react-native-safe-area-context';
-import {WebView} from 'react-native-webview';
-import {useTmdbStory} from '../../../lib/hooks/useTmdbStory';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { WebView } from 'react-native-webview';
+import { useTmdbStory } from '../../../lib/hooks/useTmdbStory';
 import type {
   TmdbStoryCollectionItem,
   TmdbStoryData,
 } from '../../../lib/hooks/useTmdbStory';
-import {useM3Colors, useM3HostTheme} from '../../../theme/M3PaletteContext';
+import { useM3Colors, useM3HostTheme } from '../../../theme/M3PaletteContext';
 import AppText from '../../../components/ui/Text';
 
 interface InfoStoryModalProps {
@@ -58,7 +58,7 @@ const formatCount = (value?: number): string | undefined => {
   if (!value) {
     return undefined;
   }
-  return new Intl.NumberFormat('en', {notation: 'compact'}).format(value);
+  return new Intl.NumberFormat('en', { notation: 'compact' }).format(value);
 };
 
 const formatCurrency = (value?: number): string | undefined => {
@@ -128,14 +128,14 @@ const SectionHeading = ({
         marginBottom: 18,
       }}>
       <MaterialCommunityIcons name={icon} size={26} color={colors.primary} />
-      <AppText role="titleLargeEmphasized" style={{color: colors.onBackground}}>
+      <AppText role="titleLargeEmphasized" style={{ color: colors.onBackground }}>
         {title}
       </AppText>
     </View>
   );
 };
 
-const ChipList = ({items}: {items: string[]}) => {
+const ChipList = ({ items }: { items: string[] }) => {
   const colors = useM3Colors();
 
   if (!items.length) {
@@ -143,7 +143,7 @@ const ChipList = ({items}: {items: string[]}) => {
   }
 
   return (
-    <View style={{flexDirection: 'row', flexWrap: 'wrap', gap: 8}}>
+    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
       {items.map(item => (
         <View
           key={item}
@@ -157,7 +157,7 @@ const ChipList = ({items}: {items: string[]}) => {
           }}>
           <AppText
             role="labelMediumEmphasized"
-            style={{color: colors.onSurface}}>
+            style={{ color: colors.onSurface }}>
             {item}
           </AppText>
         </View>
@@ -210,7 +210,7 @@ const AboutPage = ({
         <Image
           key={backdrop}
           fadeDuration={500}
-          source={{uri: backdrop}}
+          source={{ uri: backdrop }}
           resizeMode="cover"
           style={{
             aspectRatio: 16 / 9,
@@ -222,18 +222,18 @@ const AboutPage = ({
       ) : null}
       <AppText
         role="headlineLargeEmphasized"
-        style={{color: colors.onBackground, marginTop: 24}}>
+        style={{ color: colors.onBackground, marginTop: 24 }}>
         {data.title || fallbackTitle}
       </AppText>
       {data.tagline ? (
         <AppText
           role="titleMedium"
-          style={{color: colors.primary, marginTop: 7}}>
+          style={{ color: colors.primary, marginTop: 7 }}>
           {data.tagline}
         </AppText>
       ) : null}
       <View
-        style={{flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 14}}>
+        style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 14 }}>
         {formatRating(data.rating) ? (
           <View
             style={{
@@ -248,7 +248,7 @@ const AboutPage = ({
             <MaterialCommunityIcons name="star" size={16} color="#000000" />
             <AppText
               role="labelLargeEmphasized"
-              style={{color: '#000000', fontWeight: 'bold'}}>
+              style={{ color: '#000000', fontWeight: 'bold' }}>
               {formatRating(data.rating)}
               {data.voteCount ? ` (${formatCount(data.voteCount)})` : ''}
             </AppText>
@@ -274,7 +274,7 @@ const AboutPage = ({
             />
             <AppText
               role="labelLargeEmphasized"
-              style={{color: colors.onSurface}}>
+              style={{ color: colors.onSurface }}>
               {data.metascore} Metascore
             </AppText>
           </View>
@@ -299,13 +299,13 @@ const AboutPage = ({
             />
             <AppText
               role="labelLargeEmphasized"
-              style={{color: colors.onSurface}}>
+              style={{ color: colors.onSurface }}>
               #{data.trendingRank}
             </AppText>
           </View>
         ) : null}
       </View>
-      <View style={{marginTop: 34}}>
+      <View style={{ marginTop: 34 }}>
         <SectionHeading icon="movie-open-outline" title="What's it about" />
         <AppText
           role="titleLarge"
@@ -344,7 +344,7 @@ const TrailerPage = ({
       ];
     if (data.trailerKey)
       return [
-        {id: 'primary-yt', name: data.trailerName, youtubeKey: data.trailerKey},
+        { id: 'primary-yt', name: data.trailerName, youtubeKey: data.trailerKey },
       ];
     return [];
   }, [data]);
@@ -355,15 +355,15 @@ const TrailerPage = ({
   const youtubeOrigin = 'https://vega.app';
   const trailerUrl = activeVideo?.youtubeKey
     ? `https://www.youtube.com/embed/${encodeURIComponent(
-        activeVideo.youtubeKey,
-      )}?playsinline=1&rel=0&modestbranding=1&origin=${encodeURIComponent(
-        youtubeOrigin,
-      )}`
+      activeVideo.youtubeKey,
+    )}?playsinline=1&rel=0&modestbranding=1&origin=${encodeURIComponent(
+      youtubeOrigin,
+    )}`
     : '';
   const youtubeUrl = activeVideo?.youtubeKey
     ? `https://www.youtube.com/watch?v=${encodeURIComponent(
-        activeVideo.youtubeKey,
-      )}`
+      activeVideo.youtubeKey,
+    )}`
     : activeVideo?.url || '';
 
   const playerHtml = activeVideo?.url
@@ -417,7 +417,7 @@ const TrailerPage = ({
           }
         />
         {trailers.length > 1 ? (
-          <View style={{flexDirection: 'row', gap: 8}}>
+          <View style={{ flexDirection: 'row', gap: 8 }}>
             <TouchableOpacity
               activeOpacity={0.7}
               onPressIn={onInteract}
@@ -494,8 +494,8 @@ const TrailerPage = ({
             mediaPlaybackRequiresUserAction
             originWhitelist={['https://*', 'http://*']}
             setSupportMultipleWindows={false}
-            source={{baseUrl: `${youtubeOrigin}/`, html: playerHtml}}
-            style={{backgroundColor: '#000000', flex: 1}}
+            source={{ baseUrl: `${youtubeOrigin}/`, html: playerHtml }}
+            style={{ backgroundColor: '#000000', flex: 1 }}
             thirdPartyCookiesEnabled
           />
         ) : (
@@ -515,14 +515,14 @@ const TrailerPage = ({
       </View>
       <AppText
         role="titleLargeEmphasized"
-        style={{color: colors.onBackground, marginTop: 22}}>
+        style={{ color: colors.onBackground, marginTop: 22 }}>
         {activeVideo?.name || `${data.title} trailer`}
       </AppText>
       {youtubeUrl ? (
         <View
           onTouchEnd={event => event.stopPropagation()}
           onTouchStart={event => event.stopPropagation()}
-          style={{alignItems: 'center', marginTop: 30, width: '100%'}}>
+          style={{ alignItems: 'center', marginTop: 30, width: '100%' }}>
           <TouchableOpacity
             accessibilityRole="button"
             accessibilityLabel="Open trailer"
@@ -550,7 +550,7 @@ const TrailerPage = ({
             />
             <AppText
               role="labelLargeEmphasized"
-              style={{color: colors.onSurface}}>
+              style={{ color: colors.onSurface }}>
               {activeVideo?.youtubeKey ? 'Open on YouTube' : 'Open Video'}
             </AppText>
           </TouchableOpacity>
@@ -572,7 +572,7 @@ const CastPage = ({
   return (
     <>
       <SectionHeading icon="account-group-outline" title="Cast" />
-      <View style={{flexDirection: 'row', flexWrap: 'wrap', gap: 12}}>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
         {data.cast.map(person => {
           const image = getTmdbImage(person.profilePath, 'w342');
           return (
@@ -602,7 +602,7 @@ const CastPage = ({
               }}>
               {image ? (
                 <Image
-                  source={{uri: image}}
+                  source={{ uri: image }}
                   resizeMode="cover"
                   style={{
                     aspectRatio: 0.78,
@@ -626,18 +626,18 @@ const CastPage = ({
                   />
                 </View>
               )}
-              <View style={{padding: 12}}>
+              <View style={{ padding: 12 }}>
                 <AppText
                   role="labelLargeEmphasized"
                   numberOfLines={2}
-                  style={{color: colors.onSurface}}>
+                  style={{ color: colors.onSurface }}>
                   {person.name}
                 </AppText>
                 {person.character ? (
                   <AppText
                     role="bodySmall"
                     numberOfLines={2}
-                    style={{color: colors.onSurfaceVariant, marginTop: 3}}>
+                    style={{ color: colors.onSurfaceVariant, marginTop: 3 }}>
                     {person.character}
                   </AppText>
                 ) : null}
@@ -650,7 +650,7 @@ const CastPage = ({
   );
 };
 
-const BoxOfficePage = ({data}: {data: TmdbStoryData}) => {
+const BoxOfficePage = ({ data }: { data: TmdbStoryData }) => {
   const colors = useM3Colors();
   const stats = [
     {
@@ -723,7 +723,7 @@ const BoxOfficePage = ({data}: {data: TmdbStoryData}) => {
                 <AppText
                   numberOfLines={1}
                   role="labelMediumEmphasized"
-                  style={{color: colors.onSurfaceVariant}}>
+                  style={{ color: colors.onSurfaceVariant }}>
                   {item.label}
                 </AppText>
               </View>
@@ -775,7 +775,7 @@ const BoxOfficePage = ({data}: {data: TmdbStoryData}) => {
           }}>
           <AppText
             role="titleMediumEmphasized"
-            style={{color: colors.onSurface}}>
+            style={{ color: colors.onSurface }}>
             Return on Investment
           </AppText>
           <AppText
@@ -818,97 +818,97 @@ const FactCard = ({
       <MaterialCommunityIcons name={icon} size={26} color={colors.primary} />
       <AppText
         role="titleMediumEmphasized"
-        style={{color: colors.onSurface, marginTop: 12}}>
+        style={{ color: colors.onSurface, marginTop: 12 }}>
         {value}
       </AppText>
       <AppText
         role="bodySmall"
-        style={{color: colors.onSurfaceVariant, marginTop: 3}}>
+        style={{ color: colors.onSurfaceVariant, marginTop: 3 }}>
         {label}
       </AppText>
     </View>
   );
 };
 
-const FactsPage = ({data}: {data: TmdbStoryData}) => {
+const FactsPage = ({ data }: { data: TmdbStoryData }) => {
   const colors = useM3Colors();
   const facts = [
     data.trendingRank
       ? {
-          icon: 'trending-up' as const,
-          label: 'Trending this week',
-          value: `#${data.trendingRank}`,
-        }
+        icon: 'trending-up' as const,
+        label: 'Trending this week',
+        value: `#${data.trendingRank}`,
+      }
       : null,
     formatRating(data.rating)
       ? {
-          icon: 'star-outline' as const,
-          label: `${formatCount(data.voteCount) || 'TMDB'} votes`,
-          value: `${formatRating(data.rating)}/10`,
-        }
+        icon: 'star-outline' as const,
+        label: `${formatCount(data.voteCount) || 'TMDB'} votes`,
+        value: `${formatRating(data.rating)}/10`,
+      }
       : null,
     data.metascore
       ? {
-          icon: 'pound' as const,
-          label: 'Metascore',
-          value: `${data.metascore}`,
-        }
+        icon: 'pound' as const,
+        label: 'Metascore',
+        value: `${data.metascore}`,
+      }
       : null,
     data.certification
       ? {
-          icon: 'shield-outline' as const,
-          label: 'Content rating',
-          value: data.certification,
-        }
+        icon: 'shield-outline' as const,
+        label: 'Content rating',
+        value: data.certification,
+      }
       : null,
     data.releaseDate
       ? {
-          icon: 'calendar-blank-outline' as const,
-          label: 'Released',
-          value: data.releaseDate.slice(0, 4),
-        }
+        icon: 'calendar-blank-outline' as const,
+        label: 'Released',
+        value: data.releaseDate.slice(0, 4),
+      }
       : null,
     data.runtime
       ? {
-          icon: 'clock-outline' as const,
-          label: data.mediaType === 'tv' ? 'Episode runtime' : 'Runtime',
-          value: formatRuntime(data.runtime) || '',
-        }
+        icon: 'clock-outline' as const,
+        label: data.mediaType === 'tv' ? 'Episode runtime' : 'Runtime',
+        value: formatRuntime(data.runtime) || '',
+      }
       : null,
     data.status
       ? {
-          icon: 'information-outline' as const,
-          label: 'Status',
-          value: data.status,
-        }
+        icon: 'information-outline' as const,
+        label: 'Status',
+        value: data.status,
+      }
       : null,
     data.watchlistCount
       ? {
-          icon: 'account-group-outline' as const,
-          label: 'Watchlist',
-          value: data.watchlistCount.replace('Added by ', ''),
-        }
+        icon: 'account-group-outline' as const,
+        label: 'Watchlist',
+        value: data.watchlistCount.replace('Added by ', ''),
+      }
       : null,
     data.totalSeasons
       ? {
-          icon: 'television' as const,
-          label: 'Seasons',
-          value: `${data.totalSeasons} ${data.totalSeasons === 1 ? 'season' : 'seasons'}`,
-        }
+        icon: 'television' as const,
+        label: 'Seasons',
+        value: `${data.totalSeasons} ${data.totalSeasons === 1 ? 'season' : 'seasons'}`,
+      }
       : null,
     data.totalEpisodes
       ? {
-          icon: 'television-play' as const,
-          label: 'Episodes',
-          value: `${data.totalEpisodes} ${data.totalEpisodes === 1 ? 'episode' : 'episodes'}`,
-        }
+        icon: 'television-play' as const,
+        label: 'Episodes',
+        value: `${data.totalEpisodes} ${data.totalEpisodes === 1 ? 'episode' : 'episodes'}`,
+      }
       : null,
     data.upcomingSeason
       ? {
-          icon: 'calendar-clock' as const,
-          label: 'Upcoming',
-          value: data.upcomingSeason,
-        }
+        icon: 'calendar-clock' as const,
+        label: 'Upcoming',
+        value: data.upcomingSeason,
+      }
       : null,
   ].filter(Boolean) as {
     icon: React.ComponentProps<typeof MaterialCommunityIcons>['name'];
@@ -919,7 +919,7 @@ const FactsPage = ({data}: {data: TmdbStoryData}) => {
   return (
     <>
       <SectionHeading icon="chart-box-outline" title="Ratings & facts" />
-      <View style={{flexDirection: 'row', flexWrap: 'wrap', gap: 12}}>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
         {facts.map(fact => (
           <FactCard
             key={`${fact.label}-${fact.value}`}
@@ -931,10 +931,10 @@ const FactsPage = ({data}: {data: TmdbStoryData}) => {
       </View>
 
       {data.awardsText ? (
-        <View style={{marginTop: 26}}>
+        <View style={{ marginTop: 26 }}>
           <AppText
             role="titleMediumEmphasized"
-            style={{color: colors.onBackground, marginBottom: 8}}>
+            style={{ color: colors.onBackground, marginBottom: 8 }}>
             Awards
           </AppText>
           <View
@@ -945,7 +945,7 @@ const FactsPage = ({data}: {data: TmdbStoryData}) => {
               borderWidth: 1,
               padding: 14,
             }}>
-            <AppText role="bodyMedium" style={{color: colors.onSurface}}>
+            <AppText role="bodyMedium" style={{ color: colors.onSurface }}>
               {data.awardsText}
             </AppText>
           </View>
@@ -953,40 +953,40 @@ const FactsPage = ({data}: {data: TmdbStoryData}) => {
       ) : null}
 
       {data.creators.length ? (
-        <View style={{marginTop: 30}}>
+        <View style={{ marginTop: 30 }}>
           <AppText
             role="titleMediumEmphasized"
-            style={{color: colors.onBackground, marginBottom: 10}}>
+            style={{ color: colors.onBackground, marginBottom: 10 }}>
             {data.mediaType === 'tv' ? 'Created by' : 'Directed by'}
           </AppText>
           <ChipList items={data.creators} />
         </View>
       ) : null}
       {data.genres.length ? (
-        <View style={{marginTop: 26}}>
+        <View style={{ marginTop: 26 }}>
           <AppText
             role="titleMediumEmphasized"
-            style={{color: colors.onBackground, marginBottom: 10}}>
+            style={{ color: colors.onBackground, marginBottom: 10 }}>
             Genres
           </AppText>
           <ChipList items={data.genres} />
         </View>
       ) : null}
       {data.keywords.length ? (
-        <View style={{marginTop: 26}}>
+        <View style={{ marginTop: 26 }}>
           <AppText
             role="titleMediumEmphasized"
-            style={{color: colors.onBackground, marginBottom: 10}}>
+            style={{ color: colors.onBackground, marginBottom: 10 }}>
             Themes
           </AppText>
           <ChipList items={data.keywords} />
         </View>
       ) : null}
       {data.companies.length || data.networks.length ? (
-        <View style={{marginTop: 26}}>
+        <View style={{ marginTop: 26 }}>
           <AppText
             role="titleMediumEmphasized"
-            style={{color: colors.onBackground, marginBottom: 8}}>
+            style={{ color: colors.onBackground, marginBottom: 8 }}>
             Studios & networks
           </AppText>
           <AppText
@@ -1016,7 +1016,7 @@ const FactsPage = ({data}: {data: TmdbStoryData}) => {
   );
 };
 
-const CollectionRow = ({item}: {item: TmdbStoryCollectionItem}) => {
+const CollectionRow = ({ item }: { item: TmdbStoryCollectionItem }) => {
   const colors = useM3Colors();
   const image = getTmdbImage(item.imagePath, 'w342');
 
@@ -1033,7 +1033,7 @@ const CollectionRow = ({item}: {item: TmdbStoryCollectionItem}) => {
       }}>
       {image ? (
         <Image
-          source={{uri: image}}
+          source={{ uri: image }}
           resizeMode="cover"
           style={{
             alignSelf: 'stretch',
@@ -1057,14 +1057,14 @@ const CollectionRow = ({item}: {item: TmdbStoryCollectionItem}) => {
           />
         </View>
       )}
-      <View style={{flex: 1, padding: 16}}>
-        <AppText role="titleMediumEmphasized" style={{color: colors.onSurface}}>
+      <View style={{ flex: 1, padding: 16 }}>
+        <AppText role="titleMediumEmphasized" style={{ color: colors.onSurface }}>
           {item.title}
         </AppText>
         {item.subtitle ? (
           <AppText
             role="bodyMedium"
-            style={{color: colors.onSurfaceVariant, marginTop: 5}}>
+            style={{ color: colors.onSurfaceVariant, marginTop: 5 }}>
             {item.subtitle}
           </AppText>
         ) : null}
@@ -1084,8 +1084,8 @@ const RelatedPage = ({
 
   return (
     <>
-      <SectionHeading icon="movie-filter-outline" title="More like this" />
-      <View style={{flexDirection: 'row', flexWrap: 'wrap', gap: 12}}>
+      <SectionHeading icon="movie-filter-outline" title="Recommendations" />
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
         {(data.relatedTitles ?? []).map(item => {
           return (
             <TouchableOpacity
@@ -1107,7 +1107,7 @@ const RelatedPage = ({
               }}>
               {item.image ? (
                 <Image
-                  source={{uri: item.image}}
+                  source={{ uri: item.image }}
                   resizeMode="cover"
                   style={{
                     aspectRatio: 0.72,
@@ -1131,11 +1131,11 @@ const RelatedPage = ({
                   />
                 </View>
               )}
-              <View style={{padding: 12}}>
+              <View style={{ padding: 12 }}>
                 <AppText
                   role="labelLargeEmphasized"
                   numberOfLines={2}
-                  style={{color: colors.onSurface}}>
+                  style={{ color: colors.onSurface }}>
                   {item.title}
                 </AppText>
                 {formatRating(item.rating) ? (
@@ -1153,7 +1153,7 @@ const RelatedPage = ({
                     />
                     <AppText
                       role="labelMediumEmphasized"
-                      style={{color: colors.onSurfaceVariant}}>
+                      style={{ color: colors.onSurfaceVariant }}>
                       {formatRating(item.rating)}
                     </AppText>
                   </View>
@@ -1206,22 +1206,22 @@ const RatingsPage = ({
             <MaterialCommunityIcons name="star" size={38} color="#f5c518" />
             <View>
               <View
-                style={{alignItems: 'baseline', flexDirection: 'row', gap: 4}}>
+                style={{ alignItems: 'baseline', flexDirection: 'row', gap: 4 }}>
                 <AppText
                   role="headlineMediumEmphasized"
-                  style={{color: colors.onSurface}}>
+                  style={{ color: colors.onSurface }}>
                   {formatRating(data.rating)}
                 </AppText>
                 <AppText
                   role="titleSmall"
-                  style={{color: colors.onSurfaceVariant}}>
+                  style={{ color: colors.onSurfaceVariant }}>
                   /10
                 </AppText>
               </View>
               {voteCountFormatted ? (
                 <AppText
                   role="bodySmall"
-                  style={{color: colors.onSurfaceVariant}}>
+                  style={{ color: colors.onSurfaceVariant }}>
                   {voteCountFormatted} votes
                 </AppText>
               ) : null}
@@ -1316,7 +1316,7 @@ const RatingsPage = ({
               <MaterialCommunityIcons name="star" size={16} color="#f5c518" />
               <AppText
                 role="labelLargeEmphasized"
-                style={{color: colors.onSurface}}>
+                style={{ color: colors.onSurface }}>
                 {data.featuredReview.rating}/10
               </AppText>
             </View>
@@ -1325,7 +1325,7 @@ const RatingsPage = ({
           {data.featuredReview.summary ? (
             <AppText
               role="titleMediumEmphasized"
-              style={{color: colors.onSurface}}>
+              style={{ color: colors.onSurface }}>
               {data.featuredReview.summary}
             </AppText>
           ) : null}
@@ -1334,7 +1334,7 @@ const RatingsPage = ({
             <AppText
               role="bodyMedium"
               numberOfLines={isReviewExpanded ? undefined : 6}
-              style={{color: colors.onSurfaceVariant, lineHeight: 20}}>
+              style={{ color: colors.onSurfaceVariant, lineHeight: 20 }}>
               {data.featuredReview.text}
             </AppText>
           ) : null}
@@ -1349,7 +1349,7 @@ const RatingsPage = ({
               activeOpacity={0.7}>
               <AppText
                 role="labelLargeEmphasized"
-                style={{color: colors.primary}}>
+                style={{ color: colors.primary }}>
                 {isReviewExpanded ? 'Show less' : 'Read more'}
               </AppText>
             </TouchableOpacity>
@@ -1358,7 +1358,7 @@ const RatingsPage = ({
           {data.featuredReview.author ? (
             <AppText
               role="bodySmall"
-              style={{color: colors.onSurfaceVariant, opacity: 0.8}}>
+              style={{ color: colors.onSurfaceVariant, opacity: 0.8 }}>
               By {data.featuredReview.author}
               {data.featuredReview.date ? ` • ${data.featuredReview.date}` : ''}
             </AppText>
@@ -1369,7 +1369,7 @@ const RatingsPage = ({
   );
 };
 
-const CollectionPage = ({data}: {data: TmdbStoryData}) => (
+const CollectionPage = ({ data }: { data: TmdbStoryData }) => (
   <>
     <SectionHeading
       icon={
@@ -1400,11 +1400,11 @@ const InfoStoryModal = ({
 }: InfoStoryModalProps) => {
   const colors = useM3Colors();
   const hostTheme = useM3HostTheme();
-  const {width} = useWindowDimensions();
+  const { width } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const [pageIndex, setPageIndex] = useState(0);
   const storyListRef = useRef<FlatList<StoryPage>>(null);
-  const touchStart = useRef<{time: number; x: number; y: number} | undefined>(
+  const touchStart = useRef<{ time: number; x: number; y: number } | undefined>(
     undefined,
   );
   const isInteractingRef = useRef(false);
@@ -1415,7 +1415,7 @@ const InfoStoryModal = ({
     }, 400);
   }, []);
 
-  const {data, error, isFetching, refetch} = useTmdbStory({
+  const { data, error, isFetching, refetch } = useTmdbStory({
     enabled: visible,
     imdbId,
     tmdbId,
@@ -1423,7 +1423,7 @@ const InfoStoryModal = ({
   });
   const pages = useMemo<StoryPage[]>(() => {
     const items: StoryPage[] = [
-      {icon: 'movie-open-outline', key: 'about', title: 'About'},
+      { icon: 'movie-open-outline', key: 'about', title: 'About' },
     ];
     if (data?.trailers?.length || data?.trailerKey || data?.trailerUrl) {
       items.push({
@@ -1458,7 +1458,7 @@ const InfoStoryModal = ({
         title: 'Reviews',
       });
     }
-    items.push({icon: 'chart-box-outline', key: 'facts', title: 'Facts'});
+    items.push({ icon: 'chart-box-outline', key: 'facts', title: 'Facts' });
     if (data?.relatedTitles?.length) {
       items.push({
         icon: 'movie-filter-outline',
@@ -1508,13 +1508,13 @@ const InfoStoryModal = ({
     }
   };
 
-  const renderPage = ({item}: {item: StoryPage}) => {
+  const renderPage = ({ item }: { item: StoryPage }) => {
     if (!data) {
       return null;
     }
     return (
       <ScrollView
-        style={{width}}
+        style={{ width }}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{
           paddingBottom: 48,
@@ -1573,7 +1573,7 @@ const InfoStoryModal = ({
           if (!data || !start) {
             return;
           }
-          const {pageX, pageY, timestamp} = event.nativeEvent;
+          const { pageX, pageY, timestamp } = event.nativeEvent;
           const isTap =
             Math.abs(pageX - start.x) <= 12 &&
             Math.abs(pageY - start.y) <= 12 &&
@@ -1584,10 +1584,10 @@ const InfoStoryModal = ({
           }
         }}
         onTouchStart={event => {
-          const {pageX, pageY, timestamp} = event.nativeEvent;
-          touchStart.current = {time: timestamp, x: pageX, y: pageY};
+          const { pageX, pageY, timestamp } = event.nativeEvent;
+          touchStart.current = { time: timestamp, x: pageX, y: pageY };
         }}
-        style={{backgroundColor: colors.background, flex: 1}}>
+        style={{ backgroundColor: colors.background, flex: 1 }}>
         <StatusBar style="light" />
         <View
           pointerEvents="none"
@@ -1674,7 +1674,7 @@ const InfoStoryModal = ({
                   }}>
                   <AppText
                     role="labelLargeEmphasized"
-                    style={{color: colors.onPrimary}}>
+                    style={{ color: colors.onPrimary }}>
                     Try again
                   </AppText>
                 </Pressable>

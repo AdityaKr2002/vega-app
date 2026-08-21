@@ -516,6 +516,7 @@ const Player = ({ route }: Props): React.JSX.Element => {
     audioTracks,
     textTracks,
     videoTracks,
+    loadedVideoSize,
     selectedAudioTrackIndex,
     selectedTextTrackIndex,
     selectedQualityIndex,
@@ -650,7 +651,6 @@ const Player = ({ route }: Props): React.JSX.Element => {
     [continueWatchingId, updateContinueWatchingProgress],
   );
 
-  // Custom hook for progress handling
   const { videoPositionRef, handleProgress } = usePlayerProgress({
     activeEpisode,
     onProgressSaved: saveContinueWatchingProgress,
@@ -936,11 +936,15 @@ const Player = ({ route }: Props): React.JSX.Element => {
   }, []);
 
   const selectedPlayerQuality = useMemo(() => {
+    // On adaptive bitrate there is no explicit choice, so fall back to the track
+    // the player reports as active, then to the decoded size from onLoad.
+    const activeTrack = videoTracks?.find((track: any) => track.selected);
     const selectedTrack =
       videoTracks?.length === 1
         ? videoTracks[0]
-        : videoTracks?.[selectedQualityIndex];
-    const selectedTrackHeight = Number(selectedTrack?.height) || 0;
+        : (videoTracks?.[selectedQualityIndex] ?? activeTrack);
+    const selectedTrackHeight =
+      Number(selectedTrack?.height) || Number(loadedVideoSize?.height) || 0;
     const quality =
       (selectedTrackHeight > 0 ? selectedTrackHeight.toString() : undefined) ||
       selectedStream?.quality ||
@@ -956,6 +960,7 @@ const Player = ({ route }: Props): React.JSX.Element => {
     };
   }, [
     formatQuality,
+    loadedVideoSize?.height,
     selectedQualityIndex,
     selectedStream?.quality,
     selectedStream?.type,
@@ -982,14 +987,7 @@ const Player = ({ route }: Props): React.JSX.Element => {
       console.log('PlayerError', e);
 
       if (selectedStream?.type === 'local') {
-        // The remembered local file is unreadable — most likely it was
-        // deleted, moved, or its access permission was revoked. Forget it
-        // and fall back to normal online sources instead of exiting the
-        // player. This usually fires before the background online search
-        // has finished, so: if results are already in, jump straight to
-        // the first one; otherwise clear the selection back to neutral so
-        // the existing "pick streamData[0] once it arrives" logic in
-        // useStream takes over as soon as it resolves.
+
         if (activeEpisodeKey) {
           clearLocalVideoAssociation(activeEpisodeKey);
         }
@@ -1028,13 +1026,7 @@ const Player = ({ route }: Props): React.JSX.Element => {
     ],
   );
 
-  // Let the user pick a local video file from the device and play it
-  // instead of the online stream. Reuses the same DocumentPicker flow
-  // used for custom subtitle files below, and simply swaps the active
-  // "stream" for one pointing at the local file uri. Continue Watching
-  // keeps working because it is keyed off the episode/infoUrl, not the
-  // stream source, and casting is automatically disabled for local files
-  // since isCastableStreamUrl only allows http(s) links.
+
   const handleSelectLocalVideo = useCallback(async () => {
     try {
       const res = await DocumentPicker.getDocumentAsync({
@@ -1048,10 +1040,7 @@ const Player = ({ route }: Props): React.JSX.Element => {
           'video/x-m4v',
         ],
         multiple: false,
-        // Videos can be several gigabytes. Play the provider uri directly
-        // instead of duplicating the whole file into app cache — Android's
-        // takePersistableUriPermission (below) keeps it readable across
-        // app restarts without a copy.
+
         copyToCacheDirectory: false,
       });
 
@@ -1511,7 +1500,10 @@ const Player = ({ route }: Props): React.JSX.Element => {
       showOnStart: !isPlayerLocked,
       source: {
         textTracks: externalSubs,
-        uri: processedStreamUrl || '',
+        uri:
+          (selectedStream.link.startsWith('magnet:')
+            ? processedStreamUrl
+            : selectedStream.link) || '',
         bufferConfig: {
           // High-bitrate 4K streams can otherwise fill Android's complete
           // Java heap: react-native-video defaults the allocator limit to
@@ -1528,6 +1520,7 @@ const Player = ({ route }: Props): React.JSX.Element => {
         },
         shouldCache: true,
         ...(selectedStream?.type === 'm3u8' && { type: 'm3u8' }),
+        ...(selectedStream?.type === 'mpd' && { type: 'mpd' }),
         headers: selectedStream?.headers,
         metadata: {
           title: route.params?.primaryTitle,
@@ -1540,6 +1533,15 @@ const Player = ({ route }: Props): React.JSX.Element => {
       onProgress: handleProgress,
       onLoad: (e: any) => {
         handleVideoLoad(e?.naturalSize);
+        if (e?.videoTracks && e.videoTracks.length > 0) {
+          processVideoTracks(e.videoTracks);
+        }
+        if (e?.audioTracks && e.audioTracks.length > 0) {
+          processAudioTracks(e.audioTracks);
+        }
+        if (e?.textTracks && e.textTracks.length > 0) {
+          setTextTracks(e.textTracks);
+        }
         videoLoadedRef.current = true;
         if (watchedDuration > 5) {
           playerRef.current?.seek(watchedDuration);
@@ -1578,6 +1580,7 @@ const Player = ({ route }: Props): React.JSX.Element => {
       progressUpdateInterval: 1000,
       bufferingStrategy: BufferingStrategyType.DEPENDING_ON_MEMORY,
       showNotificationControls: showMediaControls,
+      // debug: {enable: true, thread: false},
       onError: handleVideoError,
       resizeMode,
       selectedAudioTrack,
@@ -1595,7 +1598,7 @@ const Player = ({ route }: Props): React.JSX.Element => {
           if (downloadedTrack) {
             setSelectedTextTrack({
               type: SelectedTrackType.INDEX,
-              value: downloadedTrack.index,
+              value: String(downloadedTrack.index),
             });
             setSelectedTextTrackIndex(downloadedTrack.index);
           }
@@ -2160,7 +2163,7 @@ const Player = ({ route }: Props): React.JSX.Element => {
                     onPress={() => {
                       setSelectedTextTrack({
                         type: SelectedTrackType.INDEX,
-                        value: track.index,
+                        value: String(track.index),
                       });
                       setSelectedTextTrackIndex(track.index);
                       cacheStorage.setString(
@@ -2223,29 +2226,91 @@ const Player = ({ route }: Props): React.JSX.Element => {
                     Quality
                   </Text>
 
+                  {videoTracks.length === 0 && (
+                    <View className="flex justify-center items-center">
+                      <Text className="text-white text-xs">
+                        {loadedVideoSize
+                          ? 'No quality options reported for this stream'
+                          : 'Loading video tracks...'}
+                      </Text>
+                    </View>
+                  )}
+
+                  {videoTracks.length === 1 && (
+                    <View className="flex justify-center items-center">
+                      <Text className="text-white text-xs">
+                        This stream has a single quality
+                      </Text>
+                    </View>
+                  )}
+
+                  {videoTracks && videoTracks.length > 1 && (
+                    <PlayerMenuRow
+                      title="Auto"
+                      detail="Adaptive bitrate"
+                      selected={selectedQualityIndex === 1000}
+                      accentColor={primary}
+                      icon="video-settings"
+                      onPress={() => {
+                        setSelectedVideoTrack({
+                          type: SelectedVideoTrackType.AUTO,
+                          value: '',
+                        });
+                        setSelectedQualityIndex(1000);
+                      }}
+                    />
+                  )}
+
                   {videoTracks &&
-                    videoTracks.map((track: any, i: any) => (
-                      <PlayerMenuRow
-                        key={i}
-                        title={`${track.height}x${track.width}`}
-                        detail={[
-                          track.bitrate && `Bitrate ${track.bitrate}`,
-                          track.codecs && `Codec ${track.codecs}`,
-                        ]
-                          .filter(Boolean)
-                          .join(' · ')}
-                        selected={selectedQualityIndex === i}
-                        accentColor={primary}
-                        icon={getQualityIconName(track.height)}
-                        onPress={() => {
-                          setSelectedVideoTrack({
-                            type: SelectedVideoTrackType.INDEX,
-                            value: track.index,
-                          });
-                          setSelectedQualityIndex(i);
-                        }}
-                      />
-                    ))}
+                    videoTracks.map((track: any, i: any) => {
+                      const resolutionTitle = track.height
+                        ? `${track.height}p`
+                        : track.width
+                          ? `${track.width}p`
+                          : 'Standard';
+                      const bitrateText = track.bitrate
+                        ? track.bitrate >= 1000000
+                          ? `${(track.bitrate / 1000000).toFixed(1)} Mbps`
+                          : `${Math.round(track.bitrate / 1000)} kbps`
+                        : undefined;
+                      const detailText = [
+                        bitrateText,
+                        track.width &&
+                        track.height &&
+                        `${track.width}x${track.height}`,
+                        track.codecs && `${track.codecs}`,
+                      ]
+                        .filter(Boolean)
+                        .join(' · ');
+
+                      return (
+                        <PlayerMenuRow
+                          key={i}
+                          title={resolutionTitle}
+                          detail={detailText}
+                          selected={selectedQualityIndex === i}
+                          accentColor={primary}
+                          icon={getQualityIconName(track.height)}
+                          onPress={() => {
+                            if (
+                              typeof track.index === 'number' &&
+                              track.index >= 0
+                            ) {
+                              setSelectedVideoTrack({
+                                type: SelectedVideoTrackType.INDEX,
+                                value: String(track.index),
+                              });
+                            } else if (track.height) {
+                              setSelectedVideoTrack({
+                                type: SelectedVideoTrackType.RESOLUTION,
+                                value: String(track.height),
+                              });
+                            }
+                            setSelectedQualityIndex(i);
+                          }}
+                        />
+                      );
+                    })}
                 </ScrollView>
               </View>
             )}

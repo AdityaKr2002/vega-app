@@ -109,27 +109,33 @@ const Extensions = ({navigation}: Props) => {
     variant: AppDialogVariant = 'info',
     actions?: AppDialogAction[],
   ) => setDialog({title, message, variant, actions});
-  // Load providers on component mount
+  // Load providers immediately on component mount (synchronous 0ms load)
   useEffect(() => {
+    const initialSource = extensionStorage.getProviderSource();
+    const initialAuthor = initialSource?.author || '';
+    setActiveSourceAuthor(initialAuthor);
+    loadProviders(initialAuthor);
+
     const initializeExtensions = async () => {
       try {
         await extensionManager.initialize();
-        const source = extensionStorage.getProviderSource();
-        const author = source?.author || '';
-        setActiveSourceAuthor(author);
-        loadProviders(author);
-        await checkForUpdates();
+        const currentSource = extensionStorage.getProviderSource();
+        const author = currentSource?.author || '';
+        if (author !== initialAuthor) {
+          setActiveSourceAuthor(author);
+          loadProviders(author);
+        }
+        await checkForUpdates(false);
 
-        // Try to fetch latest providers if we don't have any
-        if (
-          author &&
-          (!availableProviders || availableProviders.length === 0)
-        ) {
+        // Fetch latest providers in background if cache is empty
+        const cachedAvailable = author
+          ? extensionStorage.getAvailableProviders(author)
+          : [];
+        if (author && cachedAvailable.length === 0) {
           await refreshProviders(author);
         }
       } catch (error) {
-        // Still try to load from cache if initialization fails
-        loadProviders();
+        console.warn('Background extensions initialization error:', error);
       }
     };
 
@@ -148,7 +154,7 @@ const Extensions = ({navigation}: Props) => {
     setActiveSourceAuthor(selectedAuthor);
   };
 
-  const checkForUpdates = async () => {
+  const checkForUpdates = async (force = true) => {
     const source = extensionStorage.getProviderSource();
     if (!source) {
       setUpdateInfos([]);
@@ -156,7 +162,7 @@ const Extensions = ({navigation}: Props) => {
     }
 
     try {
-      const updates = await updateProvidersService.checkForUpdatesManual();
+      const updates = await updateProvidersService.checkForUpdatesManual(force);
       setUpdateInfos(updates);
     } catch (error) {
       console.error('Error checking for updates:', error);
@@ -435,29 +441,23 @@ const Extensions = ({navigation}: Props) => {
     await refreshProviders(activeSourceAuthor);
   };
   const currentData = useMemo(() => {
-    return Array.from(
-      [...(availableProviders || []), ...(installedProviders || [])]
-        .filter(item => item && item.value)
-        .reduce((providers, item) => {
-          const key = `${item.source?.author || ''}:${item.value}`;
-          const existing = providers.get(key);
-          const cachedModule = extensionStorage.getProviderModules(
-            item.value,
-            item.source?.author,
-          );
-          const hasSettings = Boolean(
-            item.hasSettings ||
-            cachedModule?.modules?.settings,
-          );
-          providers.set(key, {
-            ...(existing || {}),
-            ...item,
-            hasSettings,
-          });
-          return providers;
-        }, new Map<string, ProviderExtension>())
-        .values(),
-    );
+    const allProviders = [
+      ...(availableProviders || []),
+      ...(installedProviders || []),
+    ].filter(item => item && item.value);
+
+    const providersMap = new Map<string, ProviderExtension>();
+    for (const item of allProviders) {
+      const key = `${item.source?.author || ''}:${item.value}`;
+      const existing = providersMap.get(key);
+      providersMap.set(key, {
+        ...(existing || {}),
+        ...item,
+        hasSettings: Boolean(item.hasSettings || existing?.hasSettings),
+      });
+    }
+
+    return Array.from(providersMap.values());
   }, [availableProviders, installedProviders]);
 
   const renderProviderCard = useCallback(

@@ -114,12 +114,22 @@ export class ExtensionManager {
         }
       }
 
-      const manifestUrl = this.testMode
+      const manifestBase = this.testMode
         ? `${this.baseUrlTestMode}/manifest.json`
         : this.getManifest(activeSource.url);
+      const manifestUrl = shouldForce
+        ? `${manifestBase}${manifestBase.includes('?') ? '&' : '?'}t=${Date.now()}`
+        : manifestBase;
       console.log('Fetching manifest from:', manifestUrl);
       const response = await axios.get(manifestUrl, {
         timeout: 10000,
+        headers: shouldForce
+          ? {
+              'Cache-Control': 'no-cache, no-store, must-revalidate',
+              Pragma: 'no-cache',
+              Expires: '0',
+            }
+          : undefined,
       });
 
       if (!response.data || !Array.isArray(response.data)) {
@@ -176,11 +186,16 @@ export class ExtensionManager {
       const modules: Record<string, string> = {};
       const downloadPromises = allFiles.map(async fileName => {
         try {
-          const url = `${sourceUrl}/dist/${providerValue}/${fileName}.js`;
+          const url = `${sourceUrl}/dist/${providerValue}/${fileName}.js?t=${Date.now()}`;
           console.log(`Downloading: ${url}`);
 
           const response = await axios.get(url, {
             timeout: 15000,
+            headers: {
+              'Cache-Control': 'no-cache, no-store, must-revalidate',
+              Pragma: 'no-cache',
+              Expires: '0',
+            },
           });
 
           if (response.data) {

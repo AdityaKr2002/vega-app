@@ -1,15 +1,16 @@
-import {useQuery} from '@tanstack/react-query';
-import {useState, useEffect, useMemo, useRef} from 'react';
-import {ToastAndroid} from 'react-native';
-import {providerManager} from '../services/ProviderManager';
-import {settingsStorage} from '../storage';
-import {ifExists} from '../file/ifExists';
-import {Stream} from '../providers/types';
-import {getEpisodeIdentity} from '../utils/episodeIdentity';
+import { useQuery } from '@tanstack/react-query';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { ToastAndroid } from 'react-native';
+import { providerManager } from '../services/ProviderManager';
+import { settingsStorage } from '../storage';
+import { ifExists } from '../file/ifExists';
+import { Stream } from '../providers/types';
+import { getEpisodeIdentity } from '../utils/episodeIdentity';
 import useDownloadsStore, {
   isSubtitleDownloadItem,
 } from '../zustand/downloadsStore';
-import {TextTrackType} from 'react-native-video';
+import { TextTrackType } from 'react-native-video';
+import { downloadOutputExists } from '../downloadDestination';
 
 interface UseStreamOptions {
   activeEpisode: any;
@@ -17,6 +18,153 @@ interface UseStreamOptions {
   provider: string;
   enabled?: boolean;
 }
+
+export const isLocalPath = (path?: string): boolean => {
+  if (!path || typeof path !== 'string') return false;
+  return (
+    path.startsWith('content://') ||
+    path.startsWith('file://') ||
+    path.startsWith('/')
+  );
+};
+
+export const findDownloadedFileForMedia = async (
+  activeEpisode: any,
+  routeParams: any,
+): Promise<string | null> => {
+  if (!activeEpisode) return null;
+
+  // 1. Direct local file path in activeEpisode.link
+  if (isLocalPath(activeEpisode.link)) {
+    if (await downloadOutputExists(activeEpisode.link)) {
+      return activeEpisode.link;
+    }
+  }
+
+  // 2. Direct local file path in activeEpisode.filePath
+  if (isLocalPath(activeEpisode.filePath)) {
+    if (await downloadOutputExists(activeEpisode.filePath)) {
+      return activeEpisode.filePath;
+    }
+  }
+
+  // 3. directUrl passed in routeParams when activeEpisode matches initial selection or there is only one episode
+  if (routeParams?.directUrl && isLocalPath(routeParams.directUrl)) {
+    const isSingleEpisode =
+      !routeParams.episodeList || routeParams.episodeList.length <= 1;
+    const initialEpisode =
+      typeof routeParams.linkIndex === 'number' &&
+      routeParams.episodeList?.[routeParams.linkIndex];
+    const isInitialEpisode =
+      initialEpisode &&
+      ((initialEpisode.id &&
+        activeEpisode.id &&
+        initialEpisode.id === activeEpisode.id) ||
+        (initialEpisode.link &&
+          activeEpisode.link &&
+          initialEpisode.link === activeEpisode.link) ||
+        (initialEpisode.sourceLink &&
+          activeEpisode.sourceLink &&
+          initialEpisode.sourceLink === activeEpisode.sourceLink) ||
+        initialEpisode.title === activeEpisode.title);
+
+    if (
+      isSingleEpisode ||
+      isInitialEpisode ||
+      activeEpisode.link === routeParams.directUrl
+    ) {
+      if (await downloadOutputExists(routeParams.directUrl)) {
+        return routeParams.directUrl;
+      }
+    }
+  }
+
+  // 4. Match against completed records in downloadsStore
+  const allDownloads = Object.values(useDownloadsStore.getState().downloads);
+  const completedDownloads = allDownloads.filter(
+    item =>
+      item.status === 'completed' &&
+      Boolean(item.filePath) &&
+      !item.isSubtitle &&
+      !isSubtitleDownloadItem(item),
+  );
+
+  const episodeId = activeEpisode.id;
+  const episodeSourceLink = activeEpisode.sourceLink || activeEpisode.link;
+  const episodeTitle = activeEpisode.title || activeEpisode.episodeName;
+  const primaryTitle = routeParams?.primaryTitle || routeParams?.title;
+  const secondaryTitle =
+    routeParams?.secondaryTitle || routeParams?.seasonTitle;
+  const infoUrl = routeParams?.infoUrl || routeParams?.link;
+
+  for (const d of completedDownloads) {
+    // A) ID match
+    if (episodeId && (d.id === episodeId || d.id.includes(episodeId))) {
+      if (await downloadOutputExists(d.filePath)) {
+        return d.filePath;
+      }
+    }
+
+    // B) Source link match
+    if (
+      episodeSourceLink &&
+      (d.sourceLink === episodeSourceLink ||
+        d.url === episodeSourceLink ||
+        d.filePath === episodeSourceLink)
+    ) {
+      if (await downloadOutputExists(d.filePath)) {
+        return d.filePath;
+      }
+    }
+
+    // C) Media title + Season + Episode title match
+    const showMatch =
+      (infoUrl && d.infoUrl === infoUrl) ||
+      (primaryTitle &&
+        (d.showName === primaryTitle ||
+          d.title === primaryTitle ||
+          d.title?.startsWith(primaryTitle)));
+
+    if (showMatch) {
+      const seasonMatch =
+        !secondaryTitle ||
+        !d.seasonTitle ||
+        d.seasonTitle === secondaryTitle ||
+        secondaryTitle.toLowerCase().includes(d.seasonTitle.toLowerCase()) ||
+        d.seasonTitle.toLowerCase().includes(secondaryTitle.toLowerCase());
+
+      const episodeMatch =
+        episodeTitle &&
+        (d.episodeName === episodeTitle ||
+          d.title === episodeTitle ||
+          d.title?.includes(episodeTitle) ||
+          d.episodeName?.includes(episodeTitle) ||
+          episodeTitle.includes(d.episodeName || '___never___'));
+
+      if (seasonMatch && episodeMatch) {
+        if (await downloadOutputExists(d.filePath)) {
+          return d.filePath;
+        }
+      }
+    }
+  }
+
+  // 5. Legacy sanitized local file
+  if (primaryTitle) {
+    const file = (
+      primaryTitle +
+      (secondaryTitle || '') +
+      (episodeTitle || '')
+    ).replaceAll(/[^a-zA-Z0-9]/g, '_');
+
+    const exists = await ifExists(file);
+    if (exists) {
+      return exists;
+    }
+  }
+
+  return null;
+};
 
 export const getDownloadedSubtitlesForMedia = (
   activeEpisode: any,
@@ -90,7 +238,7 @@ export const getDownloadedSubtitlesForMedia = (
       sub.displayFileName?.endsWith('.vtt');
     const uri =
       sub.filePath.startsWith('file://') ||
-      sub.filePath.startsWith('content://')
+        sub.filePath.startsWith('content://')
         ? sub.filePath
         : `file://${sub.filePath}`;
 
@@ -113,6 +261,59 @@ export const getDownloadedSubtitlesForMedia = (
   });
 };
 
+export const getCompletedDownloadPathSync = (
+  episode: any,
+  params: any,
+): string | null => {
+  if (!episode) return null;
+  if (isLocalPath(episode.link)) return episode.link;
+  if (isLocalPath(episode.filePath)) return episode.filePath;
+  if (params?.directUrl && isLocalPath(params.directUrl)) {
+    const isSingleEpisode =
+      !params.episodeList || params.episodeList.length <= 1;
+    const initialEpisode =
+      typeof params.linkIndex === 'number' &&
+      params.episodeList?.[params.linkIndex];
+    const isInitialEpisode =
+      initialEpisode &&
+      ((initialEpisode.id &&
+        episode.id &&
+        initialEpisode.id === episode.id) ||
+        (initialEpisode.link &&
+          episode.link &&
+          initialEpisode.link === episode.link) ||
+        (initialEpisode.sourceLink &&
+          episode.sourceLink &&
+          initialEpisode.sourceLink === episode.sourceLink) ||
+        initialEpisode.title === episode.title);
+    if (
+      isSingleEpisode ||
+      isInitialEpisode ||
+      episode.link === params.directUrl
+    ) {
+      return params.directUrl;
+    }
+  }
+  const allDownloads = Object.values(useDownloadsStore.getState().downloads);
+  const completed = allDownloads.find(
+    d =>
+      d.status === 'completed' &&
+      Boolean(d.filePath) &&
+      !d.isSubtitle &&
+      !isSubtitleDownloadItem(d) &&
+      ((episode.id && (d.id === episode.id || d.id.includes(episode.id))) ||
+        (episode.link &&
+          (d.sourceLink === episode.link ||
+            d.url === episode.link ||
+            d.filePath === episode.link)) ||
+        (episode.sourceLink &&
+          (d.sourceLink === episode.sourceLink ||
+            d.url === episode.sourceLink ||
+            d.filePath === episode.sourceLink))),
+  );
+  return completed?.filePath || null;
+};
+
 export const useStream = ({
   activeEpisode,
   routeParams,
@@ -126,12 +327,7 @@ export const useStream = ({
   });
   const [externalSubs, setExternalSubs] = useState<any[]>([]);
 
-  // A locally-picked/auto-resumed video file is only ever valid for the
-  // episode it was picked for. Whenever the active episode changes, clear
-  // the selection back to neutral so the stream-data effect below falls
-  // through to picking the new episode's first online stream, instead of
-  // silently carrying over the old episode's local file (see the
-  // 'local' guard further down).
+
   const activeEpisodeKey = getEpisodeIdentity(activeEpisode);
   const previousEpisodeKeyRef = useRef(activeEpisodeKey);
 
@@ -140,8 +336,15 @@ export const useStream = ({
       return;
     }
     previousEpisodeKeyRef.current = activeEpisodeKey;
-    setSelectedStream({server: '', link: '', type: ''});
+    setSelectedStream({ server: '', link: '', type: '' });
   }, [activeEpisodeKey]);
+
+  const localPlaceholder = useMemo(() => {
+    const path = getCompletedDownloadPathSync(activeEpisode, routeParams);
+    return path
+      ? [{ server: 'Downloaded', link: path, type: 'mp4' }]
+      : undefined;
+  }, [activeEpisode, routeParams]);
 
   const {
     data: streamData = [],
@@ -149,60 +352,92 @@ export const useStream = ({
     error,
     refetch,
   } = useQuery<Stream[], Error>({
-    queryKey: ['stream', activeEpisode?.link, routeParams?.type, provider],
+    queryKey: [
+      'stream',
+      activeEpisode?.id || activeEpisode?.link || activeEpisode?.title,
+      routeParams?.type,
+      provider,
+    ],
     queryFn: async () => {
-      if (!activeEpisode?.link) {
+      if (!activeEpisode?.link && !activeEpisode?.id && !activeEpisode?.title) {
         return [];
       }
 
       console.log('Fetching stream for:', activeEpisode);
 
-      // Handle direct URL (downloaded content)
-      if (routeParams?.directUrl) {
-        return [
-          {server: 'Downloaded', link: routeParams.directUrl, type: 'mp4'},
-        ];
-      }
-
-      // Check for local downloaded file
-      if (routeParams?.primaryTitle) {
-        const file = (
-          routeParams.primaryTitle +
-          (routeParams.secondaryTitle || '') +
-          (activeEpisode?.title || '')
-        ).replaceAll(/[^a-zA-Z0-9]/g, '_');
-
-        const exists = await ifExists(file);
-        if (exists) {
-          return [{server: 'downloaded', link: exists, type: 'mp4'}];
-        }
-      }
-
-      // Fetch streams from provider
-      const controller = new AbortController();
-      const data = await providerManager.getStream({
-        link: activeEpisode.link,
-        type: routeParams?.type,
-        signal: controller.signal,
-        providerValue: routeParams?.providerValue || provider,
-      });
-
-      // Filter out excluded qualities
-      const excludedQualities = settingsStorage.getExcludedQualities() || [];
-      const filteredQualities = data?.filter(
-        streamItem => !excludedQualities.includes(streamItem?.quality + 'p'),
+      // 1. Check for downloaded content first
+      const downloadedPath = await findDownloadedFileForMedia(
+        activeEpisode,
+        routeParams,
       );
+      const localStream: Stream | null = downloadedPath
+        ? { server: 'Downloaded', link: downloadedPath, type: 'mp4' }
+        : null;
 
-      const filteredData =
-        filteredQualities?.length > 0 ? filteredQualities : data;
+      const remoteLink =
+        (!isLocalPath(activeEpisode?.link) && activeEpisode?.link) ||
+        activeEpisode?.sourceLink;
 
-      if (!filteredData || filteredData.length === 0) {
+      if (!remoteLink) {
+        if (localStream) {
+          return [localStream];
+        }
+        if (isLocalPath(activeEpisode?.link)) {
+          throw new Error('Downloaded file not found on device');
+        }
+        return [];
+      }
+
+      // 2. Fetch streams from provider online (in background if localStream exists)
+      let remoteStreams: Stream[] = [];
+      try {
+        const controller = new AbortController();
+        const data = await providerManager.getStream({
+          link: remoteLink,
+          type: routeParams?.type,
+          signal: controller.signal,
+          providerValue: routeParams?.providerValue || provider,
+        });
+
+        // Filter out excluded qualities
+        const excludedQualities = settingsStorage.getExcludedQualities() || [];
+        const filteredQualities = data?.filter(
+          streamItem => !excludedQualities.includes(streamItem?.quality + 'p'),
+        );
+
+        remoteStreams =
+          filteredQualities?.length > 0 ? filteredQualities : data || [];
+      } catch (err) {
+        if (localStream) {
+          console.warn(
+            'Remote stream refresh failed; using local downloaded file:',
+            err,
+          );
+          return [localStream];
+        }
+        throw err;
+      }
+
+      let finalStreams = remoteStreams;
+      if (localStream) {
+        finalStreams = [localStream, ...remoteStreams];
+      }
+
+      if (!finalStreams || finalStreams.length === 0) {
+        if (localStream) {
+          return [localStream];
+        }
         throw new Error('No streams available');
       }
 
-      return filteredData;
+      return finalStreams;
     },
-    enabled: enabled && !!activeEpisode?.link,
+    enabled:
+      enabled &&
+      Boolean(
+        activeEpisode?.link || activeEpisode?.id || activeEpisode?.title,
+      ),
+    placeholderData: localPlaceholder,
     staleTime: 5 * 60 * 1000, // 5 minutes
     gcTime: 30 * 60 * 1000, // 30 minutes
     retry: (failureCount, _error) => {
@@ -248,8 +483,19 @@ export const useStream = ({
 
     const mergedSubs = [...downloadedSubs];
     onlineSubs.forEach(online => {
-      if (!mergedSubs.some(existing => existing.uri === online.uri)) {
-        mergedSubs.push(online);
+      const trimmedUri = typeof online?.uri === 'string' ? online.uri.trim() : '';
+      if (
+        trimmedUri &&
+        (trimmedUri.startsWith('http://') ||
+          trimmedUri.startsWith('https://') ||
+          trimmedUri.startsWith('file://') ||
+          trimmedUri.startsWith('content://')) &&
+        !mergedSubs.some(existing => existing.uri === trimmedUri)
+      ) {
+        mergedSubs.push({
+          ...online,
+          uri: trimmedUri,
+        });
       }
     });
 
@@ -293,6 +539,14 @@ export const useStream = ({
   };
 };
 
+const trackListKey = (tracks: any[]): string =>
+  tracks
+    .map(
+      track =>
+        `${track.index}-${track.trackId}-${track.width}x${track.height}-${track.bitrate}`,
+    )
+    .join('|');
+
 // Hook for managing video tracks and settings
 export const useVideoSettings = () => {
   const [audioTracks, setAudioTracks] = useState<any[]>([]);
@@ -308,7 +562,7 @@ export const useVideoSettings = () => {
   const [selectedTextTrackIndex, setSelectedTextTrackIndex] = useState(1000);
   const [selectedQualityIndex, setSelectedQualityIndex] = useState(1000);
 
-  const processAudioTracks = (tracks: any[]) => {
+  const processAudioTracks = useCallback((tracks: any[]) => {
     const uniqueMap = new Map();
     tracks.forEach(track => {
       const key = `${track.type}-${track.title}-${track.language}`;
@@ -320,7 +574,7 @@ export const useVideoSettings = () => {
       }
 
       if (track.selected && !existingTrack.selected) {
-        uniqueMap.set(key, {...existingTrack, ...track, selected: true});
+        uniqueMap.set(key, { ...existingTrack, ...track, selected: true });
       }
     });
 
@@ -331,66 +585,59 @@ export const useVideoSettings = () => {
     if (selectedIndex !== -1) {
       setSelectedAudioTrackIndex(selectedIndex);
     }
-  };
+  }, []);
 
-  const processVideoTracks = (tracks: any[]) => {
+  const processVideoTracks = useCallback((tracks: any[]) => {
     if (!tracks || tracks.length === 0) {
       return;
     }
     const uniqueMap = new Map();
     const uniqueTracks = tracks.filter(track => {
-      const key = `bitrate-${track.bitrate}-quality ${track.height}`;
+      const key = `bitrate-${track.bitrate}-quality-${track.height || track.width}`;
       if (!uniqueMap.has(key)) {
         uniqueMap.set(key, true);
         return true;
       }
       return false;
     });
-    console.log('Processing video tracks:', uniqueTracks);
-    setVideoTracks(uniqueTracks);
-  };
+    uniqueTracks.sort(
+      (a, b) =>
+        (b.height || 0) - (a.height || 0) ||
+        (b.bitrate || 0) - (a.bitrate || 0),
+    );
+    // The player re-reports tracks on every selection change, so bail out when
+    // nothing actually changed to avoid re-rendering consumers on each event.
+    setVideoTracks(previous =>
+      trackListKey(previous) === trackListKey(uniqueTracks)
+        ? previous
+        : uniqueTracks,
+    );
+  }, []);
 
-  const handleVideoLoad = (naturalSize?: {width?: number; height?: number}) => {
-    if (!naturalSize?.height) {
-      return;
-    }
-    setLoadedVideoSize({
-      width: naturalSize.width ?? 0,
-      height: naturalSize.height ?? 0,
-    });
-  };
+  const handleVideoLoad = useCallback(
+    (naturalSize?: { width?: number; height?: number }) => {
+      if (!naturalSize?.height) {
+        return;
+      }
+      setLoadedVideoSize({
+        width: naturalSize.width ?? 0,
+        height: naturalSize.height ?? 0,
+      });
+    },
+    [],
+  );
 
   // Clear everything when switching to a new stream/episode.
-  const resetVideoTracks = () => {
+  const resetVideoTracks = useCallback(() => {
     setVideoTracks([]);
     setLoadedVideoSize(null);
-  };
-
-  const effectiveVideoTracks = useMemo(() => {
-    if (videoTracks.length > 0) {
-      return videoTracks;
-    }
-    if (loadedVideoSize?.height) {
-      return [
-        {
-          width: loadedVideoSize.width,
-          height: loadedVideoSize.height,
-          bitrate: 0,
-          codecs: '',
-          trackId: '0',
-          index: 0,
-          rotation: 0,
-          selected: true,
-        },
-      ];
-    }
-    return videoTracks;
-  }, [videoTracks, loadedVideoSize]);
+  }, []);
 
   return {
     audioTracks,
     textTracks,
-    videoTracks: effectiveVideoTracks,
+    videoTracks,
+    loadedVideoSize,
     selectedAudioTrackIndex,
     selectedTextTrackIndex,
     selectedQualityIndex,

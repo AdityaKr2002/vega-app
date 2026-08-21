@@ -325,6 +325,38 @@ const App = () => {
     );
   }, []);
 
+  // Initialize shared folder sync
+  useEffect(() => {
+    initializeSyncService().catch(e =>
+      console.warn('[VegaSync] Startup sync failed:', e),
+    );
+
+    const subscription = AppState.addEventListener('change', nextAppState => {
+      if (nextAppState === 'active') {
+        syncFromSharedFolder().catch(e =>
+          console.warn('[VegaSync] Foreground sync failed:', e),
+        );
+      } else if (nextAppState === 'background' || nextAppState === 'inactive') {
+        publishSyncManifest().catch(e =>
+          console.warn('[VegaSync] Background publish failed:', e),
+        );
+      }
+    });
+
+    const interval = setInterval(() => {
+      if (AppState.currentState === 'active') {
+        syncFromSharedFolder().catch(e =>
+          console.warn('[VegaSync] Periodic sync failed:', e),
+        );
+      }
+    }, 30000);
+
+    return () => {
+      subscription.remove();
+      clearInterval(interval);
+    };
+  }, []);
+
   function HomeStackScreen() {
     return (
       <HomeStack.Navigator

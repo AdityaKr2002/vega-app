@@ -21,6 +21,7 @@ import {
   createDownloadSeasonDirectoryName,
 } from './downloadId';
 import {getImageAccent} from './imageAccent';
+import {formatDownloadProgressLabel} from './downloadFormatting';
 
 const activeDownloads = new Set<string>();
 const occupiedDownloadSlots = new Set<string>();
@@ -146,14 +147,12 @@ const showProgressNotification = async (
   const progress = record.totalBytes
     ? record.downloadedBytes / record.totalBytes
     : 0;
-  const downloadedMB = Math.round(record.downloadedBytes / 1024 / 1024);
-  const totalMB = Math.round(record.totalBytes / 1024 / 1024);
   const color = await getDownloadNotificationColor(record);
   await notificationService.showDownloadProgress(
     record.title,
     record.id,
     progress,
-    record.totalBytes ? `${downloadedMB} / ${totalMB} MB` : 'Downloading',
+    formatDownloadProgressLabel(record),
     record.sourceType,
     record.canPause ? 'pause' : record.canResume ? 'resume' : 'none',
     color,
@@ -167,28 +166,28 @@ const showCurrentDownloadNotification = async (
   const progress = record.totalBytes
     ? record.downloadedBytes / record.totalBytes
     : 0;
-  const downloadedMB = Math.round(record.downloadedBytes / 1024 / 1024);
-  const totalMB = Math.round(record.totalBytes / 1024 / 1024);
   const color = await getDownloadNotificationColor(record);
+  const isPaused = record.status === 'paused';
+  const progressLabel = formatDownloadProgressLabel(record);
+  const body = isPaused
+    ? record.errorCode === 'NETWORK_INTERRUPTED'
+      ? record.totalBytes
+        ? `Waiting for network - ${progressLabel}`
+        : 'Waiting for network'
+      : record.totalBytes
+        ? `Paused - ${progressLabel}`
+        : 'Paused'
+    : progressLabel;
+
   await notificationService.showDownloadProgress(
     record.title,
     record.id,
     progress,
-    record.status === 'paused'
-      ? record.errorCode === 'NETWORK_INTERRUPTED'
-        ? record.totalBytes
-          ? `Waiting for network - ${downloadedMB} / ${totalMB} MB`
-          : 'Waiting for network'
-        : record.totalBytes
-          ? `Paused - ${downloadedMB} / ${totalMB} MB`
-          : 'Paused'
-      : record.totalBytes
-        ? `${downloadedMB} / ${totalMB} MB`
-        : 'Downloading',
+    body,
     record.sourceType,
-    record.status === 'paused' ? 'resume' : record.canPause ? 'pause' : 'none',
+    isPaused ? 'resume' : record.canPause ? 'pause' : 'none',
     color,
-    !record.totalBytes && record.status !== 'paused',
+    !record.totalBytes && !isPaused,
   );
 };
 

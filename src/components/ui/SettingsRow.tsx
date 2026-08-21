@@ -1,6 +1,6 @@
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import React, {ReactNode} from 'react';
-import {Pressable, View} from 'react-native';
+import {TouchableOpacity, View} from 'react-native';
 import {useM3Colors} from '../../theme/M3PaletteContext';
 import AppText from './Text';
 
@@ -24,15 +24,12 @@ const SettingsRow = ({
   const colors = useM3Colors();
 
   return (
-    <Pressable
+    <TouchableOpacity
       accessibilityRole={onPress ? 'button' : undefined}
+      activeOpacity={0.6}
       disabled={!onPress}
       hitSlop={{top: 4, bottom: 4, left: 0, right: 0}}
-      onPress={onPress}
-      pressRetentionOffset={24}
-      style={({pressed}) => ({
-        backgroundColor: pressed ? colors.surfaceContainerHigh : 'transparent',
-      })}>
+      onPress={onPress}>
       <View
         className="min-h-16 flex-row items-center px-4 py-3"
         style={{
@@ -73,7 +70,7 @@ const SettingsRow = ({
             />
           ) : null)}
       </View>
-    </Pressable>
+    </TouchableOpacity>
   );
 };
 

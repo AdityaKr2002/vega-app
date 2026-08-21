@@ -402,10 +402,34 @@ index 0000000..f3a530a
 +    }
 +}
 diff --git a/node_modules/react-native-video/android/src/main/java/com/brentvatne/exoplayer/DataSourceUtil.kt b/node_modules/react-native-video/android/src/main/java/com/brentvatne/exoplayer/DataSourceUtil.kt
-index 96a7887..8fb0bec 100644
+index 96a7887..b821a41 100644
 --- a/node_modules/react-native-video/android/src/main/java/com/brentvatne/exoplayer/DataSourceUtil.kt
 +++ b/node_modules/react-native-video/android/src/main/java/com/brentvatne/exoplayer/DataSourceUtil.kt
-@@ -59,7 +59,10 @@ object DataSourceUtil {
+@@ -32,15 +32,9 @@ object DataSourceUtil {
+     @JvmStatic
+     fun getDefaultDataSourceFactory(context: ReactContext, bandwidthMeter: DefaultBandwidthMeter?, requestHeaders: Map<String, String>?): DataSource.Factory {
+-        if (defaultDataSourceFactory == null || !requestHeaders.isNullOrEmpty()) {
+-            defaultDataSourceFactory = buildDataSourceFactory(context, bandwidthMeter, requestHeaders)
+-        }
+-        return defaultDataSourceFactory as DataSource.Factory
++        return buildDataSourceFactory(context, bandwidthMeter, requestHeaders)
+     }
+ 
+     @JvmStatic
+     fun getDefaultHttpDataSourceFactory(
+         context: ReactContext,
+         bandwidthMeter: DefaultBandwidthMeter?,
+         requestHeaders: Map<String, String>?
+     ): HttpDataSource.Factory {
+-        if (defaultHttpDataSourceFactory == null || !requestHeaders.isNullOrEmpty()) {
+-            defaultHttpDataSourceFactory = buildHttpDataSourceFactory(context, bandwidthMeter, requestHeaders)
+-        }
+-        return defaultHttpDataSourceFactory as HttpDataSource.Factory
++        return buildHttpDataSourceFactory(context, bandwidthMeter, requestHeaders)
+     }
+ 
+     private fun buildDataSourceFactory(
+@@ -59,7 +53,10 @@ object DataSourceUtil {
          bandwidthMeter: DefaultBandwidthMeter?,
          requestHeaders: Map<String, String>?
      ): HttpDataSource.Factory {
@@ -414,9 +438,20 @@ index 96a7887..8fb0bec 100644
 +            .readTimeout(60, java.util.concurrent.TimeUnit.SECONDS)
 +            .connectTimeout(60, java.util.concurrent.TimeUnit.SECONDS)
 +            .build()
-         val container = client.cookieJar as CookieJarContainer
-         val handler = ForwardingCookieHandler(context)
-         container.setCookieJar(JavaNetCookieJar(handler))
+         val okHttpDataSourceFactory = OkHttpDataSource.Factory(client as Call.Factory)
+             .setTransferListener(bandwidthMeter)
+ 
+@@ -67,5 +64,8 @@ object DataSourceUtil {
+         if (requestHeaders != null) {
+             okHttpDataSourceFactory.setDefaultRequestProperties(requestHeaders)
+-            if (!requestHeaders.containsKey("User-Agent")) {
++            val customUserAgent = requestHeaders.entries.find { it.key.equals("User-Agent", ignoreCase = true) }?.value
++            if (customUserAgent != null) {
++                okHttpDataSourceFactory.setUserAgent(customUserAgent)
++            } else {
+                 okHttpDataSourceFactory.setUserAgent(getUserAgent(context))
+             }
+         } else {
 diff --git a/node_modules/react-native-video/android/src/main/java/com/brentvatne/exoplayer/ExoPlayerView.kt b/node_modules/react-native-video/android/src/main/java/com/brentvatne/exoplayer/ExoPlayerView.kt
 index bb945fe..23d2151 100644
 --- a/node_modules/react-native-video/android/src/main/java/com/brentvatne/exoplayer/ExoPlayerView.kt
@@ -523,10 +558,16 @@ index 5e36ef2..3eba51d 100644
              @SuppressLint("InlinedApi")
              val result = AppOpsManagerCompat.noteOpNoThrow(
 diff --git a/node_modules/react-native-video/android/src/main/java/com/brentvatne/exoplayer/ReactExoplayerView.java b/node_modules/react-native-video/android/src/main/java/com/brentvatne/exoplayer/ReactExoplayerView.java
-index e16ac96..0667f6a 100644
+index e16ac96..741a382 100644
 --- a/node_modules/react-native-video/android/src/main/java/com/brentvatne/exoplayer/ReactExoplayerView.java
 +++ b/node_modules/react-native-video/android/src/main/java/com/brentvatne/exoplayer/ReactExoplayerView.java
-@@ -60,6 +60,7 @@ import androidx.media3.datasource.HttpDataSource;
+@@ -60,6 +60,13 @@ import androidx.media3.datasource.HttpDataSource;
++import androidx.media3.datasource.TransferListener;
++import androidx.media3.exoplayer.upstream.DefaultLoadErrorHandlingPolicy;
++import androidx.media3.exoplayer.upstream.LoadErrorHandlingPolicy;
++import java.io.ByteArrayInputStream;
++import java.nio.charset.StandardCharsets;
++import java.util.Collections;
  import androidx.media3.exoplayer.DefaultLoadControl;
  import androidx.media3.exoplayer.DefaultRenderersFactory;
  import androidx.media3.exoplayer.ExoPlayer;
@@ -534,7 +575,7 @@ index e16ac96..0667f6a 100644
  import androidx.media3.exoplayer.dash.DashMediaSource;
  import androidx.media3.exoplayer.dash.DashUtil;
  import androidx.media3.exoplayer.dash.DefaultDashChunkSource;
-@@ -88,6 +89,9 @@ import androidx.media3.exoplayer.source.ClippingMediaSource;
+@@ -88,6 +95,9 @@ import androidx.media3.exoplayer.source.ClippingMediaSource;
  import androidx.media3.exoplayer.source.DefaultMediaSourceFactory;
  import androidx.media3.exoplayer.source.MediaSource;
  import androidx.media3.exoplayer.source.MergingMediaSource;
@@ -544,7 +585,7 @@ index e16ac96..0667f6a 100644
  import androidx.media3.exoplayer.source.ProgressiveMediaSource;
  import androidx.media3.exoplayer.source.TrackGroupArray;
  import androidx.media3.exoplayer.source.ads.AdsMediaSource;
-@@ -234,6 +238,7 @@ public class ReactExoplayerView extends FrameLayout implements
+@@ -234,6 +244,7 @@ public class ReactExoplayerView extends FrameLayout implements
      private boolean isSeeking = false;
      private long seekPosition = -1;
      private boolean hasVideoEnded = false;
@@ -552,7 +593,7 @@ index e16ac96..0667f6a 100644
  
      // Props from React
      private Source source = new Source();
-@@ -607,7 +612,7 @@ public class ReactExoplayerView extends FrameLayout implements
+@@ -609,7 +620,7 @@ public class ReactExoplayerView extends FrameLayout implements
                  double minBufferMemoryReservePercent = source.getBufferConfig().getMinBufferMemoryReservePercent() != BufferConfig.Companion.getBufferConfigPropUnsetDouble()
                          ? source.getBufferConfig().getMinBufferMemoryReservePercent()
                          : ReactExoplayerView.DEFAULT_MIN_BUFFER_MEMORY_RESERVE;
@@ -561,7 +602,7 @@ index e16ac96..0667f6a 100644
                  long bufferedMs = bufferedDurationUs / (long) 1000;
                  if (reserveMemory > freeMemory && bufferedMs > 2000) {
                      // We don't have enough memory in reserve so we stop buffering to allow other components to use it instead
-@@ -715,6 +720,7 @@ public class ReactExoplayerView extends FrameLayout implements
+@@ -715,6 +726,7 @@ public class ReactExoplayerView extends FrameLayout implements
      private void initializePlayerCore(ReactExoplayerView self) {
          ExoTrackSelection.Factory videoTrackSelectionFactory = new AdaptiveTrackSelection.Factory();
          self.trackSelector = new DefaultTrackSelector(getContext(), videoTrackSelectionFactory);
@@ -569,7 +610,7 @@ index e16ac96..0667f6a 100644
          self.trackSelector.setParameters(trackSelector.buildUponParameters()
                  .setMaxVideoBitrate(maxBitRate == 0 ? Integer.MAX_VALUE : maxBitRate));
  
-@@ -732,7 +738,7 @@ public class ReactExoplayerView extends FrameLayout implements
+@@ -732,7 +744,7 @@ public class ReactExoplayerView extends FrameLayout implements
  
          DefaultRenderersFactory renderersFactory =
                  new DefaultRenderersFactory(getContext())
@@ -578,7 +619,7 @@ index e16ac96..0667f6a 100644
                          .setEnableDecoderFallback(true)
                          .forceEnableMediaCodecAsynchronousQueueing();
  
-@@ -1101,11 +1107,13 @@ public class ReactExoplayerView extends FrameLayout implements
+@@ -1101,11 +1113,13 @@ public class ReactExoplayerView extends FrameLayout implements
                  } else if ("file".equals(uri.getScheme()) ||
                          !useCache) {
                      mediaSourceFactory = new ProgressiveMediaSource.Factory(
@@ -594,7 +635,7 @@ index e16ac96..0667f6a 100644
                      );
  
                  }
-@@ -1144,12 +1152,49 @@ public class ReactExoplayerView extends FrameLayout implements
+@@ -1144,12 +1158,133 @@ public class ReactExoplayerView extends FrameLayout implements
                  ? overridenMediaItemBuilder.build()
                  : mediaItemBuilder.build();
  
@@ -617,8 +658,20 @@ index e16ac96..0667f6a 100644
 +        // MediaItem.SubtitleConfiguration entries. Manually merge sideloaded subtitle
 +        // sources so they appear in MappedTrackInfo and can be selected via setSelectedTextTrack.
 +        if (mediaItem.localConfiguration != null && !mediaItem.localConfiguration.subtitleConfigurations.isEmpty()) {
-+            DataSource.Factory subtitleDataSourceFactory = buildDataSourceFactory(false);
++            DataSource.Factory rawSubtitleDataSourceFactory = buildDataSourceFactory(false);
++            DataSource.Factory subtitleDataSourceFactory = () -> new SafeSubtitleDataSource(rawSubtitleDataSourceFactory.createDataSource());
 +            DefaultSubtitleParserFactory subtitleParserFactory = new DefaultSubtitleParserFactory();
++            LoadErrorHandlingPolicy noRetryPolicy = new DefaultLoadErrorHandlingPolicy() {
++                @Override
++                public long getRetryDelayMsFor(LoadErrorInfo loadErrorInfo) {
++                    return C.TIME_UNSET;
++                }
++
++                @Override
++                public int getMinimumLoadableRetryCount(int dataType) {
++                    return 0;
++                }
++            };
 +            List<MediaSource> mergedSources = new ArrayList<>();
 +            mergedSources.add(mediaSource);
 +            for (MediaItem.SubtitleConfiguration subtitleConfig : mediaItem.localConfiguration.subtitleConfigurations) {
@@ -636,7 +689,8 @@ index e16ac96..0667f6a 100644
 +                mergedSources.add(new ProgressiveMediaSource.Factory(
 +                        subtitleDataSourceFactory,
 +                        () -> new Extractor[]{new SubtitleExtractor(subtitleParserFactory.create(subtitleFormat), subtitleFormat)}
-+                ).createMediaSource(MediaItem.fromUri(subtitleConfig.uri)));
++                ).setLoadErrorHandlingPolicy(noRetryPolicy)
++                 .createMediaSource(MediaItem.fromUri(subtitleConfig.uri)));
 +            }
 +            if (mergedSources.size() > 1) {
 +                mediaSource = new MergingMediaSource(mergedSources.toArray(new MediaSource[0]));
@@ -645,7 +699,175 @@ index e16ac96..0667f6a 100644
  
          if (cropStartMs >= 0 && cropEndMs >= 0) {
              return new ClippingMediaSource(mediaSource, cropStartMs * 1000, cropEndMs * 1000);
-@@ -1954,6 +1999,12 @@ public class ReactExoplayerView extends FrameLayout implements
++        } else if (cropStartMs >= 0) {
++            return new ClippingMediaSource(mediaSource, cropStartMs * 1000, TIME_END_OF_SOURCE);
++        } else if (cropEndMs >= 0) {
++            return new ClippingMediaSource(mediaSource, 0, cropEndMs * 1000);
++        }
++
++        return mediaSource;
++    }
++
++    private static class SafeSubtitleDataSource implements DataSource {
++        private static final byte[] EMPTY_VTT = "WEBVTT\n\n".getBytes(StandardCharsets.UTF_8);
++        private final DataSource upstream;
++        private ByteArrayInputStream fallbackStream = null;
++        private boolean isFallback = false;
++        private Uri currentUri = null;
++
++        public SafeSubtitleDataSource(DataSource upstream) {
++            this.upstream = upstream;
++        }
++
++        @Override
++        public void addTransferListener(TransferListener transferListener) {
++            upstream.addTransferListener(transferListener);
++        }
++
++        @Override
++        public long open(DataSpec dataSpec) {
++            this.currentUri = dataSpec.uri;
++            this.isFallback = false;
++            this.fallbackStream = null;
++            try {
++                return upstream.open(dataSpec);
++            } catch (Exception e) {
++                DebugLog.w(TAG, "Failed to load external subtitle from " + dataSpec.uri + ": " + e.getMessage() + ". Skipping gracefully.");
++                this.isFallback = true;
++                this.fallbackStream = new ByteArrayInputStream(EMPTY_VTT);
++                return EMPTY_VTT.length;
++            }
++        }
++
++        @Override
++        public int read(byte[] buffer, int offset, int length) {
++            if (isFallback) {
++                if (fallbackStream != null) {
++                    int read = fallbackStream.read(buffer, offset, length);
++                    return read == -1 ? C.RESULT_END_OF_INPUT : read;
++                }
++                return C.RESULT_END_OF_INPUT;
++            }
++            try {
++                return upstream.read(buffer, offset, length);
++            } catch (Exception e) {
++                DebugLog.w(TAG, "Failed reading subtitle stream: " + e.getMessage() + ". Ending subtitle gracefully.");
++                return C.RESULT_END_OF_INPUT;
++            }
++        }
++
++        @Nullable
++        @Override
++        public Uri getUri() {
++            return isFallback ? currentUri : upstream.getUri();
++        }
++
++        @Override
++        public Map<String, List<String>> getResponseHeaders() {
++            return isFallback ? Collections.emptyMap() : upstream.getResponseHeaders();
++        }
++
++        @Override
++        public void close() {
++            if (!isFallback) {
++                try {
++                    upstream.close();
++                } catch (Exception ignored) {
++                }
++            }
++            fallbackStream = null;
++            isFallback = false;
++        }
++    }
+@@ -1586,7 +1631,17 @@ public class ReactExoplayerView extends FrameLayout implements
+     }
+ 
+     private ArrayList<VideoTrack> getVideoTrackInfo() {
+-        ArrayList<VideoTrack> videoTracks = new ArrayList<>();
++        // Media3 exposes the resolved track list through Player.getCurrentTracks(), which is
++        // populated by the same pass that triggers onTracksChanged. Prefer it over the legacy
++        // MappedTrackInfo lookup below: that one resolves tracks through a renderer index and
++        // yields an empty list whenever the mapped info is not available yet, even though the
++        // video is already playing. An empty list leaves the quality selector with nothing to
++        // offer, so the user cannot switch resolution at all.
++        ArrayList<VideoTrack> videoTracks = getVideoTrackInfoFromCurrentTracks();
++        if (!videoTracks.isEmpty()) {
++            return videoTracks;
++        }
++
+         if (trackSelector == null) {
+             // Likely player is unmounting so no video tracks are available anymore
+             return videoTracks;
+@@ -1612,6 +1667,68 @@ public class ReactExoplayerView extends FrameLayout implements
+         return videoTracks;
+     }
+ 
++    private ArrayList<VideoTrack> getVideoTrackInfoFromCurrentTracks() {
++        ArrayList<VideoTrack> supportedTracks = new ArrayList<>();
++        ArrayList<VideoTrack> allTracks = new ArrayList<>();
++        if (player == null) {
++            return supportedTracks;
++        }
++
++        // During adaptive playback the track selection covers every track the selector may
++        // switch between, so Tracks.Group#isTrackSelected reports true for all of them. The
++        // currently rendered format is the only meaningful "selected" value for a quality
++        // menu, so resolve it from the player instead.
++        Format activeFormat = player.getVideoFormat();
++
++        try {
++            for (Tracks.Group group : player.getCurrentTracks().getGroups()) {
++                if (group.getType() != C.TRACK_TYPE_VIDEO) {
++                    continue;
++                }
++
++                for (int trackIndex = 0; trackIndex < group.length; trackIndex++) {
++                    Format format = group.getTrackFormat(trackIndex);
++                    boolean isActive = isSameVideoFormat(format, activeFormat);
++                    boolean isSupported = group.isTrackSupported(trackIndex);
++
++                    // Keep the two lists independent: they are returned to callers that may
++                    // mutate the tracks, and sharing instances would couple them.
++                    VideoTrack track = exoplayerVideoTrackToGenericVideoTrack(format, trackIndex);
++                    track.setSelected(isActive);
++                    allTracks.add(track);
++
++                    if (isSupported) {
++                        VideoTrack supportedTrack = exoplayerVideoTrackToGenericVideoTrack(format, trackIndex);
++                        supportedTrack.setSelected(isActive);
++                        supportedTracks.add(supportedTrack);
++                    }
++                }
++            }
++        } catch (Exception e) {
++            DebugLog.w(TAG, "Failed to read video tracks from current tracks: " + e);
++            return supportedTracks;
++        }
++
++        // Reporting nothing would hide the quality selector entirely, so fall back to the
++        // unfiltered list when the decoder reports no supported track but the media does
++        // expose video tracks.
++        return supportedTracks.isEmpty() ? allTracks : supportedTracks;
++    }
++
++    private boolean isSameVideoFormat(Format format, Format activeFormat) {
++        if (format == null || activeFormat == null) {
++            return false;
++        }
++        if (format.id != null && activeFormat.id != null) {
++            return format.id.equals(activeFormat.id);
++        }
++        // Progressive containers often omit format ids, so compare the properties that
++        // distinguish one video rendition from another.
++        return format.width == activeFormat.width
++                && format.height == activeFormat.height
++                && format.bitrate == activeFormat.bitrate;
++    }
++
+     private ArrayList<VideoTrack> getVideoTrackInfoFromManifest() {
+         return this.getVideoTrackInfoFromManifest(0);
+     }
+@@ -1954,6 +2071,12 @@ public class ReactExoplayerView extends FrameLayout implements
      public void onPlayerError(@NonNull PlaybackException e) {
          String errorString = "ExoPlaybackException: " + PlaybackException.getErrorCodeName(e.errorCode);
          String errorCode = "2" + e.errorCode;
@@ -658,7 +880,7 @@ index e16ac96..0667f6a 100644
          switch(e.errorCode) {
              case PlaybackException.ERROR_CODE_DRM_DEVICE_REVOKED:
              case PlaybackException.ERROR_CODE_DRM_LICENSE_ACQUISITION_FAILED:
-@@ -2147,6 +2198,12 @@ public class ReactExoplayerView extends FrameLayout implements
+@@ -2147,6 +2270,12 @@ public class ReactExoplayerView extends FrameLayout implements
                      TrackGroupArray groups = info.getTrackGroups(textRendererIndex);
                      boolean trackFound = false;
                      
@@ -671,7 +893,7 @@ index e16ac96..0667f6a 100644
                      for (int groupIndex = 0; groupIndex < groups.length; groupIndex++) {
                          TrackGroup group = groups.get(groupIndex);
                          for (int trackIndex = 0; trackIndex < group.length; trackIndex++) {
-@@ -2159,7 +2216,7 @@ public class ReactExoplayerView extends FrameLayout implements
+@@ -2159,7 +2288,7 @@ public class ReactExoplayerView extends FrameLayout implements
                                  isMatch = true;
                              } else if ("index".equals(type)) {
                                  int targetIndex = ReactBridgeUtils.safeParseInt(value, -1);
@@ -680,7 +902,7 @@ index e16ac96..0667f6a 100644
                                      isMatch = true;
                                  }
                              }
-@@ -2171,6 +2228,8 @@ public class ReactExoplayerView extends FrameLayout implements
+@@ -2171,6 +2300,8 @@ public class ReactExoplayerView extends FrameLayout implements
                                  trackFound = true;
                                  break;
                              }
@@ -689,7 +911,132 @@ index e16ac96..0667f6a 100644
                          }
                          if (trackFound) break;
                      }
-@@ -2317,6 +2376,15 @@ public class ReactExoplayerView extends FrameLayout implements
+@@ -2197,18 +2328,121 @@ public class ReactExoplayerView extends FrameLayout implements
+         }
+     }
+ 
++    /**
++     * Applies a video track selection using Player#getCurrentTracks() instead of the track
++     * selector's mapped track info.
++     *
++     * The mapped info lookup used by setSelectedTrack resolves the video renderer to an empty
++     * TrackGroupArray in a number of cases (notably adaptive streams once playback has already
++     * started), which leaves groupIndex unset. setSelectedTrack then disables the video renderer
++     * and returns without ever calling setParameters, so the requested quality is silently
++     * ignored. getCurrentTracks() is populated by the same pass that fires onTracksChanged and is
++     * the source the quality list itself is built from, so selection and enumeration agree on
++     * indices.
++     *
++     * @return true when the selection was applied and the caller must not continue.
++     */
++    private boolean setSelectedVideoTrackFromCurrentTracks(int rendererIndex, String type, String value) {
++        if (player == null || trackSelector == null) {
++            return false;
++        }
++
++        try {
++            for (Tracks.Group group : player.getCurrentTracks().getGroups()) {
++                if (group.getType() != C.TRACK_TYPE_VIDEO) {
++                    continue;
++                }
++
++                TrackGroup mediaGroup = group.getMediaTrackGroup();
++                List<Integer> selectedTracks = resolveVideoTrackIndices(mediaGroup, type, value);
++                if (selectedTracks.isEmpty()) {
++                    continue;
++                }
++
++                DefaultTrackSelector.Parameters.Builder selectionParameters = trackSelector.getParameters()
++                        .buildUpon()
++                        // A previous failed selection may have disabled the renderer entirely.
++                        .setRendererDisabled(rendererIndex, false)
++                        .setExceedRendererCapabilitiesIfNecessary(true)
++                        .setExceedVideoConstraintsIfNecessary(true)
++                        .clearOverridesOfType(C.TRACK_TYPE_VIDEO);
++
++                if (isUsingVideoABR()) {
++                    // Auto: let the selector move between every track again.
++                    selectionParameters.setMaxVideoBitrate(maxBitRate == 0 ? Integer.MAX_VALUE : maxBitRate);
++                } else {
++                    // A fixed rendition must not be filtered out by a leftover bitrate cap.
++                    selectionParameters.setMaxVideoBitrate(Integer.MAX_VALUE);
++                    selectionParameters.addOverride(new TrackSelectionOverride(mediaGroup, selectedTracks));
++                }
++
++                trackSelector.setParameters(selectionParameters.build());
++                DebugLog.d(TAG, "Applied video track selection from current tracks: type=" + type
++                        + ", value=" + value + ", tracks=" + selectedTracks);
++                return true;
++            }
++        } catch (Exception e) {
++            DebugLog.e(TAG, "Error applying video track selection from current tracks: " + e.getMessage());
++        }
++
++        return false;
++    }
++
++    /** Resolves the track indices within {@code mediaGroup} that satisfy the requested selection. */
++    private List<Integer> resolveVideoTrackIndices(TrackGroup mediaGroup, String type, String value) {
++        List<Integer> selectedTracks = new ArrayList<>();
++
++        if (isUsingVideoABR()) {
++            for (int trackIndex = 0; trackIndex < mediaGroup.length; trackIndex++) {
++                selectedTracks.add(trackIndex);
++            }
++            return selectedTracks;
++        }
++
++        int requested = ReactBridgeUtils.safeParseInt(value, -1);
++        if (requested == -1) {
++            return selectedTracks;
++        }
++
++        if ("index".equals(type)) {
++            if (requested < mediaGroup.length) {
++                selectedTracks.add(requested);
++            }
++            return selectedTracks;
++        }
++
++        if ("resolution".equals(type)) {
++            for (int trackIndex = 0; trackIndex < mediaGroup.length; trackIndex++) {
++                if (mediaGroup.getFormat(trackIndex).height == requested) {
++                    selectedTracks.add(trackIndex);
++                    return selectedTracks;
++                }
++            }
++        }
++
++        return selectedTracks;
++    }
++
+     public void setSelectedTrack(int trackType, String type, String value) {
+         if (player == null || trackSelector == null) return;
+-        
++
+         if (controls) {
+             return;
+         }
+-        
++
+         int rendererIndex = getTrackRendererIndex(trackType);
+         if (rendererIndex == C.INDEX_UNSET) {
+             return;
+         }
+-        
++
++        // Video is resolved from the player's current tracks because the mapped info below
++        // reports no video groups once playback is running, which silently disables the
++        // renderer instead of switching quality. "disabled" keeps the shared handling.
++        if (trackType == C.TRACK_TYPE_VIDEO && !"disabled".equals(type)
++                && setSelectedVideoTrackFromCurrentTracks(rendererIndex, type, value)) {
++            return;
++        }
++
+         MappingTrackSelector.MappedTrackInfo info = trackSelector.getCurrentMappedTrackInfo();
+         if (info == null) {
+             return;
+@@ -2317,6 +2551,15 @@ public class ReactExoplayerView extends FrameLayout implements
              groupIndex = getGroupIndexForDefaultLocale(groups);
          }
  
@@ -705,7 +1052,7 @@ index e16ac96..0667f6a 100644
          if (groupIndex == C.INDEX_UNSET && trackType == C.TRACK_TYPE_VIDEO && groups.length != 0) { // Video auto
              // Add all tracks as valid options for ABR to choose from
              TrackGroup group = groups.get(0);
-@@ -2359,7 +2427,7 @@ public class ReactExoplayerView extends FrameLayout implements
+@@ -2359,7 +2602,7 @@ public class ReactExoplayerView extends FrameLayout implements
              DefaultTrackSelector.Parameters.Builder selectionParameters = trackSelector.getParameters()
                      .buildUpon()
                      .setExceedAudioConstraintsIfNecessary(true)
@@ -714,7 +1061,7 @@ index e16ac96..0667f6a 100644
                      .setExceedVideoConstraintsIfNecessary(true)
                      .setRendererDisabled(rendererIndex, false);
  
-@@ -2429,6 +2497,209 @@ public class ReactExoplayerView extends FrameLayout implements
+@@ -2429,10 +2672,225 @@ public class ReactExoplayerView extends FrameLayout implements
          return groupIndex;
      }
  
@@ -924,3 +1271,20 @@ index e16ac96..0667f6a 100644
      public void setSelectedVideoTrack(String type, String value) {
          videoTrackType = type;
          videoTrackValue = value;
+-        if (!loadVideoStarted) setSelectedTrack(C.TRACK_TYPE_VIDEO, videoTrackType, videoTrackValue);
++
++        // Mirror setSelectedAudioTrack: apply as soon as the player can accept an
++        // override. Gating on loadVideoStarted dropped every selection made while a
++        // source was (re)preparing, so the value was stored and only replayed on the
++        // next videoLoaded() - leaving the quality menu with no effect on playback.
++        // videoLoaded() still replays the stored value for pre-load selections.
++        boolean canApplyNow = player != null && trackSelector != null;
++        DebugLog.w(TAG, "setSelectedVideoTrack: type=" + type + ", value=" + value
++                + ", loadVideoStarted=" + loadVideoStarted + ", canApplyNow=" + canApplyNow);
++
++        if (canApplyNow) {
++            setSelectedTrack(C.TRACK_TYPE_VIDEO, videoTrackType, videoTrackValue);
++        }
+     }
+ 
+     public void setSelectedAudioTrack(String type, String value) {

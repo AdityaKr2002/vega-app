@@ -7,7 +7,11 @@ import {
 } from '../storage/WatchListStorage';
 import {cacheStorage, mainStorage} from '../storage/StorageService';
 import useDownloadsStore, {type DownloadItem} from '../zustand/downloadsStore';
-import {isSubtitleDownloadItem} from '../downloadId';
+import {
+  createDownloadDirectoryName,
+  createDownloadSeasonDirectoryName,
+  isSubtitleDownloadItem,
+} from '../downloadId';
 import useContinueWatchingStore, {
   type ContinueWatchingItem,
 } from '../zustand/continueWatchingStore';
@@ -35,7 +39,7 @@ const DEVICE_ID_KEY = 'vega-sync-device-id';
 const REVISION_KEY = 'vega-sync-revision';
 const TOMBSTONES_KEY = 'vega-sync-tombstones';
 const HISTORY_KEY = 'vega-sync-history';
-const PUBLISH_DELAY_MS = 3000;
+const PUBLISH_DELAY_MS = 1000;
 
 let initialized = false;
 let applyingRemoteState = false;
@@ -72,16 +76,24 @@ const addTombstone = (
   saveTombstones(tombstones);
 };
 
-const getRelativePath = (item: DownloadItem) =>
-  [
-    (item.showName || item.title).replace(/[^a-z0-9]/gi, '_').toLowerCase(),
-    ...(item.seasonTitle
-      ? [item.seasonTitle.replace(/[^a-z0-9]/gi, '_').toLowerCase()]
-      : []),
+const getRelativePath = (item: DownloadItem) => {
+  const dirs =
+    item.showName || item.seasonTitle
+      ? [
+          createDownloadDirectoryName(item.showName || item.title),
+          ...(item.seasonTitle
+            ? [
+                createDownloadSeasonDirectoryName(item.seasonTitle)!,
+              ].filter(Boolean)
+            : []),
+        ]
+      : [];
+  const fileName =
     getSafEntryName(item.finalDocumentUri || item.filePath) ||
-      item.displayFileName ||
-      item.id,
-  ].join('/');
+    item.displayFileName ||
+    item.id;
+  return [...dirs, fileName].join('/');
+};
 
 const toSyncedDownload = (item: DownloadItem): SyncedDownload => {
   const isSubtitle = Boolean(

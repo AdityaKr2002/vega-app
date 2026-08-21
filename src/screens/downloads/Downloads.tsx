@@ -9,6 +9,7 @@ import MediaPosterCard from '../../components/MediaPosterCard';
 import AppText from '../../components/ui/Text';
 import {reconcileCompletedDownloadOutputs} from '../../lib/downloadReconciliation';
 import {groupCompletedDownloads} from '../../lib/downloadLibrary';
+import {syncFromSharedFolder} from '../../lib/sync/syncService';
 import useDownloadsStore, {
   selectCompletedDownloads,
 } from '../../lib/zustand/downloadsStore';
@@ -35,6 +36,9 @@ const Downloads = () => {
 
   useFocusEffect(
     useCallback(() => {
+      syncFromSharedFolder().catch(error =>
+        console.warn('[VegaSync] Downloads sync failed:', error),
+      );
       reconcileCompletedDownloadOutputs().catch(error =>
         console.warn('Download library reconciliation failed:', error),
       );

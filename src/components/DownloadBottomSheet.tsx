@@ -25,6 +25,22 @@ export interface DownloadedSubtitleItem {
   filePath?: string;
 }
 
+const formatQualityLabel = (quality?: string): string => {
+  if (!quality) return '';
+  const trimmed = quality.trim();
+  const lower = trimmed.toLowerCase();
+  if (lower === 'auto' || lower === '4k' || lower === 'uhd' || lower === 'hd') {
+    return trimmed;
+  }
+  if (lower.endsWith('p')) {
+    return trimmed;
+  }
+  if (/^\d+$/.test(trimmed)) {
+    return `${trimmed}p`;
+  }
+  return trimmed;
+};
+
 type Props = {
   data: Stream[];
   loading: boolean;
@@ -239,9 +255,7 @@ const DownloadBottomSheet = ({
                   fontSize: 12,
                   fontWeight: '700',
                 }}>
-                {item.quality.toLowerCase().endsWith('p')
-                  ? item.quality
-                  : `${item.quality}p`}
+                {formatQualityLabel(item.quality)}
               </Text>
             </View>
           ) : null}
