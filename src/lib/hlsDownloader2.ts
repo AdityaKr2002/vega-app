@@ -9,6 +9,7 @@ interface SegmentInfo {
 
 interface M3U8Data {
   segments: SegmentInfo[];
+  initSegmentUrl?: string;
   totalDuration: number;
   isLive: boolean;
 }
@@ -16,27 +17,58 @@ interface M3U8Data {
 const cancelledDownloads = new Set<string>();
 const activeDownloads = new Set<string>();
 
+const DEFAULT_USER_AGENT =
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36';
+
+const resolveUrl = (targetUrl: string, baseUrl: string): string => {
+  try {
+    return new URL(targetUrl, baseUrl).toString();
+  } catch {
+    const base = baseUrl.substring(0, baseUrl.lastIndexOf('/') + 1);
+    if (targetUrl.startsWith('http')) {
+      return targetUrl;
+    }
+    if (targetUrl.startsWith('/')) {
+      try {
+        const u = new URL(baseUrl);
+        return `${u.origin}${targetUrl}`;
+      } catch {
+        return base + targetUrl;
+      }
+    }
+    return base + targetUrl;
+  }
+};
+
+const normalizeHeaders = (headers?: Record<string, string>): Record<string, string> => {
+  const result: Record<string, string> = {
+    'User-Agent': DEFAULT_USER_AGENT,
+    ...(headers || {}),
+  };
+  return result;
+};
+
 const parseM3U8Playlist = async (
   url: string,
-  headers: any = {},
+  headers: Record<string, string> = {},
 ): Promise<M3U8Data> => {
   try {
     console.log('Fetching M3U8 playlist:', url);
+    const reqHeaders = normalizeHeaders(headers);
     const response = await axios.get(url, {
-      headers,
-      timeout: 10000,
+      headers: reqHeaders,
+      timeout: 15000,
     });
 
-    const content = response.data;
-    console.log('M3U8 content preview:', content.substring(0, 500));
+    const content = typeof response.data === 'string' ? response.data : String(response.data);
+    console.log('M3U8 content preview:', content.substring(0, 300));
     const lines = content.split('\n').map((line: string) => line.trim());
 
     const segments: SegmentInfo[] = [];
+    let initSegmentUrl: string | undefined;
     let totalDuration = 0;
     let isLive = false;
     let segmentIndex = 0;
-
-    const baseUrl = url.substring(0, url.lastIndexOf('/') + 1);
 
     // Check if this is a master playlist (contains #EXT-X-STREAM-INF)
     const hasMasterPlaylist = lines.some((line: string) =>
@@ -48,34 +80,33 @@ const parseM3U8Playlist = async (
         'Detected master playlist, looking for best quality stream...',
       );
 
-      // Find the best quality stream URL
-      let bestQualityUrl = null;
+      let bestQualityUrl: string | null = null;
       let highestBandwidth = 0;
 
       for (let i = 0; i < lines.length; i++) {
         const line = lines[i];
 
         if (line.includes('#EXT-X-STREAM-INF')) {
-          // Extract bandwidth
           const bandwidthMatch = line.match(/BANDWIDTH=(\d+)/);
           const bandwidth = bandwidthMatch
             ? parseInt(bandwidthMatch[1], 10)
             : 0;
 
-          // Get the next line which should be the playlist URL
-          if (i + 1 < lines.length) {
-            let playlistUrl = lines[i + 1];
-            if (
-              !playlistUrl.startsWith('http') &&
-              !playlistUrl.startsWith('#')
-            ) {
-              playlistUrl = baseUrl + playlistUrl;
+          // Find the next non-empty, non-comment line which is the stream playlist URL
+          let playlistUrl = '';
+          for (let j = i + 1; j < lines.length; j++) {
+            const candidate = lines[j];
+            if (candidate && !candidate.startsWith('#')) {
+              playlistUrl = candidate;
+              break;
             }
+          }
 
-            // Choose the highest bandwidth stream
-            if (bandwidth > highestBandwidth) {
+          if (playlistUrl) {
+            const resolvedUrl = resolveUrl(playlistUrl, url);
+            if (bandwidth > highestBandwidth || !bestQualityUrl) {
               highestBandwidth = bandwidth;
-              bestQualityUrl = playlistUrl;
+              bestQualityUrl = resolvedUrl;
             }
           }
         }
@@ -88,7 +119,6 @@ const parseM3U8Playlist = async (
           'with bandwidth:',
           highestBandwidth,
         );
-        // Recursively parse the actual playlist
         return await parseM3U8Playlist(bestQualityUrl, headers);
       } else {
         throw new Error('No valid stream found in master playlist');
@@ -101,40 +131,44 @@ const parseM3U8Playlist = async (
 
       if (line.includes('#EXT-X-ENDLIST')) {
         isLive = false;
+      } else if (line.includes('#EXT-X-MAP:')) {
+        const uriMatch = line.match(/URI=["']?([^"']+)["']?/);
+        if (uriMatch && uriMatch[1]) {
+          initSegmentUrl = resolveUrl(uriMatch[1], url);
+        }
       } else if (line.includes('#EXTINF:')) {
         const durationMatch = line.match(/#EXTINF:([\d.]+)/);
         const duration = durationMatch ? parseFloat(durationMatch[1]) : 0;
 
-        // Next line should be the segment URL
-        if (i + 1 < lines.length) {
-          let segmentUrl = lines[i + 1];
-
-          // Skip lines that start with # (comments/metadata)
-          if (segmentUrl.startsWith('#')) {
-            continue;
+        // Scan subsequent lines for the segment URL
+        let segmentUrl = '';
+        for (let j = i + 1; j < lines.length; j++) {
+          const candidate = lines[j];
+          if (candidate && !candidate.startsWith('#')) {
+            segmentUrl = candidate;
+            break;
           }
+        }
 
-          if (!segmentUrl.startsWith('http')) {
-            segmentUrl = baseUrl + segmentUrl;
-          }
-
+        if (segmentUrl) {
+          const resolvedSegmentUrl = resolveUrl(segmentUrl, url);
           segments.push({
             duration,
-            url: segmentUrl,
+            url: resolvedSegmentUrl,
             index: segmentIndex++,
           });
-
           totalDuration += duration;
         }
       }
     }
 
     console.log(
-      `Parsed ${segments.length} segments, total duration: ${totalDuration}s`,
+      `Parsed ${segments.length} segments, total duration: ${totalDuration}s, hasInit: ${Boolean(initSegmentUrl)}`,
     );
 
     return {
       segments,
+      initSegmentUrl,
       totalDuration,
       isLive,
     };
@@ -148,16 +182,17 @@ const downloadSegment = async (
   downloadId: string,
   segmentUrl: string,
   outputPath: string,
-  headers: any = {},
+  headers: Record<string, string> = {},
 ): Promise<void> => {
   if (cancelledDownloads.has(downloadId)) {
     throw new Error('Download cancelled');
   }
 
+  const reqHeaders = normalizeHeaders(headers);
   const download = RNFS.downloadFile({
     fromUrl: segmentUrl,
     toFile: outputPath,
-    headers,
+    headers: reqHeaders,
     background: false,
     discretionary: false,
     cacheable: false,
@@ -166,7 +201,15 @@ const downloadSegment = async (
     readTimeout: 30000,
   });
 
-  await download.promise;
+  const result = await download.promise;
+  if (result.statusCode < 200 || result.statusCode >= 400) {
+    if (await RNFS.exists(outputPath)) {
+      await RNFS.unlink(outputPath).catch(() => undefined);
+    }
+    throw new Error(
+      `Segment download failed with HTTP status ${result.statusCode}`,
+    );
+  }
 };
 
 const mergeSegments = async (
@@ -174,8 +217,10 @@ const mergeSegments = async (
   outputPath: string,
 ): Promise<void> => {
   let isFirstFile = true;
+  let mergedCount = 0;
 
   for (const segmentPath of segmentPaths) {
+    if (!segmentPath) continue;
     if (await RNFS.exists(segmentPath)) {
       if (isFirstFile) {
         await RNFS.copyFile(segmentPath, outputPath);
@@ -184,10 +229,15 @@ const mergeSegments = async (
         const content = await RNFS.readFile(segmentPath, 'base64');
         await RNFS.appendFile(outputPath, content, 'base64');
       }
+      mergedCount++;
 
-      // Clean up segment file
-      await RNFS.unlink(segmentPath);
+      // Clean up segment file immediately
+      await RNFS.unlink(segmentPath).catch(() => undefined);
     }
+  }
+
+  if (mergedCount === 0 || !(await RNFS.exists(outputPath))) {
+    throw new Error('Failed to merge HLS segments: no downloaded segments available');
   }
 };
 
@@ -236,9 +286,18 @@ export const hlsDownloader2 = async ({
       `Found ${m3u8Data.segments.length} segments, total duration: ${m3u8Data.totalDuration}s`,
     );
 
-    let downloadedSegments = 0;
     const segmentPaths: string[] = [];
-    const maxConcurrentDownloads = 10; // Limit concurrent downloads
+
+    // Download init segment (fMP4 EXT-X-MAP) if present
+    if (m3u8Data.initSegmentUrl) {
+      const initPath = `${tempDir}/init_segment.mp4`;
+      console.log('Downloading fMP4 init segment...');
+      await downloadSegment(downloadId, m3u8Data.initSegmentUrl, initPath, headers);
+      segmentPaths.push(initPath);
+    }
+
+    let downloadedSegments = 0;
+    const maxConcurrentDownloads = 8; // Limit concurrent downloads
 
     // Download segments in batches
     for (let i = 0; i < m3u8Data.segments.length; i += maxConcurrentDownloads) {
@@ -249,7 +308,7 @@ export const hlsDownloader2 = async ({
       const batch = m3u8Data.segments.slice(i, i + maxConcurrentDownloads);
       const batchPromises = batch.map(async segment => {
         const segmentPath = `${tempDir}/segment_${segment.index}.ts`;
-        segmentPaths[segment.index] = segmentPath;
+        segmentPaths[segment.index + (m3u8Data.initSegmentUrl ? 1 : 0)] = segmentPath;
 
         try {
           await downloadSegment(downloadId, segment.url, segmentPath, headers);
@@ -274,7 +333,7 @@ export const hlsDownloader2 = async ({
 
       // Small delay between batches to avoid overwhelming the server
       if (i + maxConcurrentDownloads < m3u8Data.segments.length) {
-        await new Promise(resolve => setTimeout(resolve, 100));
+        await new Promise(resolve => setTimeout(resolve, 80));
       }
     }
 
@@ -288,13 +347,12 @@ export const hlsDownloader2 = async ({
 
     // Clean up temp directory
     if (await RNFS.exists(tempDir)) {
-      await RNFS.unlink(tempDir);
+      await RNFS.unlink(tempDir).catch(() => undefined);
     }
 
     if (cancelledDownloads.has(downloadId)) {
-      // Clean up the output file if cancelled during merge
       if (await RNFS.exists(path)) {
-        await RNFS.unlink(path);
+        await RNFS.unlink(path).catch(() => undefined);
       }
       throw new Error('Download cancelled by user');
     }
@@ -308,11 +366,11 @@ export const hlsDownloader2 = async ({
     const cancelled = cancelledDownloads.has(downloadId);
 
     if (await RNFS.exists(tempDir)) {
-      await RNFS.unlink(tempDir);
+      await RNFS.unlink(tempDir).catch(() => undefined);
     }
 
     if (await RNFS.exists(path)) {
-      await RNFS.unlink(path);
+      await RNFS.unlink(path).catch(() => undefined);
     }
 
     const errorMessage = cancelled
@@ -338,3 +396,4 @@ export const cancelHlsDownload = (downloadId: string) => {
 // Check if a download is in progress
 export const isHlsDownloadInProgress = (downloadId: string): boolean =>
   activeDownloads.has(downloadId) && !cancelledDownloads.has(downloadId);
+

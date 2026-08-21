@@ -45,6 +45,7 @@ import {
 import useDownloadsStore from '../lib/zustand/downloadsStore';
 import {useM3Colors} from '../theme/M3PaletteContext';
 import MaterialDialogSurface from './ui/MaterialDialogSurface';
+import LoadingIndicator from './ui/LoadingIndicator';
 import {LEGACY_TERTIARY_BACKGROUND} from '../theme/seeds';
 import Text from './ui/Text';
 import EpisodeRowContent, {getValidImageUri} from './EpisodeRowContent';
@@ -73,6 +74,7 @@ interface SeasonListProps {
   imdbId?: string;
   synopsis?: string;
   refreshVersion?: number;
+  quickDownload?: boolean;
 }
 
 interface PlayHandlerProps {
@@ -115,6 +117,7 @@ const SeasonList: React.FC<SeasonListProps> = ({
   imdbId,
   synopsis,
   refreshVersion,
+  quickDownload,
 }) => {
   const colors = useM3Colors();
   const primary = colors.primary;
@@ -639,6 +642,11 @@ const SeasonList: React.FC<SeasonListProps> = ({
               background={poster.background}
               synopsis={synopsis}
               infoUrl={routeParams.link}
+              quickDownload={
+                quickDownload ||
+                activeSeason?.quickDownload ||
+                item?.quickDownload
+              }
               title={
                 metaTitle.length > 30
                   ? metaTitle.slice(0, 30) + '... ' + item.title
@@ -775,6 +783,11 @@ const SeasonList: React.FC<SeasonListProps> = ({
               background={poster.background}
               synopsis={synopsis}
               infoUrl={routeParams.link}
+              quickDownload={
+                quickDownload ||
+                activeSeason?.quickDownload ||
+                item?.quickDownload
+              }
               title={
                 metaTitle.length > 30
                   ? metaTitle.slice(0, 30) + '... ' + item.title
@@ -1092,7 +1105,7 @@ const SeasonList: React.FC<SeasonListProps> = ({
         </Text>
 
         {isLoadingStreams ? (
-          <ActivityIndicator size="large" color={primary} />
+          <LoadingIndicator size={40} color={primary} />
         ) : (
           <>
             <ScrollView style={{maxHeight: 300}}>

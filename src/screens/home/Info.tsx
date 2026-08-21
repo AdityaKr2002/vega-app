@@ -328,6 +328,7 @@ export default function Info({route, navigation}: Props): React.JSX.Element {
                       imdbId={info?.imdbId}
                       synopsis={synopsis}
                       routeParams={route.params}
+                      quickDownload={info?.quickDownload}
                     />
                   )}
                 </View>

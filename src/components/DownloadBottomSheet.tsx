@@ -48,7 +48,9 @@ type Props = {
   showModal: boolean;
   setModal: (value: boolean) => void;
   onPressVideo: (item: any) => void;
+  onPressExternalVideo?: (item: any) => void;
   onPressSubs: (item: any) => void;
+  onPressExternalSubs?: (item: any) => void;
   error?: string | null;
   videoDownloaded?: boolean;
   downloadedServer?: string;
@@ -64,7 +66,9 @@ const DownloadBottomSheet = ({
   setModal,
   title,
   onPressSubs,
+  onPressExternalSubs,
   onPressVideo,
+  onPressExternalVideo,
   error,
   videoDownloaded,
   downloadedServer,
@@ -76,6 +80,8 @@ const DownloadBottomSheet = ({
   const bottomSheetRef = useRef<BottomSheet>(null);
   const colors = useM3Colors();
   const [activeTab, setActiveTab] = React.useState<1 | 2>(1);
+  const isAlwaysExternal =
+    settingsStorage.getBool('alwaysExternalDownloader') === true;
   const streams = Array.isArray(data) ? data : [];
 
   const downloadedSubs = downloadedSubtitles || [];
@@ -96,6 +102,17 @@ const DownloadBottomSheet = ({
   );
 
   const hasSubtitles = hasDownloadedSubs || streamSubtitles.length > 0;
+
+  const handleCopy = (link: string) => {
+    if (settingsStorage.isHapticFeedbackEnabled()) {
+      RNReactNativeHapticFeedback.trigger('effectTick', {
+        enableVibrateFallback: true,
+        ignoreAndroidSystemSettings: false,
+      });
+    }
+    Clipboard.setString(link);
+    ToastAndroid.show('Link copied', ToastAndroid.SHORT);
+  };
 
   useEffect(() => {
     if (showModal) {
@@ -213,52 +230,104 @@ const DownloadBottomSheet = ({
             borderRadius: 16,
             borderWidth: 1,
             flexDirection: 'row',
-            gap: 12,
+            gap: 10,
             justifyContent: 'space-between',
             marginVertical: 5,
-            paddingHorizontal: 16,
-            paddingVertical: 14,
-          }}
-          onLongPress={() => {
-            if (settingsStorage.isHapticFeedbackEnabled()) {
-              RNReactNativeHapticFeedback.trigger('effectTick', {
-                enableVibrateFallback: true,
-                ignoreAndroidSystemSettings: false,
-              });
-            }
-            Clipboard.setString(item.link);
-            ToastAndroid.show('Link copied', ToastAndroid.SHORT);
+            paddingHorizontal: 14,
+            paddingVertical: 12,
           }}
           onPress={() => {
-            onPressVideo(item);
+            if (isAlwaysExternal) {
+              onPressExternalVideo?.(item);
+            } else {
+              onPressVideo(item);
+            }
             bottomSheetRef.current?.close?.();
           }}>
-          <Text
+          <View
             style={{
-              color: colors.onSurface,
+              alignItems: 'center',
               flex: 1,
-              fontWeight: '600',
+              flexDirection: 'row',
+              gap: 8,
             }}>
-            {item.server}
-          </Text>
-          {item.quality ? (
-            <View
+            <Text
+              numberOfLines={1}
               style={{
-                backgroundColor: colors.secondaryContainer,
-                borderRadius: 12,
-                paddingHorizontal: 10,
-                paddingVertical: 5,
+                color: colors.onSurface,
+                fontSize: 15,
+                fontWeight: '600',
+                flexShrink: 1,
               }}>
-              <Text
+              {item.server}
+            </Text>
+            {item.quality ? (
+              <View
                 style={{
-                  color: colors.onSecondaryContainer,
-                  fontSize: 12,
-                  fontWeight: '700',
+                  backgroundColor: colors.secondaryContainer,
+                  borderRadius: 10,
+                  paddingHorizontal: 8,
+                  paddingVertical: 3,
                 }}>
-                {formatQualityLabel(item.quality)}
-              </Text>
-            </View>
-          ) : null}
+                <Text
+                  style={{
+                    color: colors.onSecondaryContainer,
+                    fontSize: 11,
+                    fontWeight: '700',
+                  }}>
+                  {formatQualityLabel(item.quality)}
+                </Text>
+              </View>
+            ) : null}
+          </View>
+
+          {/* Action buttons */}
+          <View style={{ alignItems: 'center', flexDirection: 'row', gap: 6 }}>
+            {/* Copy Button */}
+            <TouchableOpacity
+              activeOpacity={0.7}
+              onPress={() => handleCopy(item.link)}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              style={{
+                alignItems: 'center',
+                backgroundColor: colors.surfaceContainerHighest,
+                borderRadius: 10,
+                justifyContent: 'center',
+                padding: 8,
+              }}>
+              <MaterialCommunityIcons
+                name="content-copy"
+                size={18}
+                color={colors.onSurfaceVariant}
+              />
+            </TouchableOpacity>
+
+            {/* External / Internal Button */}
+            <TouchableOpacity
+              activeOpacity={0.7}
+              onPress={() => {
+                if (isAlwaysExternal) {
+                  onPressVideo(item);
+                } else {
+                  onPressExternalVideo?.(item);
+                }
+                bottomSheetRef.current?.close?.();
+              }}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              style={{
+                alignItems: 'center',
+                backgroundColor: colors.primaryContainer,
+                borderRadius: 10,
+                justifyContent: 'center',
+                padding: 8,
+              }}>
+              <MaterialCommunityIcons
+                name={isAlwaysExternal ? 'download-outline' : 'open-in-new'}
+                size={18}
+                color={colors.onPrimaryContainer}
+              />
+            </TouchableOpacity>
+          </View>
         </TouchableOpacity>
       ));
     }
@@ -377,52 +446,102 @@ const DownloadBottomSheet = ({
             <LoadingIndicator size={42} color={colors.primary} />
           </View>
         ) : undownloadedStreamSubs.length > 0 ? (
-          undownloadedStreamSubs.map(item => (
-            <TouchableOpacity
-              key={item.uri}
-              activeOpacity={0.72}
-              style={{
-                alignItems: 'center',
-                backgroundColor: colors.surfaceContainerHigh,
-                borderColor: colors.outlineVariant,
-                borderRadius: 16,
-                borderWidth: 1,
-                flexDirection: 'row',
-                justifyContent: 'space-between',
-                marginVertical: 5,
-                paddingHorizontal: 16,
-                paddingVertical: 14,
-              }}
-              onLongPress={() => {
-                if (settingsStorage.isHapticFeedbackEnabled()) {
-                  RNReactNativeHapticFeedback.trigger('effectTick', {
-                    enableVibrateFallback: true,
-                    ignoreAndroidSystemSettings: false,
-                  });
-                }
-                Clipboard.setString(item.uri);
-                ToastAndroid.show('Link copied', ToastAndroid.SHORT);
-              }}
-              onPress={() => {
-                onPressSubs({
-                  server: 'Subtitles',
-                  link: item.uri,
-                  type:
-                    item.type === TextTrackType.VTT ? 'vtt' : 'srt',
-                  title: item.title,
-                });
-                bottomSheetRef.current?.close?.();
-              }}>
-              <Text
+          undownloadedStreamSubs.map(item => {
+            const subData = {
+              server: 'Subtitles',
+              link: item.uri,
+              type:
+                item.type === TextTrackType.VTT ? 'vtt' : 'srt',
+              title: item.title,
+            };
+
+            return (
+              <TouchableOpacity
+                key={item.uri}
+                activeOpacity={0.72}
                 style={{
-                  color: colors.onSurface,
-                  flex: 1,
+                  alignItems: 'center',
+                  backgroundColor: colors.surfaceContainerHigh,
+                  borderColor: colors.outlineVariant,
+                  borderRadius: 16,
+                  borderWidth: 1,
+                  flexDirection: 'row',
+                  gap: 10,
+                  justifyContent: 'space-between',
+                  marginVertical: 5,
+                  paddingHorizontal: 14,
+                  paddingVertical: 12,
+                }}
+                onPress={() => {
+                  if (isAlwaysExternal) {
+                    onPressExternalSubs?.(subData);
+                  } else {
+                    onPressSubs(subData);
+                  }
+                  bottomSheetRef.current?.close?.();
                 }}>
-                {item.language}
-                {' - '} {item.title}
-              </Text>
-            </TouchableOpacity>
-          ))
+                <Text
+                  numberOfLines={1}
+                  style={{
+                    color: colors.onSurface,
+                    flex: 1,
+                    fontSize: 14,
+                    fontWeight: '500',
+                  }}>
+                  {item.language}
+                  {' - '} {item.title}
+                </Text>
+
+                {/* Subtitle Action buttons */}
+                <View style={{ alignItems: 'center', flexDirection: 'row', gap: 6 }}>
+                  {/* Copy Button */}
+                  <TouchableOpacity
+                    activeOpacity={0.7}
+                    onPress={() => handleCopy(item.uri)}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    style={{
+                      alignItems: 'center',
+                      backgroundColor: colors.surfaceContainerHighest,
+                      borderRadius: 10,
+                      justifyContent: 'center',
+                      padding: 8,
+                    }}>
+                    <MaterialCommunityIcons
+                      name="content-copy"
+                      size={18}
+                      color={colors.onSurfaceVariant}
+                    />
+                  </TouchableOpacity>
+
+                  {/* External / Internal Button */}
+                  <TouchableOpacity
+                    activeOpacity={0.7}
+                    onPress={() => {
+                      if (isAlwaysExternal) {
+                        onPressSubs(subData);
+                      } else {
+                        onPressExternalSubs?.(subData);
+                      }
+                      bottomSheetRef.current?.close?.();
+                    }}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    style={{
+                      alignItems: 'center',
+                      backgroundColor: colors.primaryContainer,
+                      borderRadius: 10,
+                      justifyContent: 'center',
+                      padding: 8,
+                    }}>
+                    <MaterialCommunityIcons
+                      name={isAlwaysExternal ? 'download-outline' : 'open-in-new'}
+                      size={18}
+                      color={colors.onPrimaryContainer}
+                    />
+                  </TouchableOpacity>
+                </View>
+              </TouchableOpacity>
+            );
+          })
         ) : downloadedSubs.length === 0 ? (
           <Text
             style={{

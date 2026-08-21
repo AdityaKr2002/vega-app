@@ -272,9 +272,9 @@ export class ProviderManager {
   }: {
     link: string;
     type: string;
-    signal: AbortSignal;
+    signal?: AbortSignal;
     providerValue: string;
-  }): Promise<any[]> => {
+  }): Promise<Stream[]> => {
     const getStreamModule = this.getModule(providerValue, 'stream');
     if (!getStreamModule) {
       throw new Error(`No stream module found for provider: ${providerValue}`);

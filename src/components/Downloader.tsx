@@ -11,6 +11,7 @@ import * as IntentLauncher from 'expo-intent-launcher';
 import { cancelDownload } from '../lib/downloadManager';
 import { downloadManager } from '../lib/downloader';
 import DownloadBottomSheet from './DownloadBottomSheet';
+import LoadingIndicator from './ui/LoadingIndicator';
 import { settingsStorage } from '../lib/storage';
 import { providerManager } from '../lib/services/ProviderManager';
 import { deleteDownloadedFileByBaseName } from '../lib/downloadLocation';
@@ -148,6 +149,7 @@ const DownloadComponent = ({
   background,
   synopsis,
   infoUrl,
+  quickDownload,
 }: {
   link: string;
   downloadId: string;
@@ -164,6 +166,7 @@ const DownloadComponent = ({
   background?: string;
   synopsis?: string;
   infoUrl?: string;
+  quickDownload?: boolean;
 }) => {
   const colors = useM3Colors();
   const primary = colors.primary;
@@ -197,7 +200,6 @@ const DownloadComponent = ({
     string | boolean
   >(false);
   const [downloadModal, setDownloadModal] = useState(false);
-  const [longPressModal, setLongPressModal] = useState(false);
   const [servers, setServers] = useState<Stream[]>([]);
   const [serverLoading, setServerLoading] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
@@ -350,18 +352,86 @@ const DownloadComponent = ({
     );
   };
 
+  const downloadSingleVideoStream = async (server: Stream) => {
+    await startDownloadWithLocation({
+      downloadId,
+      title: title,
+      showName,
+      episodeName,
+      seasonTitle,
+      mediaType,
+      imdbId,
+      poster,
+      background,
+      synopsis,
+      provider: providerValue || provider.value,
+      server: server.server,
+      infoUrl,
+      sourceLink: link,
+      url: server.link,
+      fileName: fileName,
+      fileType: server.type,
+      headers: server?.headers,
+      subtitles: server.subtitles?.map(subtitle => ({
+        url: subtitle.uri,
+        language: subtitle.language || 'Unknown',
+        format: subtitle.type === 'text/vtt' ? 'vtt' : 'srt',
+      })),
+      deleteDownload: deleteVideoDownload,
+    });
+  };
+
+  const downloadQuickStream = async (server: Stream) => {
+    await downloadSingleVideoStream(server);
+
+    if (server.subtitles && server.subtitles.length > 0) {
+      const sub = server.subtitles[0];
+      await startDownloadWithLocation({
+        downloadId: `${downloadId}_subtitle_${sub.title}`,
+        title: title + ' ' + sub.title + ' Subtitle ',
+        showName,
+        episodeName,
+        seasonTitle,
+        mediaType,
+        imdbId,
+        poster,
+        background,
+        synopsis,
+        provider: providerValue || provider.value,
+        isSubtitle: true,
+        infoUrl,
+        sourceLink: link,
+        url: sub.uri,
+        fileName: createSubtitleFileName(fileName, sub.title),
+        fileType: sub.type === 'text/vtt' ? 'vtt' : 'srt',
+        deleteDownload: () => deleteSubtitleDownload(sub.title),
+      });
+    }
+  };
+
   const fetchAndOpenSheet = async (isLongPress = false) => {
-    if (isLongPress ||
-      settingsStorage.getBool('alwaysExternalDownloader') === true
-    ) {
-      setLongPressModal(true);
-    } else {
+    const isAlwaysExternal =
+      settingsStorage.getBool('alwaysExternalDownloader') === true;
+    const shouldUseQuickDownload =
+      Boolean(quickDownload) &&
+      !isLongPress &&
+      !isAlwaysExternal &&
+      !isVideoDownloaded &&
+      !hasDownloadedSubs;
+
+    if (!shouldUseQuickDownload) {
       setDownloadModal(true);
     }
 
-    if (serverLoading || servers.length > 0) {
+    if (shouldUseQuickDownload && servers.length > 0 && !serverLoading) {
+      downloadQuickStream(servers[0]);
       return;
     }
+
+    if (serverLoading || (!isLongPress && servers.length > 0)) {
+      return;
+    }
+
     setServerLoading(true);
     setServerError(null);
     try {
@@ -375,19 +445,26 @@ const DownloadComponent = ({
       setServers(validServers);
       if (validServers.length === 0) {
         setServerError('No downloadable streams found');
+        if (shouldUseQuickDownload) {
+          setDownloadModal(true);
+        }
+      } else if (shouldUseQuickDownload) {
+        await downloadQuickStream(validServers[0]);
       }
     } catch (error: any) {
       console.error('Error fetching servers:', error);
       const errorMessage = error?.message || 'Failed to fetch servers';
       setServerError(errorMessage);
       setServers([]);
+      if (shouldUseQuickDownload) {
+        setDownloadModal(true);
+      }
     } finally {
       setServerLoading(false);
     }
   };
 
-  // on holdPress external downloader
-  const longPressDownload = async (targetLink: string, targetType?: string) => {
+  const openExternalApp = async (targetLink: string, targetType?: string) => {
     try {
       const isTorrent =
         targetType === 'torrent' || targetLink.startsWith('magnet:');
@@ -452,6 +529,7 @@ const DownloadComponent = ({
           </TouchableOpacity>
         ) : isVideoDownloaded || hasDownloadedSubs ? (
           <TouchableOpacity
+            disabled={serverLoading}
             onPress={() => fetchAndOpenSheet(false)}
             onLongPress={() => {
               if (settingsStorage.getBool('hapticFeedback') !== false) {
@@ -463,10 +541,15 @@ const DownloadComponent = ({
               fetchAndOpenSheet(true);
             }}
             className="h-12 w-12 items-center justify-center">
-            <MaterialIcons name="check-circle" size={24} color={primary} />
+            {serverLoading ? (
+              <LoadingIndicator size={28} color={primary} />
+            ) : (
+              <MaterialIcons name="check-circle" size={24} color={primary} />
+            )}
           </TouchableOpacity>
         ) : (
           <TouchableOpacity
+            disabled={serverLoading}
             onPress={() => fetchAndOpenSheet(false)}
             onLongPress={() => {
               if (settingsStorage.getBool('hapticFeedback') !== false) {
@@ -478,11 +561,15 @@ const DownloadComponent = ({
               fetchAndOpenSheet(true);
             }}
             className="h-12 w-12 items-center justify-center">
-            <Octicons
-              name="download"
-              size={24}
-              color={primary}
-            />
+            {serverLoading ? (
+              <LoadingIndicator size={24} color={primary} />
+            ) : (
+              <Octicons
+                name="download"
+                size={24}
+                color={primary}
+              />
+            )}
           </TouchableOpacity>
         )}
       </View>
@@ -501,32 +588,10 @@ const DownloadComponent = ({
         isSubDownloaded={isSubDownloaded}
         onDeleteSub={deleteSubtitleDownload}
         onPressVideo={(server: Stream) => {
-          startDownloadWithLocation({
-            downloadId,
-            title: title,
-            showName,
-            episodeName,
-            seasonTitle,
-            mediaType,
-            imdbId,
-            poster,
-            background,
-            synopsis,
-            provider: providerValue || provider.value,
-            server: server.server,
-            infoUrl,
-            sourceLink: link,
-            url: server.link,
-            fileName: fileName,
-            fileType: server.type,
-            headers: server?.headers,
-            subtitles: server.subtitles?.map(subtitle => ({
-              url: subtitle.uri,
-              language: subtitle.language || 'Unknown',
-              format: subtitle.type === 'text/vtt' ? 'vtt' : 'srt',
-            })),
-            deleteDownload: deleteVideoDownload,
-          });
+          downloadSingleVideoStream(server);
+        }}
+        onPressExternalVideo={(server: Stream) => {
+          openExternalApp(server.link, server.type);
         }}
         onPressSubs={(sub: { link: string; type: string; title: string }) => {
           startDownloadWithLocation({
@@ -550,6 +615,9 @@ const DownloadComponent = ({
             deleteDownload: () => deleteSubtitleDownload(sub.title),
           });
         }}
+        onPressExternalSubs={(sub: { link: string; type: string; title: string }) => {
+          openExternalApp(sub.link, 'text/vtt');
+        }}
       />
       <DownloadLocationDialog
         visible={locationDialogVisible}
@@ -564,27 +632,6 @@ const DownloadComponent = ({
         }}
         onSelectFolder={() => {
           selectLocationAndContinue().catch(console.error);
-        }}
-      />
-      {/* long press modal */}
-      <DownloadBottomSheet
-        setModal={setLongPressModal}
-        showModal={longPressModal}
-        data={servers}
-        loading={serverLoading}
-        error={serverError}
-        title="Select Server To Open"
-        videoDownloaded={isVideoDownloaded}
-        downloadedServer={videoDownload?.server}
-        onDeleteVideo={deleteVideoDownload}
-        downloadedSubtitles={downloadedSubsList}
-        isSubDownloaded={isSubDownloaded}
-        onDeleteSub={deleteSubtitleDownload}
-        onPressVideo={(server: Stream) => {
-          longPressDownload(server.link);
-        }}
-        onPressSubs={(sub: { link: string; type: string; title: string }) => {
-          longPressDownload(sub.link, 'text/vtt');
         }}
       />
     </>

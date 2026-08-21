@@ -99,6 +99,7 @@ const DownloadedDetails = ({ navigation, route }: DownloadedDetailsProps) => {
   const removeDownload = useDownloadsStore(state => state.removeDownload);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [pendingDelete, setPendingDelete] = useState<DownloadItem | null>(null);
+  const [readMore, setReadMore] = useState(false);
   const group = useMemo(
     () =>
       groupCompletedDownloads(completed).find(
@@ -304,8 +305,24 @@ const DownloadedDetails = ({ navigation, route }: DownloadedDetailsProps) => {
               <Text
                 className="text-base leading-6"
                 style={{ color: colors.onSurfaceVariant }}>
-                {metadata.synopsis}
+                {metadata.synopsis.length > 240 && !readMore
+                  ? `${metadata.synopsis.slice(0, 240)}...`
+                  : metadata.synopsis}
               </Text>
+              {metadata.synopsis.length > 240 ? (
+                <Pressable
+                  onPress={() => setReadMore(value => !value)}
+                  style={{ paddingVertical: 8 }}>
+                  <Text
+                    style={{
+                      color: colors.primary,
+                      fontSize: 14,
+                      fontWeight: '700',
+                    }}>
+                    {readMore ? 'Show less' : 'Read more'}
+                  </Text>
+                </Pressable>
+              ) : null}
             </View>
           ) : null}
 
