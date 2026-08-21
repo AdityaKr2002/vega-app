@@ -4,6 +4,7 @@ import {headers as commonHeaders} from '../providers/headers';
 import {Catalog, EpisodeLink, Info, Post, Stream, SettingsField} from '../providers/types';
 import {extensionManager} from './ExtensionManager';
 import {extensionStorage} from '../storage/extensionStorage';
+import {providerKvStorage} from '../storage/StorageService';
 import {MAX_STATE_BYTES} from '../sandbox/protocol';
 import {sandboxBridge, setSandboxStateHandler} from '../sandbox/sandboxBridge';
 
@@ -269,11 +270,13 @@ export class ProviderManager {
     type,
     signal,
     providerValue,
+    isDownload,
   }: {
     link: string;
     type: string;
     signal?: AbortSignal;
     providerValue: string;
+    isDownload?: boolean;
   }): Promise<Stream[]> => {
     const getStreamModule = this.getModule(providerValue, 'stream');
     if (!getStreamModule) {
@@ -284,7 +287,7 @@ export class ProviderManager {
         getStreamModule,
         providerValue,
         'getStream',
-        {link, type},
+        {link, type, isDownload: Boolean(isDownload)},
         signal,
       );
       return this.requireArray<Stream>(streams, providerValue, 'getStream');
@@ -406,6 +409,17 @@ export class ProviderManager {
     } catch (error) {
       console.warn(`Provider ${providerValue} getSettingsSchema failed:`, error);
       return [];
+    }
+  };
+
+  clearProviderStorage = async (providerValue: string): Promise<void> => {
+    this.providerState.delete(providerValue);
+    const allKeys = await providerKvStorage.getKeys();
+    const prefix = `${providerValue}:`;
+    for (const key of allKeys) {
+      if (key.startsWith(prefix)) {
+        providerKvStorage.delete(key);
+      }
     }
   };
 }

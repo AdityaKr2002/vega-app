@@ -122,13 +122,30 @@ describe('providerRpc KV store operations', () => {
     expect(remainingKeys).toEqual(['key2']);
   });
 
-  it('clears all KV entries', async () => {
+  it('clears all KV entries for a specific provider without affecting others', async () => {
     await handleProviderRpc('uhd', 'kvSet', {key: 'k1', value: 1});
     await handleProviderRpc('uhd', 'kvSet', {key: 'k2', value: 2});
+    await handleProviderRpc('cinefreak', 'kvSet', {key: 'k1', value: 99});
 
     await handleProviderRpc('uhd', 'kvClear', {});
-    const keys = await handleProviderRpc('uhd', 'kvKeys', {});
-    expect(keys).toEqual([]);
+    const uhdKeys = await handleProviderRpc('uhd', 'kvKeys', {});
+    const cinefreakKeys = await handleProviderRpc('cinefreak', 'kvKeys', {});
+    const cinefreakVal = await handleProviderRpc('cinefreak', 'kvGet', {key: 'k1'});
+
+    expect(uhdKeys).toEqual([]);
+    expect(cinefreakKeys).toEqual(['k1']);
+    expect(cinefreakVal).toEqual(99);
+  });
+
+  it('keeps KV storage isolated between different providers', async () => {
+    await handleProviderRpc('uhd', 'kvSet', {key: 'sharedKey', value: 'uhdValue'});
+    await handleProviderRpc('cinefreak', 'kvSet', {key: 'sharedKey', value: 'cineValue'});
+
+    const uhdVal = await handleProviderRpc('uhd', 'kvGet', {key: 'sharedKey'});
+    const cineVal = await handleProviderRpc('cinefreak', 'kvGet', {key: 'sharedKey'});
+
+    expect(uhdVal).toEqual('uhdValue');
+    expect(cineVal).toEqual('cineValue');
   });
 
   it('rejects invalid keys', async () => {

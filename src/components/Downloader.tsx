@@ -440,6 +440,7 @@ const DownloadComponent = ({
         type,
         signal: new AbortController().signal,
         providerValue: providerValue || provider.value,
+        isDownload: true,
       });
       const validServers = availableServers || [];
       setServers(validServers);
@@ -542,7 +543,7 @@ const DownloadComponent = ({
             }}
             className="h-12 w-12 items-center justify-center">
             {serverLoading ? (
-              <LoadingIndicator size={28} color={primary} />
+              <LoadingIndicator size={30} color={primary} />
             ) : (
               <MaterialIcons name="check-circle" size={24} color={primary} />
             )}

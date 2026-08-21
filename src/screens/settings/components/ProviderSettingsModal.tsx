@@ -15,6 +15,8 @@ import {
 } from 'react-native';
 import { providerManager } from '../../../lib/services/ProviderManager';
 import { providerKvStorage } from '../../../lib/storage/StorageService';
+import { getScopedKvKey } from '../../../lib/sandbox/providerRpc';
+import { showAppDialog } from '../../../lib/zustand/appDialogStore';
 import type { ProviderExtension } from '../../../lib/storage/extensionStorage';
 import type { SettingsField, SelectOption } from '../../../lib/providers/types';
 import { useM3Colors } from '../../../theme/M3PaletteContext';
@@ -71,7 +73,8 @@ export const ProviderSettingsModal: React.FC<ProviderSettingsModalProps> = ({
 
       const initialValues: Record<string, unknown> = {};
       for (const field of schema) {
-        const storedRaw = providerKvStorage.getString(field.key);
+        const scopedKey = getScopedKvKey(provider.value, field.key);
+        const storedRaw = providerKvStorage.getString(scopedKey);
         if (storedRaw !== undefined && storedRaw !== null) {
           try {
             initialValues[field.key] = JSON.parse(storedRaw);
@@ -104,14 +107,45 @@ export const ProviderSettingsModal: React.FC<ProviderSettingsModalProps> = ({
   };
 
   const handleSave = () => {
+    if (!provider) return;
     for (const [key, value] of Object.entries(values)) {
+      const scopedKey = getScopedKvKey(provider.value, key);
       if (value === undefined || value === null || value === '') {
-        providerKvStorage.delete(key);
+        providerKvStorage.delete(scopedKey);
       } else {
-        providerKvStorage.setString(key, JSON.stringify(value));
+        providerKvStorage.setString(scopedKey, JSON.stringify(value));
       }
     }
     onClose();
+  };
+
+  const handleResetProvider = () => {
+    if (!provider) return;
+    showAppDialog({
+      title: `Reset ${provider.display_name}?`,
+      message: `Are you sure you want to reset all settings and stored data for ${provider.display_name} to defaults?`,
+      variant: 'warning',
+      actions: [
+        { label: 'Cancel' },
+        {
+          label: 'Reset',
+          variant: 'destructive',
+          onPress: async () => {
+            await providerManager.clearProviderStorage(provider.value);
+            const defaultValues: Record<string, unknown> = {};
+            for (const field of fields) {
+              if (field.defaultValue !== undefined) {
+                defaultValues[field.key] = field.defaultValue;
+              }
+            }
+            setValues(defaultValues);
+            if (Platform.OS === 'android') {
+              ToastAndroid.show('Provider reset to default', ToastAndroid.SHORT);
+            }
+          },
+        },
+      ],
+    });
   };
 
   if (!visible || !provider) {
@@ -457,8 +491,36 @@ export const ProviderSettingsModal: React.FC<ProviderSettingsModalProps> = ({
           )}
 
           {/* Footer Actions */}
-          <View className="mt-3 flex-row gap-3 pt-3 border-t"
+          <View className="mt-3 flex-row items-center gap-2 pt-3 border-t"
             style={{ borderColor: colors.outlineVariant }}>
+            <View
+              className="h-12 w-12 items-center justify-center overflow-hidden"
+              style={{
+                backgroundColor: colors.surfaceContainerHighest,
+                borderRadius: 16,
+              }}>
+              <Pressable
+                disabled={loading || fields.length === 0}
+                onPress={handleResetProvider}
+                accessibilityLabel="Reset provider settings to default"
+                android_ripple={{ color: colors.onSurfaceVariant, borderless: false }}
+                className="h-full w-full items-center justify-center"
+                style={({ pressed }) => ({
+                  opacity: pressed ? 0.8 : 1,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                })}>
+                <MaterialCommunityIcons
+                  name="restore"
+                  size={22}
+                  color={
+                    loading || fields.length === 0
+                      ? colors.outline
+                      : colors.onSurfaceVariant
+                  }
+                />
+              </Pressable>
+            </View>
             <View
               className="h-12 flex-1 overflow-hidden"
               style={{

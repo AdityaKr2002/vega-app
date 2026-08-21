@@ -11,6 +11,14 @@ import {providerKvStorage} from '../storage/StorageService';
 const MAX_KV_KEY_LENGTH = 256;
 const MAX_KV_VALUE_BYTES = 1_000_000;
 
+export const getScopedKvKey = (providerValue: string, key: string): string => {
+  return `${providerValue}:${key}`;
+};
+
+export const getProviderKvPrefix = (providerValue: string): string => {
+  return `${providerValue}:`;
+};
+
 const validateKvKey = (key: unknown): string => {
   if (typeof key !== 'string' || !key.trim() || key.length > MAX_KV_KEY_LENGTH) {
     throw new Error(
@@ -20,9 +28,10 @@ const validateKvKey = (key: unknown): string => {
   return key;
 };
 
-const handleKvGet = async (args: any): Promise<unknown> => {
+const handleKvGet = async (providerValue: string, args: any): Promise<unknown> => {
   const key = validateKvKey(args?.key);
-  const raw = providerKvStorage.getString(key);
+  const scopedKey = getScopedKvKey(providerValue, key);
+  const raw = providerKvStorage.getString(scopedKey);
   if (raw === undefined || raw === null) {
     return undefined;
   }
@@ -33,11 +42,12 @@ const handleKvGet = async (args: any): Promise<unknown> => {
   }
 };
 
-const handleKvSet = async (args: any): Promise<void> => {
+const handleKvSet = async (providerValue: string, args: any): Promise<void> => {
   const key = validateKvKey(args?.key);
+  const scopedKey = getScopedKvKey(providerValue, key);
   const value = args?.value;
   if (value === undefined) {
-    providerKvStorage.delete(key);
+    providerKvStorage.delete(scopedKey);
     return;
   }
   const serialized = JSON.stringify(value);
@@ -47,22 +57,30 @@ const handleKvSet = async (args: any): Promise<void> => {
   if (serialized.length > MAX_KV_VALUE_BYTES) {
     throw new Error(`KV value exceeds limit of ${MAX_KV_VALUE_BYTES} bytes`);
   }
-  providerKvStorage.setString(key, serialized);
+  providerKvStorage.setString(scopedKey, serialized);
 };
 
-const handleKvDelete = async (args: any): Promise<boolean> => {
+const handleKvDelete = async (providerValue: string, args: any): Promise<boolean> => {
   const key = validateKvKey(args?.key);
-  const exists = providerKvStorage.contains(key);
-  providerKvStorage.delete(key);
+  const scopedKey = getScopedKvKey(providerValue, key);
+  const exists = providerKvStorage.contains(scopedKey);
+  providerKvStorage.delete(scopedKey);
   return exists;
 };
 
-const handleKvKeys = async (): Promise<string[]> => {
-  return providerKvStorage.getKeys();
+const handleKvKeys = async (providerValue: string): Promise<string[]> => {
+  const allKeys = await providerKvStorage.getKeys();
+  const prefix = getProviderKvPrefix(providerValue);
+  return allKeys
+    .filter(k => k.startsWith(prefix))
+    .map(k => k.slice(prefix.length));
 };
 
-const handleKvClear = async (): Promise<void> => {
-  providerKvStorage.clearAll();
+const handleKvClear = async (providerValue: string): Promise<void> => {
+  const keys = await handleKvKeys(providerValue);
+  for (const k of keys) {
+    providerKvStorage.delete(getScopedKvKey(providerValue, k));
+  }
 };
 
 const digestAlgorithms: Record<string, Crypto.CryptoDigestAlgorithm> = {
@@ -144,19 +162,19 @@ export const handleProviderRpc = async (
       return handleCrypto(args);
 
     case 'kvGet':
-      return handleKvGet(args);
+      return handleKvGet(providerValue, args);
 
     case 'kvSet':
-      return handleKvSet(args);
+      return handleKvSet(providerValue, args);
 
     case 'kvDelete':
-      return handleKvDelete(args);
+      return handleKvDelete(providerValue, args);
 
     case 'kvKeys':
-      return handleKvKeys();
+      return handleKvKeys(providerValue);
 
     case 'kvClear':
-      return handleKvClear();
+      return handleKvClear(providerValue);
 
     default:
       throw new Error(`Unsupported provider operation: ${operation}`);

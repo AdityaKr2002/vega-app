@@ -213,7 +213,7 @@ const DownloadBottomSheet = ({
             paddingVertical: 64,
             minHeight: 180,
           }}>
-          <LoadingIndicator size={52} color={colors.primary} />
+          <LoadingIndicator size={62} color={colors.primary} />
         </View>
       );
     }
@@ -443,7 +443,7 @@ const DownloadBottomSheet = ({
 
         {loading ? (
           <View style={{ alignItems: 'center', justifyContent: 'center', paddingVertical: 32 }}>
-            <LoadingIndicator size={42} color={colors.primary} />
+            <LoadingIndicator size={62} color={colors.primary} />
           </View>
         ) : undownloadedStreamSubs.length > 0 ? (
           undownloadedStreamSubs.map(item => {
